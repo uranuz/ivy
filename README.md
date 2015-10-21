@@ -1,0 +1,2 @@
+# declarative
+Declarative programming language
