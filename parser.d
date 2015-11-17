@@ -4,7 +4,7 @@ import std.stdio;
 import std.range;
 
 import declarative.lexer, declarative.lexer_tools, declarative.node, declarative.expression, 
-	declarative.declaration, declarative.common;
+	declarative.statement, declarative.common;
 
 
 class Parser(R)
@@ -81,10 +81,195 @@ public:
 	
 	}
 +/
+
+	string parseQualifiedIdentifier(bool justTry = false)
+	{
+		import std.array: array;
+		import std.conv: to;
+		
+		string[] nameParts;
+		
+		if( !lexer.front.test(LexemeType.Name) )
+		{
+			if( justTry )
+				return null;
+		
+			assert( 0, "Expected Name, but got: " ~ lexer.frontValue.array.to!string );
+		}
+		nameParts ~= lexer.frontValue.array.to!string;
+		lexer.popFront();
+		
+		while( !lexer.empty )
+		{
+			if( !lexer.front.test(LexemeType.Dot) )
+				break;
+				
+			lexer.popFront();
+			
+			if( !lexer.front.test(LexemeType.Name) )
+			{
+				if( justTry )
+					return null;
+					
+				assert( 0, "Expected Name, but got: " ~ lexer.frontValue.array.to!string );
+			}
+			
+			nameParts ~= lexer.frontValue.array.to!string;
+			lexer.popFront();
+		}
+		
+		import std.array: join;
+		
+		return nameParts.join(".");
+	}
+
+	IStatement parseStatement()
+	{
+		import std.array: array;
+		import std.conv: to;
+		
+		IStatement stmt = null;
+		CustLocation loc = this.currentLocation;
+		
+		assert( lexer.front.test( LexemeType.Name ), "Expected statement name!!!" );
+		
+		string stmtIdentifier = parseQualifiedIdentifier();
+		writeln("statement identifier: ", stmtIdentifier);
+		
+		IDeclNode[] unnamedAttrs;
+		IDeclNode[] namedAttrs;
+			
+		//Parse unnamed attributes list
+		
+		IExpression expr;
+		
+		
+		
+		while( !lexer.empty )
+		{
+			LexerType lexCopy = lexer.save;
+			
+			string attrName = parseQualifiedIdentifier(true);
+			
+			if( attrName.empty )
+				lexer = lexCopy.save;
+			
+			writeln("Parse statement: parsed possible attr name, frontValue is: ", lexer.frontValue.array.to!string);
+			
+			//If identifier found and Colon or Assign follows it
+			//then we parse named attributes list
+			if( !attrName.empty && ( lexer.front.test( LexemeType.Colon) || lexer.front.test( LexemeType.Assign ) ) )
+			{
+					assert( lexer.front.test( LexemeType.Assign ), "Expected colon between attribute name and it's expression!!!" );
+					lexer.popFront();
+					
+					expr = parseExpression();
+					
+					writeln("Parsed named attr of kind: ", expr.kind);
+					writeln("Parsed named attr, frontValue is: ", lexer.frontValue.array.to!string);
+					
+					assert( expr, "Got null reference instead of expression object in named attribute!!!" );
+					
+					namedAttrs ~= new KeyValueAttribute!(config)(loc, attrName, expr);
+			
+			}
+			else if( unnamedAttrs.empty ) //All unnamed attrs should be at the begining
+			{
+				LexerType lexerCopy = lexer.save;
+				expr = parseExpression();
+				
+				writeln("parseStatement: unnamed attr parsed, frontValue is: ", lexer.frontValue.array.to!string);
+				
+				if( !expr || lexer.front.test( LexemeType.Colon) || lexer.front.test( LexemeType.Assign ) )
+				{
+					lexer = lexerCopy.save;
+					writeln("parseStatement: named attr detected, reset: ", lexer.frontValue.array.to!string);
+					break;
+				}
+				
+				writeln("Parsed unnamed attr of kind: ", expr.kind);
+				unnamedAttrs ~= expr;
+				
+				// if( !lexer.test( LexemeType.Comma ) )
+					// break;
+					
+				lexer.popFront();
+			
+			}
+			else
+				break; //Exit loop if cannot find attrs in there
+		}
+		
+		//Parse named attributes list
+		
+		writeln("parseStatement debug1: ", lexer.frontValue.array.to!string);
+
+		//For single statement body we must use colon to separate it from attributes list
+		//But for block statement it's made optional in order to simplify syntax
+		
+		// if( lexer.front.test( LexemeType.Colon ) )
+		
+		IDeclNode mainBody;
+		
+		// //Parse main statement body
+		// while( !lexer.empty )
+		// {
+			// LexemeT lex = lexer.front;
+			
+			// switch( lex.info.typeIndex ) with( LexemeType )
+			// {
+				// case LBrace:
+				// {
+					// //parseCodeOrDataBlock() depending on current parser state
+				
+					// break;
+				// }
+				
+				// case CodeBlockBegin:
+				// {
+					// //parseCodeBlock()
+					
+					// break;
+				// }
+				
+				// case DataBlockBegin:
+				// {
+					// //parseDataBlock()
+					
+					// break;
+				// }
+				// default:
+					// break;
+			// }
+			// lexer.popFront();
+		// }
+		
+		IDeclNode[] continuations;
+		
+		// //Parse extended statement bodies
+		// while( !lexer.empty )
+		// {
+			// //Find special lexeme that signals about start of extension body
+			// //Extention body cannot have it's own extension bodies,
+			// //but can have attribute list
+		// }
+		
+		stmt = new Statement!(config)(loc, stmtIdentifier, unnamedAttrs, namedAttrs, mainBody, continuations);
+		
+		return stmt;
+	}
 	
 	IExpression parseExpression()
 	{
-		return parseLogicalOrExp();
+		auto currRangeCopy = lexer.currentRange.save;
+		
+		auto expr = parseLogicalOrExp();
+				
+		//Restore currentRange if parser cannot found expression
+		if( !expr )
+			lexer.currentRange = currRangeCopy.save;
+		
+		return expr;
 	}
 	
 	IExpression parsePrimaryExp()
@@ -550,54 +735,4 @@ public:
 	}
 +/
 	
-}
-
-void printNodesRecursive(IDeclNode node, int indent = 0)
-{
-	import std.range: repeat;
-	import std.conv: to;
-	
-	if( node )
-	{
-		writeln( '\t'.repeat(indent), node.kind() );
-		
-		foreach( child; node.children )
-		{
-			child.printNodesRecursive(indent+1);
-		}
-	}
-	else
-		writeln( '\t'.repeat(indent), "Node is null!" );
-}
-
-void main()
-{
-		
-	alias TextRange = TextForwardRange!(string, LocationConfig());
-	
-	auto parser = new Parser!(TextRange)(
-` [ ( 10 + 20 * ( 67 - 22 ) ) ] + [ 100 * 100, 15 ] - [ 16.6 - 7 ] + { "aaa": "bbb" } ~ doIt(  checkIt( [] + {} ) + 15 ) ;`, "source.tpl");
-	
-	
-	//try {
-		parser.lexer.popFront();
-		auto expr = parser.parseExpression();
-		
-		writeln;
-		writeln("Recursive printing of nodes:");
-		
-		expr.printNodesRecursive();
-
-	//} catch(Throwable) {}
-	
-	writeln;
-	writeln("List of lexemes:");
-	
-	import std.array: array;
-	
-	foreach( lex; parser.lexer.lexemes )
-	{
-		writeln( cast(LexemeType) lex.info.typeIndex, "  content: ", lex.getSlice(parser.lexer.sourceRange).array );
-	}
-
 }

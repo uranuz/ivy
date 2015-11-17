@@ -1,0 +1,27 @@
+statement := statementIdentifier attributesList statementBody statementContinuations ';'
+
+statementBodySep := ':'
+
+statementBody := 
+	| statementBodySep plainStatementBody
+	| blockStatementBody
+	| statementBodySep blockStatementBody
+	
+statementContinuation := statementBodySep statementIdentifier attributesList statementBody
+
+attributesList := plainAttributesList keyValuePairsList
+
+plainAttributesList := attributeValue+
+
+keyValuePairsList := keyValuePair+
+
+attributeValue := plainExpression| blockExpression
+
+blockExpression := codeBlock | mixedBlock | rawTextBlock
+
+keyValuePairSep := '='
+
+keyValuePair := key keyValuePairSep attributeValue
+	
+key := dotSeparatedName 
+	| stringLiteral

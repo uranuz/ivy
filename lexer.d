@@ -497,13 +497,13 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	enum ContextState { DataContext, CodeContext };
 	
 	LexemeT[] lexemes;
-	const(SourceRange) sourceRange; //Source range. Don't modify it!
+	SourceRange sourceRange; //Source range. Don't modify it!
 	SourceRange currentRange;
 	bool inCode = false;
 	
 	ContextState ctxState;
 	LexTypeIndex[] balancingStack;
-	private LexemeT _front;
+	/+private+/ LexemeT _front;
 	
 	@disable this(this);	
 	
@@ -514,6 +514,12 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 		// if( !this.empty )
 			// popFront();
+	}
+	
+	this( ref const(SourceRange) srcRange )
+	{
+		sourceRange = srcRange.save;
+		currentRange = sourceRange.save;
 	}
 	
 	void parse()
@@ -628,6 +634,21 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	{
 		return front.getSlice(sourceRange);
 	}
+	
+	@property auto save()
+	{
+		auto thisCopy = Lexer!(S, c)(sourceRange);
+		thisCopy.currentRange = this.currentRange.save;
+		thisCopy.lexemes = this.lexemes.dup;
+		thisCopy.inCode = this.inCode;
+	
+		thisCopy.ctxState = this.ctxState;
+		thisCopy.balancingStack = this.balancingStack.dup;
+		thisCopy._front = this._front;
+		
+		return thisCopy;
+	}
+	
 	
 	void fail_expectation(LexemeType lexType, size_t line, String value = String.init )
 	{

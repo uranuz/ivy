@@ -20,7 +20,7 @@ interface IDeclNode
 		void parent(IDeclNode node);
 	}
 	
-	string toString();
+	// string toString();
 }
 
 
@@ -129,5 +129,18 @@ public:
 
 
 }
+
+interface IStatement: IDeclNode
+{
+	
+	@property {
+		IDeclNode[] plainAttributes();
+		IDeclNode[] keyValueAttributes();
+		
+		IDeclNode mainBody();
+		IDeclNode[] statementContinuations();
+	}
+}
+
 
 
