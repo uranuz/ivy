@@ -476,7 +476,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	
 	static LexTypeIndex[LexTypeIndex] matchingParens;
 	
-	shared static this()
+	static this()
 	{
 		foreach( rule; allRules )
 		{
@@ -492,7 +492,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			LexemeType.RBrace: LexemeType.LBrace,
 			LexemeType.RBracket: LexemeType.LBracket,
 			LexemeType.RParen: LexemeType.LParen
-		];
+		];		
 	}
 	
 	enum ContextState { CodeContext, MixedContext, RawDataContext };
@@ -509,27 +509,14 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		
 		ref LexerContext opAssign(ref LexerContext rhs)
 		{
-			state = rhs.state;
-			parenStack = rhs.parenStack;
+			statesStack = rhs.statesStack.dup;
+			parenStack = rhs.parenStack.dup;
 			return this;
 		}
 		
 		@property ContextState state()
 		{
 			return statesStack.back;	
-		}
-		
-		bool remove(LexTypeIndex typeIndex)
-		{
-			
-		
-		}
-		
-		bool checkRemove(LexTypeIndex typeIndex, ContextState state)
-		{
-			if( typeIndex )
-		
-		
 		}
 	}
 
@@ -615,69 +602,138 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 	void popFront()
 	{
+		import std.array: array;
+		import std.conv: to;
+		
 		_front = parseFront(currentRange, _ctx);
 		
 		lexemes ~= _front;
 		
-		if( _ctx.state == ContextState.CodeContext )
+		auto typeIndex = _front.info.typeIndex;
+		
+		switch( typeIndex ) with( LexemeType )
 		{
-			switch( _front.info.typeIndex ) with( LexemeType )
+			case CodeBlockBegin:
 			{
-				case MixedBlockBegin:
+				if( _ctx.state == ContextState.CodeContext )
 				{
-				
-					break;
-				}
-				case RawDataBlockBegin:
-				{
-				
-					break;
-				}
-				case CodeBlockEnd:
-				{
-				
+					_ctx.parenStack ~= ContextState.CodeContext;
 				
 				}
-				default:
-					break;
-			}		
-		}
-		else if( _ctx.state == ContextState.MixedContext )
-		{
-			switch( _front.info.typeIndex ) with( LexemeType )
-			{
-				case MixedBlockBegin:
+				else if( _ctx.state == ContextState.MixedContext )
 				{
-				
-					break;
-				}
-				case RawDataBlockBegin:
-				{
-				
-					break;
-				}
-				case MixedBlockEnd:
-				{
-					
+					_ctx.parenStack ~= ContextState.CodeContext;
 				
 				}
-				default:
-					break;
-			}
-		}
-		else if( _ctx.state == ContextState.RawDataContext )
-		{
-			if( _front.test( LexemeType.RawDataBlockEnd ) )
-			{
-				assert( state. )
-				_ctx.statesStack.popBack();
-			}
 			
-			//There is nothing matters, except block end
+				break;
+			}
+			case CodeBlockEnd:
+			{
+				if( _ctx.state == ContextState.CodeContext )
+				{
+					assert( _ctx.parenStack.back == CodeBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
+					_ctx.parenStack.popBack();
+				}
+				
+				break;
+			}
+			case MixedBlockBegin:
+			{
+				if( _ctx.state == ContextState.CodeContext )
+				{
+					_ctx.parenStack ~= ContextState.MixedContext;
+				
+				}
+				else if( _ctx.state == ContextState.MixedContext )
+				{
+					_ctx.parenStack ~= ContextState.MixedContext;
+				
+				}
+				break;
+			}
+			case MixedBlockEnd:
+			{
+				if( _ctx.state == ContextState.MixedContext )
+				{
+					assert( _ctx.parenStack.back == MixedBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
+					_ctx.parenStack.popBack();
+				}
+			
+				break;
+			}
+			case LBrace:
+			{
+				
+				break;
+			}
+			case RBrace:
+			{
+				if( _ctx.state == ContextState.CodeContext )
+				{
+					assert( _ctx.parenStack.back == LBrace, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
+					_ctx.parenStack.popBack();
+				}
+				break;
+			}
+			case LParen:
+			{
+			
+				break;
+			}
+			case RParen:
+			{
+				if( _ctx.state == ContextState.CodeContext )
+				{
+					assert( _ctx.parenStack.back == LParen, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
+					_ctx.parenStack.popBack();
+				}
+				break;
+			}
+			case LBracket:
+			{
+			
+				break;
+			}
+			case RBracket:
+			{
+				if( _ctx.state == ContextState.CodeContext )
+				{
+					assert( _ctx.parenStack.back == LBracket, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
+					_ctx.parenStack.popBack();
+				}
+				break;
+			}			
+			case RawDataBlockBegin:
+			{	
+				if( _ctx.state == ContextState.CodeContext )
+				{
+					_ctx.parenStack ~= ContextState.RawDataContext;
+				
+				}
+				else if( _ctx.state == ContextState.MixedContext )
+				{
+					_ctx.parenStack ~= ContextState.RawDataContext;
+				
+				}
+				break;
+			}
+			case RawDataBlockEnd:
+			{
+				if( _ctx.state == ContextState.RawDataContext )
+				{
+					assert( _ctx.parenStack.back == RawDataBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
+					_ctx.parenStack.popBack();					
+				}
+				break;
+			}			
+			default:
+				break;		
 		}
 		
+		
 		if( front.info.isLeftParen )
-			ctx.parenStack ~= front.info.typeIndex;
+			_ctx.parenStack ~= front.info.typeIndex;
 	}
 	
 	bool empty()
