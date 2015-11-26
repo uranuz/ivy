@@ -2,113 +2,195 @@ module declarative.statement;
 
 import declarative.common, declarative.node;
 
-class Statement(LocationConfig c): IStatement
+mixin template PlainStatementImpl(LocationConfig c, T = IDeclNode)
 {
-private:
-	enum locConfig = c;
-	alias CustLocation = CustomizedLocation!locConfig;
+	mixin BaseDeclNodeImpl!(c, T);
 
-	private CustLocation _location;
-	
-	string _name;
-	IDeclNode _parent;
-	
-	IDeclNode[] _plainAttrs;
-	IDeclNode[] _keyValueAttrs;
-	IDeclNode _mainBody;
-	IDeclNode[] _continuations;
+	@property {
+		bool isCompoundStatement()
+		{
+			return false;
+		}
+		
+		ICompoundStatement asCompoundStatement()
+		{
+			return null;
+		}
+		
+		bool isDeclarativeStatement()
+		{
+			return false;
+		}
+		
+		IDeclarativeStatement asDeclarativeStatement()
+		{
+			return null;
+		}
+	}
+}
+
+class DeclarativeStatement(LocationConfig c): IDeclarativeStatement
+{
+	mixin PlainStatementImpl!c;
+
+private:
+	IStatementSection _mainSection;
+	IStatementSection[] _sections;
 	
 public:
 
-	this(string name)
-	{
-		_name = name;
-	}
-
-	this(CustLocation location, string name, IDeclNode[] plainAttrs, IDeclNode[] keyValueAttrs, IDeclNode mainBody, IDeclNode[] continuations)
+	this(CustLocation location, IStatementSection mainSec, IStatementSection[] sections)
 	{
 		_location = location;
-		_name = name;
-		_plainAttrs = plainAttrs;
-		_keyValueAttrs = keyValueAttrs;
-		_mainBody = mainBody;
-		_continuations = continuations;
+		_mainSection = mainSec;
+		_sections = sections;
 	}
 
 	public @property override {
-		IDeclNode parent()
-		{
-			return _parent;
-		}
 		IDeclNode[] children()
 		{
-			return cast(IDeclNode[])( _plainAttrs[] ~ _keyValueAttrs[] ~ _mainBody ~ _continuations[] );
+			return cast(IDeclNode[])( _mainSection ~ _sections );
 		}
 		
-		Location location() const
-		{
-			return _location.toLocation();
-		}
-		
-		PlainLocation plainLocation() const
-		{
-			return _location.toPlainLocation();
-		}
-		
-		ExtendedLocation extLocation() const
-		{
-			return _location.toExtendedLocation();
-		}
-		
-		LocationConfig locationConfig() const
-		{
-			return _location.config;
-		}
-
 		string kind()
 		{
 			return "statement";
 		}
 	}
 	
-	public @property override
-	{
-		void parent(IDeclNode node)
+	// string toString();
+	
+	public @property override {
+		string name()
 		{
-			_parent = node;
+			if( _mainSection )
+				return _mainSection.name;
+				
+			return null;
+		}
+	
+		IDeclNode mainSection()
+		{
+			return _mainSection;
+		}
+		
+		IDeclNode[] sections()
+		{
+			return _sections;
 		}
 	}
 	
-	// string toString();
-	
-	@property override {
-	
-		IDeclNode[] plainAttributes()
+	public @property override {
+		bool isDeclarativeStatement()
 		{
-			return _plainAttrs;
-		}
-		IDeclNode[] keyValueAttributes()
-		{
-			return _keyValueAttrs;
+			return true;
 		}
 		
-		IDeclNode mainBody()
+		IDeclarativeStatement asDeclarativeStatement()
 		{
-			return _mainBody;
-		}
-		IDeclNode[] statementContinuations()
-		{
-			return _continuations;
+			return this;
 		}
 	}
 	
 }
 
-class KeyValueAttribute(LocationConfig c): IDeclNode
+class DeclarationSection(LocationConfig c): IDeclarationSection
 {
-	import declarative.expression: BaseExpressionImpl;
+	mixin PlainStatementImpl!c;
+private:
+	string _name;
+	IExpression[] _plainAttrs;
+	IKeyValueAttribute[] _keyValueAttrs;
 	
-	mixin BaseExpressionImpl!c;
+	IStatement _statement;
+
+public:
+	this( CustLocation loc, string name, IExpression[] plainAttrs, IKeyValueAttribute[] keyValueAttrs, IStatement stmt )
+	{
+		_location = location;
+		_name = name;
+		_plainAttrs = plainAttrs;
+		_keyValueAttrs = keyValueAttrs;
+		_statement = stmt;
+	}
+
+
+	public @property override {
+		string name()
+		{
+			return _name;
+		}
+		
+		IExpression[] plainAttributes()
+		{
+			return _plainAttrs;
+		}
+		
+		IKeyValueAttribute[] keyValueAttributes()
+		{
+			return _keyValueAttrs;
+		}
+		
+		IStatement statement()
+		{
+			return _statement;
+		}
+	}
+	
+	public @property override {
+		IDeclNode[] children()
+		{
+			return cast(IDeclNode[])( _plainAttrs ~ _keyValueAttrs ~ _body );
+		}
+		
+		string kind()
+		{
+			return "statement section";
+		}
+	}
+
+
+}
+
+/+
+class PlainAttribute: IPlainAttribute
+{
+	mixin BaseDeclNodeImpl!c;
+private:
+	IExpression _expr;
+	
+public:
+	this(CustLocation loc, IExpression expr)
+	{
+		_location = loc;
+		_expr = expr;
+	}
+
+	override @property {
+		string kind()
+		{
+			return "plain attribute";
+		}
+	
+		IDeclNode[] children()
+		{
+			return  [ cast(IDeclNode) _expr ];
+		}
+	}
+	
+	override @property {
+		IExpression expression()
+		{
+			return _expr;		
+		}
+	}
+
+}
++/
+
+class KeyValueAttribute(LocationConfig c): IKeyValueAttribute
+{
+	mixin BaseDeclNodeImpl!c;
 
 private:
 	string _name;
@@ -123,47 +205,96 @@ public:
 		_expr = expr;
 	}
 	
-	override @property string kind()
-	{
-		return "key-value attribute";
+	override @property {
+		string kind()
+		{
+			return "key-value attribute";
+		}
+	
+		IDeclNode[] children()
+		{
+			return  [ cast(IDeclNode) _expr ];
+		}
 	}
 	
-	override @property IDeclNode[] children()
-	{
-		return  [ cast(IDeclNode) _expr ];
+	override @property {
+		string name()
+		{
+			return _name;
+		}
+		
+		IExpression expression()
+		{
+			return _expr;		
+		}
 	}
 }
 
-// class DefaultBlock: IDeclNode
-// {
+class BlockStatement(LocationConfig c): ICompoundStatement
+{
+	mixin PlainStatementImpl!c;
+	
+private:
+	IStatement[] _statements;
 
+public:
+	this(CustLocation loc, IStatement[] stmts)
+	{
+		_location = loc;
+		_statements = stmts;
+	}
+	
+	public @property override {
+		bool isCompound()
+		{
+			return true;
+		}
+		
+		ICompoundStatement asCompoundStatement()
+		{
+			return this;
+		}
+	
+	}
+	
+	public @property override {
+		IStatement[] statements()
+		{
+			return _statements;
+		}
+	}
+}
 
-// }
+enum TextBlockType { Mixed, Raw };
 
-// class CodeBlock: IDeclNode
-// {
+class TextBlockStatement(LocationConfig c): IStatement
+{
+	mixin PlainStatementImpl!c;
+private:
+	TextBlockType _textBlockType;
+	size_t _indent;
 	
 
-// }
+public:
+	this(CustLocation loc, TextBlockType blockType, size_t indent = 0)
+	{
+		_location = loc;
+		_textBlockType = blockType;
+		_indent = indent;
+	}
 
-
-// class MixedBlock: IDeclNode
-// {
-
-// }
-
-// class RawTextBlock: IDeclNode
-// {
-
-
-// }
-
-
-// class ExprEvalBlock: IDeclNode
-// {
-
-// }
-
+	public @property override {
+		IDeclNode[] children()
+		{
+			return null;
+		}
+		
+		string kind()
+		{
+			return "text block statement";
+		}
+	}
+}
 
 
 

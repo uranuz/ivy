@@ -10,8 +10,8 @@ static immutable intChars = "0123456789";
 
 static immutable codeBlockBegin = "{%";
 static immutable codeBlockEnd = "%}";
-static immutable dataBlockBegin = "{*" ;
-static immutable dataBlockEnd = "*}";
+static immutable mixedBlockBegin = "{*" ;
+static immutable mixedBlockEnd = "*}";
 static immutable commentBlockBegin = "{#";
 static immutable commentBlockEnd = "#}";
 static immutable evalBlockBegin = "{{";
@@ -54,8 +54,8 @@ enum LexemeType {
 	Name,
 	CodeBlockBegin, //30
 	CodeBlockEnd,
-	DataBlockBegin,
-	DataBlockEnd,
+	MixedBlockBegin,
+	MixedBlockEnd,
 	RawDataBlockBegin,
 	RawDataBlockEnd, //35
 	CommentBlockBegin,
@@ -436,8 +436,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	static LexRule[] inCodeRules = [
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
 		staticRule( codeBlockEnd, LexemeType.CodeBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
-		staticRule( dataBlockBegin, LexemeType.DataBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
-		staticRule( dataBlockEnd, LexemeType.DataBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
+		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
+		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
 		
 		staticRule( "+", LexemeType.Add, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "=", LexemeType.Assign, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
@@ -487,33 +487,65 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		
 		matchingParens = [
 			LexemeType.CodeBlockEnd: LexemeType.CodeBlockBegin,
-			LexemeType.DataBlockEnd: LexemeType.DataBlockBegin,
+			LexemeType.MixedBlockEnd: LexemeType.MixedBlockBegin,
+			LexemeType.RawDataBlockEnd: LexemeType.RawDataBlockBegin,
 			LexemeType.RBrace: LexemeType.LBrace,
 			LexemeType.RBracket: LexemeType.LBracket,
 			LexemeType.RParen: LexemeType.LParen
 		];
 	}
 	
-	enum ContextState { DataContext, CodeContext };
+	enum ContextState { CodeContext, MixedContext, RawDataContext };
 	
+	struct LexerContext
+	{
+		ContextState[] statesStack;
+		LexTypeIndex[] parenStack;
+		
+		this(this)
+		{
+			parenStack = parenStack.dup;
+		}
+		
+		ref LexerContext opAssign(ref LexerContext rhs)
+		{
+			state = rhs.state;
+			parenStack = rhs.parenStack;
+			return this;
+		}
+		
+		@property ContextState state()
+		{
+			return statesStack.back;	
+		}
+		
+		bool remove(LexTypeIndex typeIndex)
+		{
+			
+		
+		}
+		
+		bool checkRemove(LexTypeIndex typeIndex, ContextState state)
+		{
+			if( typeIndex )
+		
+		
+		}
+	}
+
 	LexemeT[] lexemes;
 	SourceRange sourceRange; //Source range. Don't modify it!
 	SourceRange currentRange;
-	bool inCode = false;
-	
-	ContextState ctxState;
-	LexTypeIndex[] balancingStack;
+	LexerContext _ctx;
+		
 	/+private+/ LexemeT _front;
 	
 	@disable this(this);	
 	
 	this( String src ) 
 	{
-		sourceRange = SourceRange(src);
-		currentRange = sourceRange.save;
-
-		// if( !this.empty )
-			// popFront();
+		auto newRange = SourceRange(src);
+		this( newRange );
 	}
 	
 	this( ref const(SourceRange) srcRange )
@@ -530,47 +562,23 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		}
 	}
 
-/+
-	static LexemeT parseFront(ref SourceRange source, ref int[] balancingStack, bool inCode)
+	static LexemeT parseFront(ref SourceRange source, ref LexerContext ctx)
 	{
-		LexemeT lex;
-		if( inCode )
-			skipWhiteSpaces(source);
+		import std.conv: to;
 		
-		auto rules = inCode ? inCodeRules : inDataRules;
-		foreach( ref rule; rules )
-		{
-			lex = rule.parse(source);
-			if( lex.info.typeIndex != LexemeType.Unknown )
-				break;
-		}
-		
-		if( lex.info.typeIndex == LexemeType.Unknown )
-			assert(false, "Expected token!");
-		if( lex.info.isRightParen )
-		{
-			if( balancingStack.length > 0 )
-			{
-				if( balancingStack.back == matchingParens[lex.info.typeIndex] )
-				{
-					balancingStack.popBack();
-				}
-				else
-					assert( false, "Expected matching parenthesis!!!" );
-			}
-		}
-		return lex;
-	}
-+/
-
-	static LexemeT parseFront(ref SourceRange source, ref int[] balancingStack, bool inCode)
-	{
 		LexemeT lex;
 		// if( inCode )
 			skipWhiteSpaces(source);
 			
 		if( source.empty )
+		{
+			assert( ctx.parenStack.length > 0 , 
+				"Expected matching parenthesis for " 
+				~ (cast(LexemeType) ctx.parenStack.back).to!string  
+				~ ", but unexpected end of input found!!!" 
+			);
 			return createLexemeAt(source, LexemeType.EndOfFile);
+		}
 		
 		auto rules = allRules;
 
@@ -589,36 +597,87 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			
 		if( lex.info.isRightParen )
 		{
-			if( balancingStack.length > 0 )
+			if( ctx.parenStack.length > 0 )
 			{
-				int backParen = balancingStack.back;
+				int backParen = ctx.parenStack.back;
 				
 				if( backParen == matchingParens[lex.info.typeIndex] )
 				{
-					balancingStack.popBack();
+					ctx.parenStack.popBack();
 				}
 				else
 					assert( false, "Expected matching parenthesis!!!" );
 			}
-		}
+		}			
 
 		return lex;
 	}
 
 	void popFront()
 	{
-		_front = parseFront(currentRange, balancingStack, inCode);
+		_front = parseFront(currentRange, _ctx);
 		
 		lexemes ~= _front;
-
-		if( inCode && ( front.info.typeIndex == LexemeType.CodeBlockEnd /+|| front.info.typeIndex == LexemeType.VariableEnd+/ ) )
-			inCode = false;
-		else if( !inCode && ( front.info.typeIndex == LexemeType.CodeBlockBegin /+|| front.typeIndex == LexemeType.VariableBegin+/ ) )
-			inCode = true;
+		
+		if( _ctx.state == ContextState.CodeContext )
+		{
+			switch( _front.info.typeIndex ) with( LexemeType )
+			{
+				case MixedBlockBegin:
+				{
+				
+					break;
+				}
+				case RawDataBlockBegin:
+				{
+				
+					break;
+				}
+				case CodeBlockEnd:
+				{
+				
+				
+				}
+				default:
+					break;
+			}		
+		}
+		else if( _ctx.state == ContextState.MixedContext )
+		{
+			switch( _front.info.typeIndex ) with( LexemeType )
+			{
+				case MixedBlockBegin:
+				{
+				
+					break;
+				}
+				case RawDataBlockBegin:
+				{
+				
+					break;
+				}
+				case MixedBlockEnd:
+				{
+					
+				
+				}
+				default:
+					break;
+			}
+		}
+		else if( _ctx.state == ContextState.RawDataContext )
+		{
+			if( _front.test( LexemeType.RawDataBlockEnd ) )
+			{
+				assert( state. )
+				_ctx.statesStack.popBack();
+			}
+			
+			//There is nothing matters, except block end
+		}
 		
 		if( front.info.isLeftParen )
-			balancingStack ~= front.info.typeIndex;
-
+			ctx.parenStack ~= front.info.typeIndex;
 	}
 	
 	bool empty()
@@ -640,10 +699,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		auto thisCopy = Lexer!(S, c)(sourceRange);
 		thisCopy.currentRange = this.currentRange.save;
 		thisCopy.lexemes = this.lexemes.dup;
-		thisCopy.inCode = this.inCode;
 	
-		thisCopy.ctxState = this.ctxState;
-		thisCopy.balancingStack = this.balancingStack.dup;
+		thisCopy._ctx = this._ctx;
 		thisCopy._front = this._front;
 		
 		return thisCopy;
@@ -736,7 +793,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		if( this.empty )
 			assert( false, "Cannot peek lexeme, because currentRange is empty!!!" );
 		
-		return parseFront(parsedRange, balancingStack, inCode);
+		return parseFront(parsedRange, _ctx);
 	}
 	
 	static void skipWhiteSpaces(ref SourceRange source)
@@ -895,6 +952,13 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		return extractLexeme(source, parsedRange, rule.lexemeInfo);
 	}
 	
+	static LexemeT parseRawData(ref SourceRange source, ref const(LexRule) rule)
+	{
+		SourceRange parsedRange = source.save;
+	
+		return extractLexeme(source, parsedRange, rule.lexemeInfo);
+	}
+	
 	static LexemeT parseName(ref SourceRange source, ref const(LexRule) rule)
 	{
 		//writeln("lexer.parseName");
@@ -935,28 +999,3 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	}
 	
 }
-
-/+
-import std.stdio;
-
-void main()
-{
-	string str = `{%%}+- 0.1  "Vasya" ***  -100500.05 hello null array.length ` ;
-	
-	import std.uni: isAlpha;
-	alias MyLexer = Lexer!(string, LocationConfig.init);
-	
-	MyLexer lexer = MyLexer(str);
-		
- 	try {
-		lexer.parse();
-	} catch (Throwable e){}
-
-	
-	foreach( lex; lexer.lexemes )
-	{
-		writeln( "lex.index: ", lex.index, " ", "lex.length: ", lex.length, ", lex.type: ", cast(LexemeType) lex.info.typeIndex, ", content: ", lex.getSlice(lexer.sourceRange).toString() );
-	}
-
-}
-+/

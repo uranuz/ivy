@@ -250,3 +250,50 @@ auto getCustomizedLocation(LexemeT)( LexemeT lex, string fileName )
 
 	return loc;
 }
+
+import declarative.node : IDeclNode;
+
+mixin template BaseDeclNodeImpl(LocationConfig c, T = IDeclNode)
+{
+	enum locConfig = c;
+	alias CustLocation = CustomizedLocation!locConfig;
+	
+	private T _parentNode;
+	private CustLocation _location;
+	
+	public @property override
+	{ 
+		T parent()
+		{
+			return _parentNode;
+		}
+	
+		Location location() const
+		{
+			return _location.toLocation();
+		}
+		
+		PlainLocation plainLocation() const
+		{
+			return _location.toPlainLocation();
+		}
+		
+		ExtendedLocation extLocation() const
+		{
+			return _location.toExtendedLocation();
+		}
+		
+		LocationConfig locationConfig() const
+		{
+			return _location.config;
+		}
+	}
+	
+	public @property override
+	{
+		void parent(IDeclNode node)
+		{
+			_parentNode = node;
+		}
+	}
+}

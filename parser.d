@@ -50,7 +50,7 @@ public:
 				parseCodeBlockContent();
 			
 			}
-			else if( lex.info.typeIndex == LexemeType.DataBlockBegin )
+			else if( lex.info.typeIndex == LexemeType.MixedBlockBegin )
 			{
 				parseDataBlockContent();
 			
@@ -122,8 +122,209 @@ public:
 		
 		return nameParts.join(".");
 	}
+	
+	IKeyValueAttribute parseNamedAttribute()
+	{
+		import std.array: array;
+		import std.conv: to;
 
-	IStatement parseStatement()
+		CustLocation loc = this.currentLocation;
+		
+		LexerType lexerCopy = lexer.save;
+		
+		string attrName = parseQualifiedIdentifier(true);
+		
+		writeln( "parseNamedAttribute: attrName: ", attrName );
+		writeln( "parseNamedAttribute: frontValue is: ", lexer.frontValue.array.to!string );
+		
+		if( attrName.empty || !lexer.front.test( LexemeType.Assign ) || lexer.empty )
+		{
+			lexer = lexerCopy.save;
+			writeln( "parseNamedAttribute(0): lexer restored, LexemeType is: ", 
+				cast(LexemeType) lexer.front.info.typeIndex,
+				", frontValue is: ", lexer.frontValue.array.to!string
+			);
+			return null;
+		}
+		
+		lexer.popFront(); //Skip key-value delimeter
+		
+		IExpression expr = parseExpression();
+		
+		if( !expr )
+		{
+			lexer = lexerCopy.save;
+			writeln( "parseNamedAttribute(1): lexer restored, LexemeType is: ", 
+				cast(LexemeType) lexer.front.info.typeIndex,
+				", frontValue is: ", lexer.frontValue.array.to!string
+			);
+			return null;
+		}
+		
+		return new KeyValueAttribute!(config)(loc, attrName, expr);
+	}
+	
+	IStatement[] parseStatementBody()
+	{
+		bool isBlockDetected = 
+			lexer.front.test( LexemeType.LBrace ) 
+			|| lexer.front.test(CodeBlockBegin) 
+			|| lexer.front.test(MixedBlockBegin) ;
+		
+		IExpression expr;
+		
+		IStatement[] statements;
+		
+		if( isBlockDetected )
+		{
+			int blockTypeIndex = lexer.front.info.typeIndex;
+			lexer.popFront();
+			
+			switch( blockTypeIndex ) with( LexemeType )
+			{
+				case LBrace:
+				{
+					//parseCodeOrDataBlock() depending on current parser state
+					assert(0, "Default block is not implemented yet!!!");
+					
+					break;
+				}
+				
+				case CodeBlockBegin:
+				{
+					IStatement stmt;
+					
+					while( !lexer.empty && !lexer.front.test(CodeBlockEnd) )
+					{
+						stmt = parseDeclarativeStatement();
+						assert( stmt !is null, "parseStatementBody: declarative statement is null" );
+						statements ~= stmt;
+					}
+					
+					break;
+				}
+				
+				case MixedBlockBegin:
+				{
+					assert(0, "Data block is not implemented yet!!!");
+					
+					
+					// while( !lexer.empty && !lexer.front.test(MixedBlockEnd) )
+					// {
+						// if( lexer.front.test())
+						
+						// stmt = parseDeclarativeStatement();
+						// assert( stmt !is null, "parseStatementBody: declarative statement is null" );
+					// }
+					break;
+				}
+				default:
+					assert(0, "Undefined block type found!!!");
+			}
+		
+		}
+		else
+		{
+			expr = parseExpression();
+			
+		}
+		
+		return statements;
+	}
+	
+	IDeclarationSection parseDeclarationSection()
+	{
+		import std.array: array;
+		import std.conv: to;
+		
+		IDeclarationSection section;
+		
+		assert( lexer.front.test( LexemeType.Name ), "Expected statement name!!!" );
+		
+		string sectionName = parseQualifiedIdentifier();
+		writeln("section identifier: ", sectionName);
+		
+		if( sectionName.empty )
+			return null;
+		
+		IExpression[] unnamedAttrs;
+		IKeyValueAttribute[] namedAttrs;
+		
+		bool isUnnamedAfterNamed = false;
+		
+		while( !lexer.empty )
+		{
+			auto lexerCopy = lexer.save;
+			
+			
+			if( lexer.front.test( LexemeType.Semicolon ) )
+				break;
+			
+			IExpression attr;
+			
+			//Try parse named attribute
+			IKeyValueAttribute namedAttr = parseNamedAttribute();
+			
+			writeln( "parseStatement: parsed named attr, frontValue: ", lexer.frontValue.array.to!string );
+			writeln( "parseStatement: attr is", ( namedAttr is null ? null : " not" ) ~ " null" );
+			
+			//If no named attrs detected yet then we try parse unnamed attrs
+			if( namedAttr )
+			{	//Named attribute parsed, add it to list
+				writeln( "Named attribute detected!!!" );
+				namedAttrs ~= namedAttr;
+			}
+			else
+			{	//Named attribute was not found will try to parse unnamed one
+				attr = parseExpression();
+				
+				if( attr )
+				{
+					writeln( "Unnamed attribute detected!!!" );
+					
+					
+					if( !unnamedAttrs.empty )
+					{
+						isUnnamedAfterNamed = true;
+						writeln( "Found unnamed attr after named, possibly it's main body!!!" );
+						lexer = lexerCopy.save; //Restore lexer range to original at current step
+						break; //Exit loop after this situation detected
+					}
+					unnamedAttrs ~= attr;
+					
+				}
+			}
+			
+			if( !namedAttr && !attr )
+				break; //If no more attributes parsed then exit loop
+			
+			if( lexer.front.test( LexemeType.Comma ) )
+				lexer.popFront(); //Skip optional Comma
+		}
+		
+		//For single statement body we must use colon to separate it from attributes list
+		//But for block statement it's made optional in order to simplify syntax
+		
+		bool isBodySepFound = false;
+		
+		if( lexer.front.test( LexemeType.Colon ) )
+		{
+			isBodySepFound = true;
+			lexer.popFront();
+		}
+		
+		IExpression sectionBody = parseStatementBody();
+		
+
+		section = new StatementSection!(config)(sectionName, unnamedAttrs, namedAttrs, sectionBody);
+		
+		return section;	
+	}
+	
+	
+	
+
+	IDeclarativeStatement parseDeclarativeStatement()
 	{
 		import std.array: array;
 		import std.conv: to;
@@ -131,118 +332,19 @@ public:
 		IStatement stmt = null;
 		CustLocation loc = this.currentLocation;
 		
-		assert( lexer.front.test( LexemeType.Name ), "Expected statement name!!!" );
 		
-		string stmtIdentifier = parseQualifiedIdentifier();
-		writeln("statement identifier: ", stmtIdentifier);
 		
-		IDeclNode[] unnamedAttrs;
-		IDeclNode[] namedAttrs;
-			
-		//Parse unnamed attributes list
-		
-		IExpression expr;
-		
+		StatementSecResult mainSection = parseStatementSection();
 		
 		
 		while( !lexer.empty )
 		{
-			LexerType lexCopy = lexer.save;
-			
-			string attrName = parseQualifiedIdentifier(true);
-			
-			if( attrName.empty )
-				lexer = lexCopy.save;
-			
-			writeln("Parse statement: parsed possible attr name, frontValue is: ", lexer.frontValue.array.to!string);
-			
-			//If identifier found and Colon or Assign follows it
-			//then we parse named attributes list
-			if( !attrName.empty && ( lexer.front.test( LexemeType.Colon) || lexer.front.test( LexemeType.Assign ) ) )
-			{
-					assert( lexer.front.test( LexemeType.Assign ), "Expected colon between attribute name and it's expression!!!" );
-					lexer.popFront();
-					
-					expr = parseExpression();
-					
-					writeln("Parsed named attr of kind: ", expr.kind);
-					writeln("Parsed named attr, frontValue is: ", lexer.frontValue.array.to!string);
-					
-					assert( expr, "Got null reference instead of expression object in named attribute!!!" );
-					
-					namedAttrs ~= new KeyValueAttribute!(config)(loc, attrName, expr);
-			
-			}
-			else if( unnamedAttrs.empty ) //All unnamed attrs should be at the begining
-			{
-				LexerType lexerCopy = lexer.save;
-				expr = parseExpression();
-				
-				writeln("parseStatement: unnamed attr parsed, frontValue is: ", lexer.frontValue.array.to!string);
-				
-				if( !expr || lexer.front.test( LexemeType.Colon) || lexer.front.test( LexemeType.Assign ) )
-				{
-					lexer = lexerCopy.save;
-					writeln("parseStatement: named attr detected, reset: ", lexer.frontValue.array.to!string);
-					break;
-				}
-				
-				writeln("Parsed unnamed attr of kind: ", expr.kind);
-				unnamedAttrs ~= expr;
-				
-				// if( !lexer.test( LexemeType.Comma ) )
-					// break;
-					
-				lexer.popFront();
-			
-			}
-			else
-				break; //Exit loop if cannot find attrs in there
+		
+		
 		}
 		
-		//Parse named attributes list
 		
-		writeln("parseStatement debug1: ", lexer.frontValue.array.to!string);
-
-		//For single statement body we must use colon to separate it from attributes list
-		//But for block statement it's made optional in order to simplify syntax
 		
-		// if( lexer.front.test( LexemeType.Colon ) )
-		
-		IDeclNode mainBody;
-		
-		// //Parse main statement body
-		// while( !lexer.empty )
-		// {
-			// LexemeT lex = lexer.front;
-			
-			// switch( lex.info.typeIndex ) with( LexemeType )
-			// {
-				// case LBrace:
-				// {
-					// //parseCodeOrDataBlock() depending on current parser state
-				
-					// break;
-				// }
-				
-				// case CodeBlockBegin:
-				// {
-					// //parseCodeBlock()
-					
-					// break;
-				// }
-				
-				// case DataBlockBegin:
-				// {
-					// //parseDataBlock()
-					
-					// break;
-				// }
-				// default:
-					// break;
-			// }
-			// lexer.popFront();
-		// }
 		
 		IDeclNode[] continuations;
 		
@@ -254,7 +356,7 @@ public:
 			// //but can have attribute list
 		// }
 		
-		stmt = new Statement!(config)(loc, stmtIdentifier, unnamedAttrs, namedAttrs, mainBody, continuations);
+		stmt = new DeclarativeStatement!(config)(loc, stmtIdentifier, unnamedAttrs, namedAttrs, mainBody, continuations);
 		
 		return stmt;
 	}

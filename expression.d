@@ -4,47 +4,21 @@ import declarative.node, declarative.common;
 
 mixin template BaseExpressionImpl(LocationConfig c, T = IDeclNode)
 {
-	enum locConfig = c;
-	alias CustLocation = CustomizedLocation!locConfig;
-	
-	private T _parentNode;
-	private CustLocation _location;
-	
-	public @property override
-	{ 
-		T parent()
-		{
-			return _parentNode;
-		}
-	
-		Location location() const
-		{
-			return _location.toLocation();
-		}
-		
-		PlainLocation plainLocation() const
-		{
-			return _location.toPlainLocation();
-		}
-		
-		ExtendedLocation extLocation() const
-		{
-			return _location.toExtendedLocation();
-		}
-		
-		LocationConfig locationConfig() const
-		{
-			return _location.config;
-		}
-	}
+	mixin BaseDeclNodeImpl!(c, T);
 	
 	public @property override
 	{
-		void parent(IDeclNode node)
+		bool hasStatement()
 		{
-			_parentNode = node;
+			return false;
+		}
+		
+		IStatement statement()
+		{
+			return null;
 		}
 	}
+
 }
 
 mixin template BinaryArithmeticExpressionImpl()
@@ -554,6 +528,29 @@ public:
 		return cast(IDeclNode[]) _argList;
 	}
 
-
-
 }
+
+class BlockExp(LocationConfig c): IExpression
+{
+	mixin BaseExpressionImpl!c;
+private:
+	ICompoundStatement _blockStatement;
+	
+public:
+	this( CustLocation loc, ICompoundStatement blockStmt )
+	{
+		_location = loc;
+		_blockStatement = blockStmt;
+	}
+	
+	override @property {
+		ICompoundStatement statement()
+		{
+			return _blockStatement;
+		}
+		
+	}
+
+	
+}
+

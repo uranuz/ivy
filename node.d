@@ -34,6 +34,9 @@ interface IExpression: IDeclNode
 	// bool checkFloating();
 	// bool checkArithmetic();
 	// bool checkString();
+	@property {
+		IStatement statement();
+	}
 }
 
 
@@ -91,14 +94,6 @@ interface IBinaryExpression: IOperatorExpression
 
 }
 
-interface IDeclaration: IDeclNode
-{
-	
-	@property {
-		string declName();
-	}
-}
-
 interface IIdentifier
 {
 	@property {
@@ -127,18 +122,52 @@ public:
 		}
 	}
 
+}
+
+interface IKeyValueAttribute: IDeclNode
+{
+	@property {
+		string name();
+		IExpression expression();
+	}
 
 }
 
 interface IStatement: IDeclNode
 {
-	
 	@property {
-		IDeclNode[] plainAttributes();
-		IDeclNode[] keyValueAttributes();
-		
-		IDeclNode mainBody();
-		IDeclNode[] statementContinuations();
+		bool isCompoundStatement();
+		ICompoundStatement asCompoundStatement();
+		bool isDeclarativeStatement();
+		IDeclarativeStatement asDeclarativeStatement();
+	}
+}
+
+
+interface IDeclarationSection: IStatement
+{
+	@property {
+		string name();
+		IExpression[] plainAttributes();
+		IKeyValueAttribute[] keyValueAttributes();
+		IStatement statement();
+	}
+
+}
+
+interface IDeclarativeStatement: IStatement
+{
+	@property {
+		string name();
+		IDeclarationSection mainSection();
+		IDeclarationSection[] sections();
+	}
+}
+
+interface ICompoundStatement: IStatement
+{
+	@property {
+		IStatement[] statements();	
 	}
 }
 
