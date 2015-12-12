@@ -31,12 +31,12 @@ void main()
 // ` [ ( 10 + 20 * ( 67 - 22 ) ) ] + [ 100 * 100, 15 ] - [ 16.6 - 7 ] + { "aaa": "bbb" } ~ doIt(  checkIt( [] + {} ) + 15 ) ;`, "source.tpl");
 
 	auto parser = new Parser!(TextRange)(
-	` Qt.TextBox 20 kesha hui shit.callMe(10, 20) "Epta" name= 2 + 2 * doIt(50 + 800) value= 20 ; `, "source.tpl");
+	` Qt.TextBox {% Qt.Font size= 10; %} `, "source.tpl");
 	
 	
 	//try {
 		parser.lexer.popFront();
-		auto expr = parser.parseStatement();
+		auto expr = parser.parseDeclarativeStatement();
 		
 		writeln;
 		writeln("Recursive printing of nodes:");

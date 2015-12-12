@@ -35,7 +35,7 @@ interface IExpression: IDeclNode
 	// bool checkArithmetic();
 	// bool checkString();
 	@property {
-		IStatement statement();
+		IStatement asStatement();
 	}
 }
 
@@ -128,7 +128,7 @@ interface IKeyValueAttribute: IDeclNode
 {
 	@property {
 		string name();
-		IExpression expression();
+		IDeclNode value();
 	}
 
 }
@@ -148,7 +148,7 @@ interface IDeclarationSection: IStatement
 {
 	@property {
 		string name();
-		IExpression[] plainAttributes();
+		IDeclNode[] plainAttributes();
 		IKeyValueAttribute[] keyValueAttributes();
 		IStatement statement();
 	}
@@ -166,10 +166,10 @@ interface IDeclarativeStatement: IStatement
 
 interface ICompoundStatement: IStatement
 {
+	IStatement opIndex(size_t index);
+	
 	@property {
-		IStatement[] statements();	
+		IStatement first();
+		IStatement last();
 	}
 }
-
-
-

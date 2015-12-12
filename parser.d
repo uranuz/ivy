@@ -164,14 +164,15 @@ public:
 		return new KeyValueAttribute!(config)(loc, attrName, expr);
 	}
 	
-	IStatement[] parseStatementBody()
+	IStatement parseStatementBody()
 	{
 		bool isBlockDetected = 
 			lexer.front.test( LexemeType.LBrace ) 
-			|| lexer.front.test(CodeBlockBegin) 
-			|| lexer.front.test(MixedBlockBegin) ;
+			|| lexer.front.test( LexemeType.CodeBlockBegin ) 
+			|| lexer.front.test( LexemeType.MixedBlockBegin )
+			|| lexer.front.test( LexemeType.ExprBlockBegin );
 		
-		IExpression expr;
+		IStatement statement;
 		
 		IStatement[] statements;
 		
@@ -179,6 +180,8 @@ public:
 		{
 			int blockTypeIndex = lexer.front.info.typeIndex;
 			lexer.popFront();
+			
+			writeln( "parseStatementBody: block statement detected: ", cast(LexemeType) blockTypeIndex );
 			
 			switch( blockTypeIndex ) with( LexemeType )
 			{
@@ -218,6 +221,11 @@ public:
 					// }
 					break;
 				}
+				case ExprBlockBegin:
+				{
+				
+					break;
+				}
 				default:
 					assert(0, "Undefined block type found!!!");
 			}
@@ -225,17 +233,40 @@ public:
 		}
 		else
 		{
-			expr = parseExpression();
+			//expr = parseExpression();
 			
 		}
 		
-		return statements;
+		return statement;
+	}
+	
+	IExpression parseExpressionBlock()
+	{
+		IExpression expr;
+	
+		return expr;
+	}
+	
+	ICompoundStatement parseCodeBlock()
+	{
+		ICompoundStatement statement;
+		
+		return statement;
+	}
+	
+	ICompoundStatement parseMixedBlock()
+	{
+		ICompoundStatement statement;
+		
+		return statement;
 	}
 	
 	IDeclarationSection parseDeclarationSection()
 	{
 		import std.array: array;
 		import std.conv: to;
+		
+		CustLocation loc = this.currentLocation;
 		
 		IDeclarationSection section;
 		
@@ -313,10 +344,10 @@ public:
 			lexer.popFront();
 		}
 		
-		IExpression sectionBody = parseStatementBody();
+		IStatement sectionBody = parseStatementBody();
 		
 
-		section = new StatementSection!(config)(sectionName, unnamedAttrs, namedAttrs, sectionBody);
+		section = new DeclarationSection!(config)(loc, sectionName, cast(IDeclNode[]) unnamedAttrs, namedAttrs, sectionBody);
 		
 		return section;	
 	}
@@ -329,24 +360,15 @@ public:
 		import std.array: array;
 		import std.conv: to;
 		
-		IStatement stmt = null;
+		IDeclarativeStatement stmt = null;
 		CustLocation loc = this.currentLocation;
 		
 		
 		
-		StatementSecResult mainSection = parseStatementSection();
+		IDeclarationSection mainSection = parseDeclarationSection();
 		
 		
-		while( !lexer.empty )
-		{
-		
-		
-		}
-		
-		
-		
-		
-		IDeclNode[] continuations;
+		IDeclarationSection[] sections;
 		
 		// //Parse extended statement bodies
 		// while( !lexer.empty )
@@ -356,7 +378,7 @@ public:
 			// //but can have attribute list
 		// }
 		
-		stmt = new DeclarativeStatement!(config)(loc, stmtIdentifier, unnamedAttrs, namedAttrs, mainBody, continuations);
+		stmt = new DeclarativeStatement!(config)(loc, mainSection, sections);
 		
 		return stmt;
 	}

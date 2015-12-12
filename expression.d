@@ -8,12 +8,12 @@ mixin template BaseExpressionImpl(LocationConfig c, T = IDeclNode)
 	
 	public @property override
 	{
-		bool hasStatement()
-		{
-			return false;
-		}
+// 		bool hasStatement()
+// 		{
+// 			return false;
+// 		}
 		
-		IStatement statement()
+		IStatement asStatement()
 		{
 			return null;
 		}
