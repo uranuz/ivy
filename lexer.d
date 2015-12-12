@@ -480,7 +480,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		dynamicRule( &parseFloat, LexemeType.Float, LexemeFlag.Literal ),
 		dynamicRule( &parseInteger, LexemeType.Integer, LexemeFlag.Literal ),
 		dynamicRule( &parseName, LexemeType.Name ),
-		dynamicRule( &parseString, LexemeType.String, LexemeFlag.Literal )
+		dynamicRule( &parseString, LexemeType.String, LexemeFlag.Literal ),
+		dynamicRule( &parseData, LexemeType.Data, LexemeFlag.Literal )
 	];
 
 	static LexRule[] allRules;
@@ -644,7 +645,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			{
 				if( _ctx.state == ContextState.CodeContext )
 				{
-					assert( !_ctx.parenStack.empty && _ctx.parenStack.back == CodeBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
+					//assert( !_ctx.parenStack.empty && _ctx.parenStack.back == CodeBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
 					_ctx.statesStack.popBack();
 				}
 				
@@ -990,16 +991,13 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	
 	static immutable notTextLexemes = [
 		codeBlockBegin,
-		// BLOCK_END,
-		// // VARIABLE_START,
-		// VARIABLE_END,
-		// // COMMENT_START,
-		// COMMENT_END
+		mixedBlockBegin,
+		exprBlockBegin
 	];
 
 	static LexemeT parseData(ref SourceRange source, ref const(LexRule) rule)
 	{
-		//writeln("lexer.parseData");
+		writeln("lexer.parseData");
 		
 		SourceRange parsedRange = source.save;
 		

@@ -195,30 +195,15 @@ public:
 				
 				case CodeBlockBegin:
 				{
-					IStatement stmt;
-					
-					while( !lexer.empty && !lexer.front.test(CodeBlockEnd) )
-					{
-						stmt = parseDeclarativeStatement();
-						assert( stmt !is null, "parseStatementBody: declarative statement is null" );
-						statements ~= stmt;
-					}
+					statement = parseCodeBlock();
 					
 					break;
 				}
 				
 				case MixedBlockBegin:
 				{
-					assert(0, "Data block is not implemented yet!!!");
-					
-					
-					// while( !lexer.empty && !lexer.front.test(MixedBlockEnd) )
-					// {
-						// if( lexer.front.test())
-						
-						// stmt = parseDeclarativeStatement();
-						// assert( stmt !is null, "parseStatementBody: declarative statement is null" );
-					// }
+					//assert(0, "Data block is not implemented yet!!!");
+					statement = parseMixedBlock();
 					break;
 				}
 				case ExprBlockBegin:
@@ -233,6 +218,13 @@ public:
 		}
 		else
 		{
+			if( lexer.front.test( LexemeType.Semicolon ) )
+			{
+				writeln( "parseStatementBody: Semicolon found as statement body, so body is empty" );
+				lexer.popFront(); //Skip semicolon
+				return null;
+			}
+			
 			//expr = parseExpression();
 			
 		}
@@ -251,12 +243,45 @@ public:
 	{
 		ICompoundStatement statement;
 		
+		IStatement[] statements;
+					
+		CustLocation blockLocation = this.currentLocation;
+		
+		while( !lexer.empty && !lexer.front.test(LexemeType.CodeBlockEnd) )
+		{
+			IStatement stmt = parseDeclarativeStatement();
+			assert( stmt !is null, "parseStatementBody: declarative statement is null" );
+			statements ~= stmt;
+		}
+		
+		statement = new CodeBlockStatement!(config)(blockLocation, statements);
+		
 		return statement;
 	}
 	
 	ICompoundStatement parseMixedBlock()
 	{
+		import std.conv: to;
+		
 		ICompoundStatement statement;
+		
+		IStatement[] statements;
+		
+		CustLocation loc = this.currentLocation;
+		
+		while( !lexer.empty && !lexer.front.test(LexemeType.MixedBlockEnd) )
+		{
+			CustLocation itemLoc = this.currentLocation;
+			
+			if( lexer.front.test( LexemeType.CodeBlockBegin ))
+				statements ~= parseCodeBlock();
+			else if( lexer.front.test( LexemeType.Data ) )
+				statements ~= new DataFragmentStatement!(config)(itemLoc);
+			else
+				assert( 0, "parseMixedBlock: unexpected lexeme type: " ~ (cast(LexemeType) lexer.front.info.typeIndex).to!string );
+		}
+		
+		statement = new MixedBlockStatement!(config)(loc, statements);
 		
 		return statement;
 	}
@@ -346,10 +371,12 @@ public:
 		
 		IStatement sectionBody = parseStatementBody();
 		
+		writeln( "parseDeclarationSection: sectionBody is ", sectionBody ? "not null " : "null" );
+		
 
 		section = new DeclarationSection!(config)(loc, sectionName, cast(IDeclNode[]) unnamedAttrs, namedAttrs, sectionBody);
 		
-		return section;	
+		return section;
 	}
 	
 	

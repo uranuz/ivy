@@ -31,7 +31,7 @@ void main()
 // ` [ ( 10 + 20 * ( 67 - 22 ) ) ] + [ 100 * 100, 15 ] - [ 16.6 - 7 ] + { "aaa": "bbb" } ~ doIt(  checkIt( [] + {} ) + 15 ) ;`, "source.tpl");
 
 	auto parser = new Parser!(TextRange)(
-	` Qt.TextBox {% Qt.Font size= 10; %} `, "source.tpl");
+	` Qt.TextBox 10 {% Qt.Font size= 10 {% vasya name= vasya; petya name=petya; goblin name=vova, rank= 3, type="big"; do_nothing {* trololo abcd xyz *} %} %} `, "source.tpl");
 	
 	
 	//try {

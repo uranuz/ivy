@@ -6,7 +6,7 @@ mixin template PlainStatementImpl(LocationConfig c, T = IDeclNode)
 {
 	mixin BaseDeclNodeImpl!(c, T);
 
-	@property {
+	public @property override {
 		bool isCompoundStatement()
 		{
 			return false;
@@ -195,12 +195,13 @@ public:
 
 mixin template BaseBlockStatementImpl(LocationConfig c)
 {
+	mixin BaseDeclNodeImpl!(c);
 private:
 	IStatement[] _statements;
 
 public:
 	public @property override {
-		bool isCompound()
+		bool isCompoundStatement()
 		{
 			return true;
 		}
@@ -209,8 +210,19 @@ public:
 		{
 			return this;
 		}
-	
+		
+		bool isDeclarativeStatement()
+		{
+			return false;
+		}
+		
+		IDeclarativeStatement asDeclarativeStatement()
+		{
+			return null;
+		}
 	}
+	
+	import std.range: empty;
 	
 	override IStatement opIndex(size_t index)
 	{
@@ -240,7 +252,6 @@ public:
 
 class CodeBlockStatement(LocationConfig c): ICompoundStatement
 {
-	mixin PlainStatementImpl!c;
 	mixin BaseBlockStatementImpl!c;
 	
 private:
@@ -263,7 +274,6 @@ public:
 
 class MixedBlockStatement(LocationConfig c): ICompoundStatement
 {
-	mixin PlainStatementImpl!c;
 	mixin BaseBlockStatementImpl!c;
 private:
 
@@ -290,10 +300,9 @@ class DataFragmentStatement(LocationConfig c): IStatement
 private:
 
 public:
-	this(CustLocation loc, IStatement[] stmts)
+	this(CustLocation loc)
 	{
 		_location = loc;
-		_statements = stmts;
 	}
 	
 	public @property override {
