@@ -252,22 +252,24 @@ public:
 					
 		CustLocation blockLocation = this.currentLocation;
 		
-		if( lexer.front.test( LexemeType.CodeBlockBegin ) )
-			lexer.popFront();
+// 		if( lexer.front.test( LexemeType.CodeBlockBegin ) )
+// 			lexer.popFront();
 		
 		while( !lexer.empty && !lexer.front.test(LexemeType.CodeBlockEnd) )
 		{
 			IStatement stmt;
-			
+
 			switch( lexer.front.info.typeIndex ) with( LexemeType )
 			{
 				case MixedBlockBegin:
 				{
+					lexer.popFront();
 					stmt = parseMixedBlock();
 					break;
 				}
 				case CodeBlockBegin:
 				{
+					lexer.popFront();
 					stmt = parseCodeBlock();
 					break;
 				}
@@ -284,6 +286,8 @@ public:
 			statements ~= stmt;
 		}
 		
+		lexer.popFront(); //Skip CodeBlockEnd
+		
 		statement = new CodeBlockStatement!(config)(blockLocation, statements);
 		
 		return statement;
@@ -299,15 +303,17 @@ public:
 		
 		CustLocation loc = this.currentLocation;
 		
-		if( lexer.front.test( LexemeType.MixedBlockBegin ) )
-			lexer.popFront();
+// 		if( lexer.front.test( LexemeType.MixedBlockBegin ) )
+// 			lexer.popFront();
 		
 		while( !lexer.empty && !lexer.front.test(LexemeType.MixedBlockEnd) )
 		{
 			CustLocation itemLoc = this.currentLocation;
+
 			
 			if( lexer.front.test( LexemeType.CodeBlockBegin ))
 			{
+				lexer.popFront();
 				statements ~= parseCodeBlock();
 			}
 			else if( lexer.front.test( LexemeType.Data ) )
@@ -318,6 +324,8 @@ public:
 			else
 				assert( 0, "parseMixedBlock: unexpected lexeme type: " ~ (cast(LexemeType) lexer.front.info.typeIndex).to!string );
 		}
+		
+		lexer.popFront(); //Skip MixedBlockEnd
 		
 		statement = new MixedBlockStatement!(config)(loc, statements);
 		

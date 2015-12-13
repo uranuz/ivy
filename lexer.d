@@ -573,11 +573,12 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			
 		if( source.empty )
 		{
-			assert( ctx.parenStack.length > 0 , 
-				"Expected matching parenthesis for " 
-				~ (cast(LexemeType) ctx.parenStack.back).to!string  
-				~ ", but unexpected end of input found!!!" 
-			);
+			if( !ctx.parenStack.empty )
+				assert( 0, 
+					"Expected matching parenthesis for " 
+					~ (cast(LexemeType) ctx.parenStack.back).to!string  
+					~ ", but unexpected end of input found!!!" 
+				);
 			
 			return createLexemeAt(source, LexemeType.EndOfFile);
 		}
@@ -600,24 +601,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			}
 		}
 
-
 		if( !lex.info.isValidType )
 			assert(false, "Expected valid token!");
-			
-		if( lex.info.isRightParen )
-		{
-			if( ctx.parenStack.length > 0 )
-			{
-				int backParen = ctx.parenStack.back;
-				
-				if( backParen == matchingParens[lex.info.typeIndex] )
-				{
-					ctx.parenStack.popBack();
-				}
-				else
-					assert( false, "Expected matching parenthesis!!!" );
-			}
-		}			
 
 		return lex;
 	}
@@ -640,12 +625,10 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 				if( _ctx.state == ContextState.CodeContext )
 				{
 					_ctx.statesStack ~= ContextState.CodeContext;
-				
 				}
 				else if( _ctx.state == ContextState.MixedContext )
 				{
 					_ctx.statesStack ~= ContextState.CodeContext;
-				
 				}
 			
 				break;
@@ -654,8 +637,9 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			{
 				if( _ctx.state == ContextState.CodeContext )
 				{
-					//assert( !_ctx.parenStack.empty && _ctx.parenStack.back == CodeBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
-					_ctx.statesStack.popBack();
+					assert( !_ctx.parenStack.empty && _ctx.parenStack.back == CodeBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
+					if( !_ctx.statesStack.empty )
+						_ctx.statesStack.popBack();
 				}
 				
 				break;
@@ -679,7 +663,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 				if( _ctx.state == ContextState.MixedContext )
 				{
 					assert( !_ctx.parenStack.empty && _ctx.parenStack.back == MixedBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
-					_ctx.statesStack.popBack();
+					if( !_ctx.statesStack.empty )
+						_ctx.statesStack.popBack();
 				}
 			
 				break;
@@ -745,7 +730,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 				if( _ctx.state == ContextState.RawDataContext )
 				{
 					assert( !_ctx.parenStack.empty && _ctx.parenStack.back == RawDataBlockBegin, "Unexpected: "  ~ (cast(LexemeType) typeIndex).to!string );
-					_ctx.statesStack.popBack();
+					if( !_ctx.statesStack.empty )
+						_ctx.statesStack.popBack();
 				}
 				break;
 			}
@@ -753,8 +739,21 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 				break;
 		}
 		
-		
-		if( front.info.isLeftParen )
+		if( _front.info.isRightParen )
+		{
+			if( !_ctx.parenStack.empty )
+			{
+				int backParen = _ctx.parenStack.back;
+				
+				if( backParen == matchingParens[_front.info.typeIndex] )
+				{
+					_ctx.parenStack.popBack();
+				}
+				else
+					assert( false, "Expected matching parenthesis!!!" );
+			}
+		}
+		else if( _front.info.isLeftParen )
 			_ctx.parenStack ~= front.info.typeIndex;
 	}
 	
@@ -1019,7 +1018,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		{
 			foreach( ref notText; notTextLexemes )
 			{
-				if( parsedRange.match(notText) )
+				if( parsedRange.save.match(notText) )
 				{
 					return extractLexeme(source, parsedRange, rule.lexemeInfo);
 				}
