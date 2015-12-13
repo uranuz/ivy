@@ -30,29 +30,43 @@ void main()
 	// auto parser = new Parser!(TextRange)(
 // ` [ ( 10 + 20 * ( 67 - 22 ) ) ] + [ 100 * 100, 15 ] - [ 16.6 - 7 ] + { "aaa": "bbb" } ~ doIt(  checkIt( [] + {} ) + 15 ) ;`, "source.tpl");
 
+	//` Qt.TextBox 10 {% Qt.Font size= 10 {% vasya name= vasya; petya name=petya; goblin name=vova, rank= 3, type="big"; do_nothing {* trololo abcd xyz *} %} %} `
+
 	auto parser = new Parser!(TextRange)(
-	` Qt.TextBox 10 {% Qt.Font size= 10 {% vasya name= vasya; petya name=petya; goblin name=vova, rank= 3, type="big"; do_nothing {* trololo abcd xyz *} %} %} `, "source.tpl");
-	
-	
-	//try {
-		parser.lexer.popFront();
-		auto expr = parser.parseDeclarativeStatement();
+	` statement {% {* abcd xyz + - * *}  %} `, "source.tpl");
+
+	void printLexemes()
+	{
+		writeln;
+		writeln("List of lexemes:");
+		
+		import std.array: array;
+		
+		foreach( lex; parser.lexer.lexemes )
+		{
+			writeln( cast(LexemeType) lex.info.typeIndex, "  content: ", lex.getSlice(parser.lexer.sourceRange).array );
+		}
 		
 		writeln;
-		writeln("Recursive printing of nodes:");
+	
+	}
+	
+	IDeclNode ast;
+	
+	try {
+		parser.lexer.popFront();
+		ast = parser.parseDeclarativeStatement();
+	} catch(Throwable e) {
+		printLexemes();
 		
-		expr.printNodesRecursive();
-
-	//} catch(Throwable) {}
+		throw e;
+	}
 	
 	writeln;
-	writeln("List of lexemes:");
+	writeln("Recursive printing of nodes:");
 	
-	import std.array: array;
+	ast.printNodesRecursive();
 	
-	foreach( lex; parser.lexer.lexemes )
-	{
-		writeln( cast(LexemeType) lex.info.typeIndex, "  content: ", lex.getSlice(parser.lexer.sourceRange).array );
-	}
+	printLexemes();
 
 }

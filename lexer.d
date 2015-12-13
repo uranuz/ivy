@@ -436,20 +436,23 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	public:
 
 	
-	static LexRule[] inDataRules = [
-		// staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
-		// dynamicRule(&parseData, LexemeType.Data)
+	static LexRule[] mixedContextRules = [
+		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
+		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
+		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
+		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
+		dynamicRule( &parseData, LexemeType.Data, LexemeFlag.Literal )
 	];
 	
-	static LexRule[] inCodeRules = [
-		dynamicRule( &parseRawData, LexemeType.RawDataBlock, LexemeFlag.Literal ), //Because of ambiguity it comes first
-		
+	static LexRule[] codeContextRules = [
+		dynamicRule( &parseRawData, LexemeType.RawDataBlock, LexemeFlag.Literal ),
+	
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
 		staticRule( codeBlockEnd, LexemeType.CodeBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
-		staticRule( exprBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
-		staticRule( exprBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
+		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
+		staticRule( exprBlockEnd, LexemeType.ExprBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
 		
 		staticRule( "+", LexemeType.Add, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "=", LexemeType.Assign, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
@@ -480,8 +483,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		dynamicRule( &parseFloat, LexemeType.Float, LexemeFlag.Literal ),
 		dynamicRule( &parseInteger, LexemeType.Integer, LexemeFlag.Literal ),
 		dynamicRule( &parseName, LexemeType.Name ),
-		dynamicRule( &parseString, LexemeType.String, LexemeFlag.Literal ),
-		dynamicRule( &parseData, LexemeType.Data, LexemeFlag.Literal )
+		dynamicRule( &parseString, LexemeType.String, LexemeFlag.Literal )
 	];
 
 	static LexRule[] allRules;
@@ -491,13 +493,13 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	
 	static this()
 	{
+		allRules = mixedContextRules ~ codeContextRules;
+		
 		foreach( rule; allRules )
 		{
 			allRulesByType[rule.lexemeInfo.typeIndex] = rule;
 		}
-		
-		allRules = inDataRules ~ inCodeRules;
-		
+
 		matchingParens = [
 			LexemeType.CodeBlockEnd: LexemeType.CodeBlockBegin,
 			LexemeType.MixedBlockEnd: LexemeType.MixedBlockBegin,
@@ -580,7 +582,14 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			return createLexemeAt(source, LexemeType.EndOfFile);
 		}
 		
-		auto rules = allRules;
+		LexRule[] rules;
+		
+		if( ctx.state == ContextState.CodeContext )
+			rules = codeContextRules;
+		else if( ctx.state == ContextState.MixedContext )
+			rules = mixedContextRules;
+		else
+			rules = null;
 
 		foreach( rule; rules )
 		{
@@ -992,6 +1001,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	static immutable notTextLexemes = [
 		codeBlockBegin,
 		mixedBlockBegin,
+		mixedBlockEnd,
 		exprBlockBegin
 	];
 
@@ -1009,8 +1019,10 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		{
 			foreach( ref notText; notTextLexemes )
 			{
-				if( parsedRange.save.startsWith(notText) )
+				if( parsedRange.match(notText) )
+				{
 					return extractLexeme(source, parsedRange, rule.lexemeInfo);
+				}
 			}
 			parsedRange.popFront();
 		}
