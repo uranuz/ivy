@@ -18,7 +18,33 @@ mixin template BaseExpressionImpl(LocationConfig c, T = IDeclNode)
 			return null;
 		}
 	}
-
+	
+	public override {
+		bool isNullExpr()
+		{
+			assert( 0, "Expression is not null expr!" );
+		}
+		
+		bool toBoolean()
+		{
+			assert( 0, "Expression is not boolean!" );
+		}
+		
+		int toInteger()
+		{
+			assert( 0, "Expression is not integer!" );
+		}
+		
+		double toFloating()
+		{
+			assert( 0, "Expression is not floating!" );
+		}
+		
+		IExpression toStringExpr()
+		{
+			assert( 0, "Expression is not string!" );
+		}
+	}
 }
 
 mixin template BinaryArithmeticExpressionImpl()

@@ -2,25 +2,25 @@ module declarative.parser_test;
 
 import std.stdio;
 
-import declarative.node, declarative.common, declarative.parser, declarative.lexer, declarative.lexer_tools;
+import declarative.node, declarative.common, declarative.parser, declarative.lexer, declarative.lexer_tools, declarative.ast_writer;
 
-void printNodesRecursive(IDeclNode node, int indent = 0)
-{
-	import std.range: repeat;
-	import std.conv: to;
-	
-	if( node )
-	{
-		writeln( '\t'.repeat(indent), node.kind() );
-		
-		foreach( child; node.children )
-		{
-			child.printNodesRecursive(indent+1);
-		}
-	}
-	else
-		writeln( '\t'.repeat(indent), "Node is null!" );
-}
+// void printNodesRecursive(IDeclNode node, int indent = 0)
+// {
+// 	import std.range: repeat;
+// 	import std.conv: to;
+// 	
+// 	if( node )
+// 	{
+// 		writeln( '\t'.repeat(indent), node.kind() );
+// 		
+// 		foreach( child; node.children )
+// 		{
+// 			child.printNodesRecursive(indent+1);
+// 		}
+// 	}
+// 	else
+// 		writeln( '\t'.repeat(indent), "Node is null!" );
+// }
 
 void main()
 {
@@ -33,7 +33,7 @@ void main()
 	//` Qt.TextBox 10 {% Qt.Font size= 10 {% vasya name= vasya; petya name=petya; goblin name=vova, rank= 3, type="big"; do_nothing {* trololo abcd xyz *} %} %} `
 
 	auto parser = new Parser!(TextRange)(
-	` statement {% {* abcd xyz + - * *}  %} `, "source.tpl");
+	` statement {% {* abcd xyz + - * *} TextBox  %} trololo `, "source.tpl");
 
 	void printLexemes()
 	{
@@ -65,7 +65,14 @@ void main()
 	writeln;
 	writeln("Recursive printing of nodes:");
 	
-	ast.printNodesRecursive();
+	import std.stdio;
+	import std.json;
+	
+	JSONValue astJSON;
+	
+	writeASTasJSON(parser.lexer.sourceRange, ast, astJSON);
+	
+	stdout.writeln(toJSON(&astJSON, true));
 	
 	printLexemes();
 

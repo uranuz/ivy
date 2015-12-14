@@ -252,6 +252,7 @@ auto getCustomizedLocation(LexemeT)( LexemeT lex, string fileName )
 }
 
 import declarative.node : IDeclNode;
+import declarative.node_visitor : AbstractNodeVisitor;
 
 mixin template BaseDeclNodeImpl(LocationConfig c, T = IDeclNode)
 {
@@ -295,5 +296,10 @@ mixin template BaseDeclNodeImpl(LocationConfig c, T = IDeclNode)
 		{
 			_parentNode = node;
 		}
+	}
+	
+	public override void accept(AbstractNodeVisitor visitor)
+	{
+		visitor.visit(this);
 	}
 }

@@ -20,6 +20,8 @@ interface IDeclNode
 		void parent(IDeclNode node);
 	}
 	
+	void accept(AbstractNodeVisitor visitor);
+
 	// string toString();
 }
 
@@ -37,6 +39,12 @@ interface IExpression: IDeclNode
 	@property {
 		IStatement asStatement();
 	}
+	
+	bool isNullExpr();
+	bool toBoolean();
+	int toInteger();
+	double toFloating();
+	IExpression toStringExpr();
 }
 
 
