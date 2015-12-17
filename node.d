@@ -25,7 +25,7 @@ interface IDeclNode
 	// string toString();
 }
 
-
+enum LiteralType { NotLiteral, Null, Boolean, Integer, Floating, String, Array, AssocArray };
 
 interface IExpression: IDeclNode
 {
@@ -38,13 +38,23 @@ interface IExpression: IDeclNode
 	// bool checkString();
 	@property {
 		IStatement asStatement();
+		
+		LiteralType literalType();
+		
+		bool isScalar();
+		bool isNullExpr();
 	}
-	
-	bool isNullExpr();
+
 	bool toBoolean();
 	int toInteger();
 	double toFloating();
 	IExpression toStringExpr();
+}
+
+interface ILiteralExpression: IExpression
+{
+
+
 }
 
 
@@ -63,7 +73,7 @@ enum Operator {
 	Mod,
 	
 	//Logical operators
-	Not,
+	Not, //Unary
 	And,
 	Or,
 	Xor,

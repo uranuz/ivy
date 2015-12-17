@@ -709,6 +709,19 @@ public:
 		return expr;
 	}
 	
+	static int[int] lexToBinaryOpMap;
+	
+	shared static this()
+	{
+		lexToBinaryOpMap = [
+			LexemeType.Add: Operator.Add,
+			LexemeType.Sub: Operator.Sub,
+			LexemeType.Mul: Operator.Mul,
+			LexemeType.Div: Operator.Div,
+			LexemeType.Mod: Operator.Mod
+		];
+	}
+	
 	IExpression parseMulExp()
 	{
 		writeln("parseMulExp");
@@ -731,7 +744,7 @@ public:
 				{
 					lexer.popFront();
 					right = parseUnaryExp();
-					left = new BinaryArithmeticExp!(config)(loc, lex.info.typeIndex, left, right);
+					left = new BinaryArithmeticExp!(config)(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
 					continue;
 				}
 				default:
@@ -764,7 +777,7 @@ public:
 				{
 					lexer.popFront();
 					right = parseMulExp();
-					left = new BinaryArithmeticExp!(config)(loc, lex.info.typeIndex, left, right);
+					left = new BinaryArithmeticExp!(config)(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
 					continue;
 				}
 				default:
@@ -774,7 +787,7 @@ public:
 		
 		return left;
 	}
-	
+
 	IExpression parseUnaryExp()
 	{
 		writeln("parseUnaryExp");
@@ -821,6 +834,20 @@ public:
 		return expr;
 	}
 	
+	static int[int] lexToCmpOpMap;
+	
+	shared static this()
+	{
+		lexToCmpOpMap = [
+			LexemeType.Equal: Operator.Equal,
+			LexemeType.NotEqual: Operator.NotEqual,
+			LexemeType.LT: Operator.LT,
+			LexemeType.GT: Operator.GT,
+			LexemeType.LTEqual: Operator.LTEqual,
+			LexemeType.GTEqual: Operator.GTEqual
+		];
+	}
+	
 	IExpression parseCompareExp()
 	{
 		writeln("parseCompareExp");
@@ -838,18 +865,9 @@ public:
 		{
 			case Equal, NotEqual, LT, GT, LTEqual, GTEqual:
 			{
-				Operator[int] mapping = [
-					Equal: Operator.Equal, 
-					NotEqual: Operator.NotEqual,
-					LT: Operator.LT, 
-					GT: Operator.GT,  
-					LTEqual: Operator.LTEqual, 
-					GTEqual: Operator.GTEqual
-				];
-				
 				lexer.popFront();
 				right = parseAddExp();
-				left = new CompareExp!(config)(loc, mapping[lex.info.typeIndex], left, right);
+				left = new CompareExp!(config)(loc, lexToCmpOpMap[lex.info.typeIndex], left, right);
 			}
 			default:
 				break;

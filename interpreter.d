@@ -1,402 +1,518 @@
-module jinjed.interpreter;
+module declarative.interpreter;
 
-struct Context(String)
+import std.stdio, std.conv;
+
+import declarative.node, declarative.node_visitor, declarative.common, declarative.expression;
+
+import declarative.interpreter_data;
+
+interface IInterpreterContext {}
+
+class InterpreterContext: IInterpreterContext
 {
-	Context* parent;
-	Node[String] names;
-	void setLocal(String name, ref Node node)
+public:
+	
+
+
+public:
+	
+
+
+
+}
+
+interface IDeclarationInterpreter
+{
+	void interpret(IDeclarativeStatement statement, IInterpreterContext context);
+
+}
+
+static IDeclarationInterpreter[string] declInterpreters;
+
+shared static this()
+{
+	declInterpreters["for"] = new ForInterpreter();
+	declInterpreters["if"] = new IfInterpreter();
+	declInterpreters["pass"] = new PassInterpreter();
+
+}
+
+class ForInterpreter : IDeclarationInterpreter
+{
+public:
+	void interpret(IDeclarativeStatement statement, IInterpreterContext context)
 	{
-		names[name] = node;
+	
 	}
+
+}
+
+class IfInterpreter : IDeclarationInterpreter
+{
+public:
+	void interpret(IDeclarativeStatement statement, IInterpreterContext context)
+	{
+	
+	}
+
+}
+
+class PassInterpreter : IDeclarationInterpreter
+{
+public:
+	void interpret(IDeclarativeStatement statement, IInterpreterContext context)
+	{
+	
+	}
+
 }
 
 
-struct Interpreter(String) {
+class Interpreter : AbstractNodeVisitor
+{
+public:
+	alias TDataNode = DataNode!string;
+	
+	TDataNode opnd; //Current operand value
 
-	alias Node
-	alias IterpreterFunc = Node function(ref Context ctx, ref Node node);
-	
-	static IterpreterFunc[String] iterpreters;
-	
-	shared static this()
-	{
-		iterpreters = [
-			"output": &execStatements,
-			"if": &execIf
-		];
-	}
-	
-	void execNode(ref Context ctx, ref Node node)
-	{
-		if( !node.name.empty )
+	public override {
+		void visit(IDeclNode node)
 		{
-			//Literal node
+			writeln( typeof(node).stringof ~ " visited" );
 		}
-		else
+		
+		//Expressions
+		void visit(IExpression node)
 		{
-			if( node.name in iterpreters )
+			writeln( typeof(node).stringof ~ " visited" );
+		}
+		
+		void visit(ILiteralExpression node)
+		{
+			switch( node.literalType ) with(LiteralType)
 			{
-				return interpreters[node.name](ctx, node);
-			}
-		}
-	}
-
-	static Node asString(ref Node node)
-	{
-		import std.conv;
-		
-		if( node.type == NodeType.Null )
-			return Node("");
-		else if( node.type == NodeType.Boolean )
-			return Node(node.boolean ? "true" : "false");
-		else if( node.type == NodeType.Integer )
-			return Node( node.integer.to!String );
-		else if( node.type == NodeType.Floating )
-			return Node( node.floating.to!String );
-		else if( node.type == NodeType.String )
-			return Node( node.str );
-		else if( node.type == NodeType.Array )
-		{
-			String tmp = "[";
-			foreach( i, el; node.array )
-			{
-				tmp ~= ( i > 0 : ", " : "" ) ~ asString(el);
-			}
-			tmp ~= "]";
-			
-			return Node(tmp);
-		}
-		else if( node.type == NodeType.Dict )
-		{
-			String tmp = "{";
-			size_t i = 0;
-			foreach( key, val; node.array )
-			{
-				tmp ~= ( i > 0 : ", " : "" ) ~ key ~ ": " ~ asString(el);
-				i++;
-			}
-			tmp ~= "}";
-			
-			return Node(tmp);
-		}
-		assert( false, `Unexpected node type!!!` );
-	}
-	
-// 	static String concatArray(Node[] nodes)
-// 	{
-// 		String str;
-// 		foreach( ref node; nodes )
-// 		{
-// 			str ~= asString(node);
-// 		}
-// 		return str;
-// 	}
-
-	static Node execStatements(ref Context ctx, ref Node node)
-	{
-		assert( node.name == "output", `Expected "output" node as statements list!!!` );
-		
-		
-		assert( "nodes" in node, `Expected "nodes" field in statements list!!!` );
-		
-		Node nodes = output["node"];
-		assert( nodes.type == NodeType.Array, `Statements list node must be of "array" type!!!` );
-		
-		String result;
-		
-		foreach( stmt; nodes.array )
-			result ~= asString( execNode(ctx, stmt) );
-
-		return Node(result);
-	}
-	
-	static Node execExpression(ref Context ctx, ref Node node)
-	{
-		
-	}
-	
-	static Node execBooleanExpression(ref Context ctx, ref Node node)
-	{
-		if( node.type == NodeType.Null )
-			return Node(false);
-		else if( node.type == NodeType.Boolean )
-			return node;
-		else if( node.type == NodeType.String )
-		{
-			return Node( !node.str.empty );
-		}
-		else if( node.type == NodeType.Integer )
-		{
-			return Node( node.integer != 0 );
-		}
-		else if( node.type == NodeType.Floating )
-		{
-			return Node( node.floating != 0.0 );
-		}
-		else if( node.type == NodeType.Array )
-		{
-			return Node( !node.array.empty )
-		}
-		else if( node.type == NodeType.Dict )
-		{
-			return execBooleanExpression( ctx, execNode(ctx, node) );
-		}
-	}
-	
-
-	static Node execIf(ref Context ctx, ref Node node)
-	{
-		assert( node.name == "if" && node.type == LexemeType.Dict, `Expected "if" node of type "Dict"` );
-		
-		assert( "test" in node, `Expected "test" field in "if" node!!!` );
-		
-		Node test = execBooleanExpression( ctx, node["test"] );
-		Node body_ = execStatements( ctx, node["body"] );
-		Node else_ = execStatements( ctx, node["else_"] );
-		
-		assert( test.type == NodeType.Boolean, `Expected "test" field of boolean type in "if" statement` );
-		
-		if( test.boolean )
-		{
-			return body_;
-		}
-		else 
-		{
-			return else_;
-		}
-	}
-
-	static Node calcBinary(string op)(ref Node left, ref Node right)
-		if( op == "+" || op == "-" || op == "*" )
-	{
-		Node result;
-		
-		if( left.type == NodeType.Integer && right.type == NodeType.Integer )
-		{
-			mixin( `result = left.integer ` ~ op ~ ` right.integer;` );
-		}
-		else if( left.type == NodeType.Floating && right.type == NodeType.Floating )
-		{
-			mixin( `result = left.floating ` ~ op ~ ` right.floating;` );
-		}
-		else if( left.type == NodeType.Integer && right.type == NodeType.Floating )
-		{
-			mixin( `result = (cast(double) left.integer) ` ~ op ~ ` right.floating;` );
-		}
-		else if( left.type == NodeType.Floating && right.type == NodeType.Integer )
-		{
-			mixin( `result = left.floating ` ~ op ~ ` (cast(double) right.integer);` );
-		}
-		else
-			assert( false, `"` ~ op ~ `" binary operation is implemented for "integer" and "floating" only!!!` );
-		
-		return result;
-	}
-
-	static Node calcBinary(string op)(ref Node left, ref Node right)
-		if( op == "/" )
-	{
-		Node result;
-		
-		if( left.type == NodeType.Integer && right.type == NodeType.Integer )
-		{
-			result = (cast(double) left.integer) / (cast(double) right.integer);
-		}
-		else if( left.type == NodeType.Floating && right.type == NodeType.Floating )
-		{
-			result = left.floating / right.floating;
-		}
-		else if( left.type == NodeType.Integer && right.type == NodeType.Floating )
-		{
-			result = (cast(double) left.integer) / right.floating;
-		}
-		else if( left.type == NodeType.Floating && right.type == NodeType.Integer )
-		{
-			result = left.floating / (cast(double) right.integer);
-		}
-		else
-			assert( false, `"/" binary operation is implemented for "integer" and "floating" only!!!` );
-		
-		return result;
-	}
-
-	static Node calcBinary(string op)(ref Node left, ref Node right)
-		if( op == "//" )
-	{
-		Node result;
-		
-		if( left.type == NodeType.Integer && right.type == NodeType.Integer )
-		{
-			result = left.integer / right.integer);
-		}
-		else if( left.type == NodeType.Floating && right.type == NodeType.Floating )
-		{
-			result = cast(long) left.floating / right.floating;
-		}
-		else if( left.type == NodeType.Integer && right.type == NodeType.Floating )
-		{
-			result = cast(long) left.integer / right.floating;
-		}
-		else if( left.type == NodeType.Floating && right.type == NodeType.Integer )
-		{
-			result = cast(long) left.floating / right.integer;
-		}
-		else
-			assert( false, `"/" binary operation is implemented for "integer" and "floating" only!!!` );
-		
-		return result;
-	}
-
-	static Node calcBinary(string op)(ref Node left, ref Node right)
-		if( op == "or" )
-	{
-		Node result;
-		
-		if( left.type == NodeType.Boolean && right.type == NodeType.Boolean )
-		{
-			result = left.boolean || right.boolean;
-		}
-		else
-			assert( false, `"or" binary operation is implemented for "boolean" only!!!` );
-		
-		return result;
-	}
-
-	static Node calcBinary(string op)(ref Node left, ref Node right)
-		if( op == "and" )
-	{
-		Node result;
-		
-		if( left.type == NodeType.Boolean && right.type == NodeType.Boolean )
-		{
-			result = left.boolean && right.boolean;
-		}
-		else
-			assert( false, `"and" binary operation is implemented for "boolean" only!!!` );
-		
-		return result;
-	}
-
-	static Node execBinary(ref Context ctx, ref Node binExpr)
-	{
-		assert( !!("left" in binExpr) && !!("right" in binExpr) && !!("operator" in binExpr),
-			`Expected "left", "right", "operator" fields in binary expression node!!!`
-		);
-		
-		
-		Node left = execNode(ctx, binExpr["left"]);
-		Node right = execNode(ctx, binExpr["right"]);
-		Node operator = execNode(ctx, binExpr["operator"]);
-		
-		Node result;
-		
-		assert( operator.type == NodeType.String, "Operator node must be of string type!!!" );
-		
-		alias Ops = TypeTuple!("+", "-", "*", "/", "//", "**", "%", "and", "or")
-		
-		switch( operator.str)
-		{
-			foreach( op; Ops )
-			{
-				case op: {
-					result = calcBinary!(op)(left, right);
+				case NotLiteral:
+				{
+					assert( 0, "Incorrect AST node. ILiteralExpression cannot have NotLiteral literalType property!!!" );
 					break;
 				}
+				case Null:
+				{
+					opnd = null;
+					break;
+				}
+				case Boolean:
+				{
+					opnd = node.toBoolean();
+					break;
+				}
+				case Integer:
+				{
+					opnd = node.toInteger();
+					break;
+				}
+				case Floating:
+				{
+					opnd = node.toFloating();
+					break;
+				}
+				case String:
+				{
+					assert( 0, "Not implemented yet!");
+					break;
+				}
+				case Array:
+				{
+					assert( 0, "Not implemented yet!");
+					break;
+				}
+				case AssocArray:
+				{
+					assert( 0, "Not implemented yet!");
+					break;
+				}
+				default:
+					assert( 0 , "Unexpected LiteralType" );
 			}
-			default: {
-				assert( false, `Unexpected binary operator!!!` )
-				break;
+			
+			writeln( typeof(node).stringof ~ " visited" );
+		}
+		
+		void visit(IOperatorExpression node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+		}
+		
+		void visit(IUnaryExpression node)
+		{
+			import std.conv : to;
+			
+			writeln( typeof(node).stringof ~ " visited" );
+			
+			IExpression operandExpr = node.expr;
+			int op = node.operatorIndex;
+			
+			assert( operandExpr, "Unary operator operand shouldn't be null ast object!!!" );
+			
+			with(Operator)
+				assert( op == UnaryPlus || op == UnaryMin || op == Not, "Incorrect unary operator " ~ (cast(Operator) op).to!string  );
+			
+			opnd = TDataNode.init;
+			operandExpr.accept(this); //This must interpret child nodes
+
+			switch(op) with(Operator)
+			{
+				case UnaryPlus:
+				{
+					assert( 
+						opnd.type == DataNodeType.Integer || opnd.type == DataNodeType.Floating, 
+						"Unsupported UnaryPlus operator for type: " ~ opnd.type.to!string
+					);
+					
+					break;
+				}
+				case UnaryMin:
+				{
+					assert( 
+						opnd.type == DataNodeType.Integer || opnd.type == DataNodeType.Floating, 
+						"Unsupported UnaryMin operator for type: " ~ opnd.type.to!string
+					);
+					
+					if( opnd.type == DataNodeType.Integer )
+					{
+						opnd = -opnd.integer;
+					}
+					else if( opnd.type == DataNodeType.Floating )
+					{
+						opnd = -opnd.floating;
+					}
+					
+					break;
+				}
+				case Not:
+				{
+					assert( 
+						opnd.type == DataNodeType.Boolean, 
+						"Unsupported Not operator for type: " ~ opnd.type.to!string
+					);
+					
+					if( opnd.type == DataNodeType.Boolean )
+					{
+						opnd = !opnd.boolean;
+					}
+					
+					break;
+				}
+				default:
+					assert(0);
 			}
 		}
 		
-		return result;
-	}
+		void visit(IBinaryExpression node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+			
+			IExpression leftExpr = node.leftExpr;
+			IExpression rightExpr = node.rightExpr;;
+			int op = node.operatorIndex;
+			
+			assert( leftExpr && rightExpr, "Binary operator operands shouldn't be null ast objects!!!" );
+			
+			with(Operator)
+				assert( 
+					op == Add || op == Sub || op == Mul || op == Div || op == Mod ||
+					op == Equal || op == NotEqual || op == LT || op == GT || op == LTEqual || op == GTEqual, 
+					"Incorrect binary operator " ~ (cast(Operator) op).to!string 
+				);
+			
+			
+			
+			opnd = TDataNode.init;
+			leftExpr.accept(this);
+			TDataNode leftOpnd = opnd;
+			
+			opnd = TDataNode.init;
+			rightExpr.accept(this);
+			TDataNode rightOpnd = opnd;
+			
+			assert( leftOpnd.type == rightOpnd.type, "Operands tags in binary expr must match!!!" );
+			
+			switch(op) with(Operator)
+			{
+				case Add:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Integer || leftOpnd.type == DataNodeType.Floating, 
+						"Unsupported Add operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer + rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating + rightOpnd.floating;
+					}
+					
+					break;
+				}
+				case Sub:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Integer || leftOpnd.type == DataNodeType.Floating, 
+						"Unsupported Sub operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer - rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating - rightOpnd.floating;
+					}
+					
+					break;
+				}
+				case Mul:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Integer || leftOpnd.type == DataNodeType.Floating, 
+						"Unsupported Mul operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer * rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating * rightOpnd.floating;
+					}
+					
+					break;
+				}
+				case Div:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Integer || leftOpnd.type == DataNodeType.Floating, 
+						"Unsupported Sub operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer / rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating / rightOpnd.floating;
+					}
+					
+					break;
+				}
+				case Mod:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Integer || leftOpnd.type == DataNodeType.Floating, 
+						"Unsupported Mod operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer % rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating % rightOpnd.floating;
+					}
+					
+					break;
+				}
+				case And:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Boolean, 
+						"Unsupported And operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Boolean )
+					{
+						opnd = leftOpnd.boolean && rightOpnd.boolean;
+					}
 
-	static Node calcUnary(string op)(ref Node node)
-		if( op == "+" )
-	{
-		if( node.type == NodeType.Integer || node.type == NodeType.Floating )
-		{
-			return node;
-		}
-		else
-			assert(false, `"+" unary operation is implemented for "integer" and "floating" only!!!`);
-	}
+					break;
+				}
+				case Or:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Boolean, 
+						"Unsupported Or operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Boolean )
+					{
+						opnd = leftOpnd.boolean || rightOpnd.boolean;
+					}
 
-	static Node calcUnary(string op)(ref Node node)
-		if( op == "-" )
-	{
-		if( node.type == NodeType.Integer)
-		{
-			return Node( -node.integer );
-		}
-		else if( node.type == NodeType.Floating )
-		{
-			return Node( -node.floating );
-		}
-		else
-			assert(false, `"-" unary operation is implemented for "integer" and "floating" only!!!`);
-	}
+					break;
+				}
+				case Xor:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Boolean, 
+						"Unsupported Xor operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Boolean )
+					{
+						opnd = leftOpnd.boolean ^^ rightOpnd.boolean;
+					}
 
-	static Node calcUnary(string op)(ref Node node)
-		if( op == "not" )
-	{
-		if( node.type == NodeType.Boolean)
-		{
-			return Node( !node.boolean );
-		}
-		else
-			assert(false, `"-" unary operation is implemented for "boolean" only!!!`);
-	}
+					break;
+				}
+				case Equal:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Boolean ||
+						leftOpnd.type == DataNodeType.Integer ||
+						leftOpnd.type == DataNodeType.Floating ||
+						leftOpnd.type == DataNodeType.String,
+						"Unsupported Equal operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Boolean )
+					{
+						opnd = leftOpnd.boolean == rightOpnd.boolean;
+					}
+					else if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer == rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating == rightOpnd.floating;
+					}
+					else if( leftOpnd.type == DataNodeType.String )
+					{
+						opnd = leftOpnd.str == rightOpnd.str;
+					}
 
-	static Node execUnary(ref Context ctx, ref Node unaryExpr)
-	{
-		assert( !!("node" in unaryExpr) && !!("operator" in unaryExpr),
-			`Expected "node" and "operator" fields in unary expression node!!!`
-		);
-		
-		Node node = unaryExpr["node"];
-		Node operator = unaryExpr["operator"];
-		
-		assert( operator.type == NodeType.String, "Operator node must be of string type!!!" );
-		
-		switch( operator.str)
-		{
-			case "+": {
-				result = calcUnary!("+")(left, right);
-				break;
-			} case "-": {
-				result = calcUnary!("-")(left, right);
-				break;
-			} case "not": {
-				result = calcUnary!("not")(left, right);
-				break;
-			} default: {
-				assert( false, `Unexpected unary operator!!!` );
-				break;
+					break;
+				}
+				case NotEqual:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Boolean ||
+						leftOpnd.type == DataNodeType.Integer ||
+						leftOpnd.type == DataNodeType.Floating ||
+						leftOpnd.type == DataNodeType.String,
+						"Unsupported NotEqual operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Boolean )
+					{
+						opnd = leftOpnd.boolean != rightOpnd.boolean;
+					}
+					else if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer != rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating != rightOpnd.floating;
+					}
+					else if( leftOpnd.type == DataNodeType.String )
+					{
+						opnd = leftOpnd.str != rightOpnd.str;
+					}
+
+					break;
+				}
+				case LT:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Boolean ||
+						leftOpnd.type == DataNodeType.Integer ||
+						leftOpnd.type == DataNodeType.Floating ||
+						leftOpnd.type == DataNodeType.String,
+						"Unsupported LT operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Boolean )
+					{
+						opnd = leftOpnd.boolean < rightOpnd.boolean;
+					}
+					else if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer < rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating < rightOpnd.floating;
+					}
+					else if( leftOpnd.type == DataNodeType.String )
+					{
+						opnd = leftOpnd.str < rightOpnd.str;
+					}
+
+					break;
+				}
+				case GT:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.Boolean ||
+						leftOpnd.type == DataNodeType.Integer ||
+						leftOpnd.type == DataNodeType.Floating ||
+						leftOpnd.type == DataNodeType.String,
+						"Unsupported LT operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.Boolean )
+					{
+						opnd = leftOpnd.boolean > rightOpnd.boolean;
+					}
+					else if( leftOpnd.type == DataNodeType.Integer )
+					{
+						opnd = leftOpnd.integer > rightOpnd.integer;
+					}
+					else if( leftOpnd.type == DataNodeType.Floating )
+					{
+						opnd = leftOpnd.floating > rightOpnd.floating;
+					}
+					else if( leftOpnd.type == DataNodeType.String )
+					{
+						opnd = leftOpnd.str > rightOpnd.str;
+					}
+
+					break;
+				}
+				default:
+					assert(0);
 			}
 		}
+		
+		
+		//Statements
+		void visit(IStatement node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+		}
+		
+		void visit(IDeclarationSection node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+		}
+		
+		void visit(IDeclarativeStatement node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+		}
+		
+		void visit(ICompoundStatement node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+		}
+		
 	}
-
-
-	static Node execFor(ref Context ctx, ref Node node)
-	{
-		Node result;
-		
-		
-		
-		for()
-	}
-
-	Node execSet(ref Context ctx, ref Node node)
-	{
-		
-
-	}
-
-	String execCall(ref Context ctx, ref Node node)
-	{
-		
-	}
-
 }

@@ -17,14 +17,24 @@ mixin template BaseExpressionImpl(LocationConfig c, T = IDeclNode)
 		{
 			return null;
 		}
-	}
-	
-	public override {
+		
+		LiteralType literalType()
+		{
+			return LiteralType.NotLiteral;
+		}
+		
+		bool isScalar()
+		{
+			assert( 0, "Cannot determine expression type" );
+		}
+		
 		bool isNullExpr()
 		{
 			assert( 0, "Expression is not null expr!" );
 		}
-		
+	}
+	
+	public override {
 		bool toBoolean()
 		{
 			assert( 0, "Expression is not boolean!" );
@@ -74,7 +84,7 @@ mixin template BinaryArithmeticExpressionImpl()
 
 }
 
-class NullExp(LocationConfig c): IExpression
+class NullExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 	
@@ -93,6 +103,11 @@ public:
 	{
 		return null;
 	}
+	
+	override @property LiteralType literalType()
+	{
+		return LiteralType.Null;
+	}
 
 /+
 	string toString() override
@@ -103,7 +118,7 @@ public:
 }
 
 
-class BooleanExp(LocationConfig c): IExpression
+class BooleanExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 	
@@ -126,6 +141,16 @@ public:
 	{
 		return null;
 	}
+	
+	override @property LiteralType literalType()
+	{
+		return LiteralType.Boolean;
+	}
+	
+	override bool toBoolean()
+	{
+		return _value;
+	}
 
 /+
 	string toString() override
@@ -137,7 +162,7 @@ public:
 
 alias IntegerType = int;
 
-class IntegerExp(LocationConfig c): IExpression
+class IntegerExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 	
@@ -160,6 +185,16 @@ public:
 	{
 		return null;
 	}
+	
+	override @property LiteralType literalType()
+	{
+		return LiteralType.Integer;
+	}
+
+	override int toInteger()
+	{
+		return _value;
+	}
 
 /+
 	string toString() override
@@ -173,7 +208,7 @@ public:
 
 alias FloatType = double;
 
-class FloatExp(LocationConfig c): IExpression
+class FloatExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 	
@@ -197,6 +232,15 @@ public:
 		return null;
 	}
 	
+	override @property LiteralType literalType()
+	{
+		return LiteralType.Floating;
+	}
+	
+	override double toFloating()
+	{
+		return _value;
+	}
 	
 /+
 	string toString() override
@@ -210,7 +254,7 @@ public:
 
 alias StringType = string;
 
-class StringExp(LocationConfig c): IExpression
+class StringExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 
@@ -234,6 +278,11 @@ public:
 		return null;
 	}
 	
+	override @property LiteralType literalType()
+	{
+		return LiteralType.String;
+	}
+	
 /+
 	string toString() override
 	{
@@ -244,7 +293,7 @@ public:
 +/
 }
 
-class ArrayLiteralExp(LocationConfig c): IExpression
+class ArrayLiteralExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 
@@ -268,6 +317,11 @@ public:
 		return cast(IDeclNode[])  _elements.dup;
 	}
 	
+	override @property LiteralType literalType()
+	{
+		return LiteralType.Array;
+	}
+	
 /+
 	string toString() override
 	{
@@ -283,7 +337,7 @@ public:
 }
 
 
-class AssocArrayLiteralExp(LocationConfig c): IExpression
+class AssocArrayLiteralExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 
@@ -307,6 +361,11 @@ public:
 	override @property IDeclNode[] children()
 	{
 		return cast(IDeclNode[])( _keys ~ _values );
+	}
+	
+	override @property LiteralType literalType()
+	{
+		return LiteralType.AssocArray;
 	}
 
 /+

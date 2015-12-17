@@ -47,7 +47,7 @@ void writeASTasJSON(SourceRange)(ref const(SourceRange) source, IDeclNode node, 
 			writeASTasJSON(source, child, childJSON);
 			childrenJSON ~= childJSON;
 		}
-		json["children"] = childrenJSON;
+		json["z_children"] = childrenJSON;
 	}
 	else
 		json = null;
