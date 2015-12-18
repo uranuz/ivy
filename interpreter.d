@@ -220,12 +220,11 @@ public:
 			
 			with(Operator)
 				assert( 
-					op == Add || op == Sub || op == Mul || op == Div || op == Mod ||
-					op == Equal || op == NotEqual || op == LT || op == GT || op == LTEqual || op == GTEqual, 
+					op == Add || op == Sub || op == Mul || op == Div || op == Mod || //Arithmetic
+					op == And || op == Or || op == Xor || //Boolean
+					op == Equal || op == NotEqual || op == LT || op == GT || op == LTEqual || op == GTEqual,  //Comparision
 					"Incorrect binary operator " ~ (cast(Operator) op).to!string 
 				);
-			
-			
 			
 			opnd = TDataNode.init;
 			leftExpr.accept(this);
