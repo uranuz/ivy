@@ -18,7 +18,7 @@ static immutable rawDataBlockBegin = "{$$";
 static immutable rawDataBlockEnd = "$$}";
 static immutable exprBlockBegin = "{{";
 static immutable exprBlockEnd = "}}";
-static immutable subDirectiveSep = "#"
+static immutable subDirectiveSep = "#";
 
 
 enum LexemeType {

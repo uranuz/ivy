@@ -41,7 +41,6 @@ public:
 	this(CustLocation location, IDirectiveSectionStatement[] sections)
 	{
 		_location = location;
-		_mainSection = mainSec;
 		_sections = sections;
 	}
 
@@ -158,7 +157,7 @@ public:
 
 
 
-class DirectiveSectionStatement(LocationConfig c): DirectiveSectionStatement
+class DirectiveSectionStatement(LocationConfig c): IDirectiveSectionStatement
 {
 	mixin PlainStatementImpl!c;
 private:
@@ -197,7 +196,7 @@ public:
 	public override {
 		IAttributesRange opSlice()
 		{
-			return new Range(this)
+			return new Range(this);
 		}
 		
 		IAttributesRange opSlice(size_t begin, size_t end)
@@ -415,7 +414,7 @@ public:
 			}
 			//@property size_t length();
 			
-			@property IDirectiveSectionStatementRange save()
+			@property IStatementRange save()
 			{
 				return new Range(_statement, _begin, _end);
 			}
