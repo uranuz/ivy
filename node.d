@@ -156,38 +156,102 @@ interface IStatement: IDeclNode
 	@property {
 		bool isCompoundStatement();
 		ICompoundStatement asCompoundStatement();
-		bool isDeclarativeStatement();
-		IDeclarativeStatement asDeclarativeStatement();
-	}
-}
-
-
-interface IDeclarationSection: IStatement
-{
-	@property {
-		string name();
-		IDeclNode[] plainAttributes();
-		IKeyValueAttribute[] keyValueAttributes();
-		IStatement statement();
-	}
-
-}
-
-interface IDeclarativeStatement: IStatement
-{
-	@property {
-		string name();
-		IDeclarationSection mainSection();
-		IDeclarationSection[] sections();
+		bool isDirectiveStatement();
+		IDirectiveStatement asDirectiveStatement();
 	}
 }
 
 interface ICompoundStatement: IStatement
 {
-	IStatement opIndex(size_t index);
+	//@property size_t length();
 	
+	//@property IStatement first();
+	//@property IStatement last();
+	
+	IStatementRange opSlice();
+	IStatementRange opSlice(size_t begin, size_t end);
+	
+	//IStatement opIndex(size_t index);
+}
+
+interface IStatementRange
+{
+	@property IStatement front();
+	void popFront();
+	
+	@property IStatement back();
+	void popBack();
+	
+	bool empty();
+	//@property size_t length();
+	
+	@property IStatementRange save();
+	
+	IStatement opIndex(size_t index);
+
+}
+
+interface IDirectiveSectionStatementRange
+{
+	@property IStatement front();
+	void popFront();
+	
+	@property IStatement back();
+	void popBack();
+	
+	bool empty();
+	//@property size_t length();
+	
+	@property IDirectiveSectionStatementRange save();
+	
+	IStatement opIndex(size_t index);
+}
+
+interface IAttributesRange
+{
+	@property IDeclNode front();
+	void popFront();
+	
+	@property IDeclNode back();
+	void popBack();
+	
+	@property bool empty();
+	//@property size_t length();
+	
+	@property IAttributesRange save();
+	
+	IDeclNode opIndex(size_t index);
+}
+
+interface IDirectiveSectionStatement: IStatement
+{
 	@property {
-		IStatement first();
-		IStatement last();
+		string name(); //Returns name of this subdirective
 	}
+
+	//@property size_t length();
+	
+	IAttributesRange opSlice();
+	IAttributesRange opSlice(size_t begin, size_t end);
+	
+	//IDirectiveSectionStatement opIndex(size_t index);
+}
+
+
+interface IDirectiveStatement: IStatement
+{
+	@property {
+		string name(); //Returns name of the first subdirective
+	}
+	
+	//@property size_t length();
+	
+	//@property IDirectiveSection first();
+	//@property IDirectiveSection last();
+
+	IDirectiveSectionStatementRange opSlice();
+	IDirectiveSectionStatementRange opSlice(size_t begin, size_t end);
+	
+	//IDirectiveSectionStatement opIndex(size_t index);
+	//IDirectiveSectionStatementRange filterByName(string name);
 }

@@ -33,7 +33,7 @@ void main()
 	//` Qt.TextBox 10 {% Qt.Font size= 10 {% vasya name= vasya; petya name=petya; goblin name=vova, rank= 3, type="big"; do_nothing {* trololo abcd xyz *} %} %} `
 
 	auto parser = new Parser!(TextRange)(
-	` statement {% {* abcd xyz + - * *} TextBox  %} trololo `, "source.tpl");
+	` if {% doIf %} :else {% doElse %} `, "source.tpl");
 
 	void printLexemes()
 	{
@@ -55,7 +55,7 @@ void main()
 	
 	try {
 		parser.lexer.popFront();
-		ast = parser.parseDeclarativeStatement();
+		ast = parser.parseDirectiveStatement();
 	} catch(Throwable e) {
 		printLexemes();
 		

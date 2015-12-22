@@ -275,7 +275,7 @@ public:
 				}
 				case Name:
 				{
-					stmt = parseDeclarativeStatement();
+					stmt = parseDirectiveStatement();
 					break;
 				}
 				default:
@@ -332,14 +332,14 @@ public:
 		return statement;
 	}
 	
-	IDeclarationSection parseDeclarationSection()
+	IDirectiveSection parseDeclarationSection()
 	{
 		import std.array: array;
 		import std.conv: to;
 		
 		CustLocation loc = this.currentLocation;
 		
-		IDeclarationSection section;
+		IDirectiveSection section;
 		
 		assert( lexer.front.test( LexemeType.Name ), "Expected statement name, but got: " ~ lexer.frontValue.array.to!string );
 		
@@ -428,18 +428,30 @@ public:
 	
 	
 
-	IDeclarativeStatement parseDeclarativeStatement()
+	IDirectiveStatement parseDirectiveStatement()
 	{
 		import std.array: array;
 		import std.conv: to;
 		
-		IDeclarativeStatement stmt = null;
+		IDirectiveStatement stmt = null;
 		CustLocation loc = this.currentLocation;
 
-		IDeclarationSection mainSection = parseDeclarationSection();
-
+		IDirectiveSection mainSection = parseDeclarationSection();
+		IDirectiveSection[] sections;
 		
-		IDeclarationSection[] sections;
+		if( lexer.front.test( LexemeType.Colon ) )
+		{
+			lexer.popFront();
+			
+			while( !lexer.empty )
+			{
+				IDirectiveSection sect = parseDeclarationSection();
+				if( !sect )
+					break;
+				
+				sections ~= sect;
+			}
+		}
 		
 		// //Parse extended statement bodies
 		// while( !lexer.empty )
@@ -449,9 +461,9 @@ public:
 			// //but can have attribute list
 		// }
 		
-		stmt = new DeclarativeStatement!(config)(loc, mainSection, sections);
+		stmt = new DirectiveStatement!(config)(loc, mainSection, sections);
 
-		writeln( "parseDeclarativeStatement: front value is: ", lexer.frontValue.array.to!string );
+		writeln( "parseDirectiveStatement: front value is: ", lexer.frontValue.array.to!string );
 		
 		return stmt;
 	}

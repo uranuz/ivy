@@ -17,29 +17,28 @@ mixin template PlainStatementImpl(LocationConfig c, T = IDeclNode)
 			return null;
 		}
 		
-		bool isDeclarativeStatement()
+		bool isDirectiveStatement()
 		{
 			return false;
 		}
 		
-		IDeclarativeStatement asDeclarativeStatement()
+		IDirectiveStatement asDirectiveStatement()
 		{
 			return null;
 		}
 	}
 }
 
-class DeclarativeStatement(LocationConfig c): IDeclarativeStatement
+class DirectiveStatement(LocationConfig c): IDirectiveStatement
 {
 	mixin PlainStatementImpl!c;
 
 private:
-	IDeclarationSection _mainSection;
-	IDeclarationSection[] _sections;
+	IDirectiveSectionStatement[] _sections;
 	
 public:
 
-	this(CustLocation location, IDeclarationSection mainSec, IDeclarationSection[] sections)
+	this(CustLocation location, IDirectiveSectionStatement[] sections)
 	{
 		_location = location;
 		_mainSection = mainSec;
@@ -49,12 +48,12 @@ public:
 	public @property override {
 		IDeclNode[] children()
 		{
-			return cast(IDeclNode[])( _mainSection ~ _sections );
+			return cast(IDeclNode[]) _sections;
 		}
 		
 		string kind()
 		{
-			return "statement";
+			return "directive statement";
 		}
 	}
 	
@@ -63,55 +62,116 @@ public:
 	public @property override {
 		string name()
 		{
-			if( _mainSection )
-				return _mainSection.name;
+			if( _sections.length > 0 )
+				return _sections[0].name;
 				
 			return null;
 		}
+	}
 	
-		IDeclarationSection mainSection()
-		{
-			return _mainSection;
-		}
-		
-		IDeclarationSection[] sections()
-		{
-			return _sections;
-		}
+	public override IDirectiveSectionStatementRange opSlice()
+	{
+		return new Range(this);
+	}
+	
+	public override IDirectiveSectionStatementRange opSlice(size_t begin, size_t end)
+	{
+		return new Range(this, begin, end);
 	}
 	
 	public @property override {
-		bool isDeclarativeStatement()
+		bool isDirectiveStatement()
 		{
 			return true;
 		}
 		
-		IDeclarativeStatement asDeclarativeStatement()
+		IDirectiveStatement asDirectiveStatement()
 		{
 			return this;
 		}
 	}
 	
+	static class Range: IDirectiveSectionStatementRange
+	{
+	private:
+		DirectiveStatement!c _statement;
+		size_t _begin;
+		size_t _end;
+
+	public:
+
+		this(DirectiveStatement!c statement)
+		{
+			_statement = statement;
+			_end = _statement._sections.length - 1;
+		}
+		
+		this(DirectiveStatement!c statement, size_t begin, size_t end)
+		{
+			_statement = statement;
+			_begin = begin;
+			_end = end;
+		}
+		
+		public override {
+			@property IStatement front()
+			{
+				return _statement._sections[_begin];
+			}
+			
+			void popFront() 
+			{
+				++_begin;
+			}
+			
+			@property IStatement back()
+			{ 
+				return _statement._sections[_end];
+			}
+			
+			void popBack()
+			{
+				--_end;
+			}
+			
+			bool empty()
+			{
+				if( _begin <= _end && _end < _statement._sections.length )
+					return false;
+					
+				return true;
+			}
+			//@property size_t length();
+			
+			@property IDirectiveSectionStatementRange save()
+			{
+				return new Range(_statement, _begin, _end);
+			}
+			
+			IStatement opIndex(size_t index)
+			{
+				return _statement._sections[index];
+			}
+		}
+	}
 }
 
-class DeclarationSection(LocationConfig c): IDeclarationSection
+
+
+class DirectiveSectionStatement(LocationConfig c): DirectiveSectionStatement
 {
 	mixin PlainStatementImpl!c;
 private:
 	string _name;
-	IDeclNode[] _plainAttrs;
-	IKeyValueAttribute[] _keyValueAttrs;
-	
-	IStatement _statement;
+	IDeclNode[] _attrs;
+
 
 public:
-	this( CustLocation loc, string name, IDeclNode[] plainAttrs, IKeyValueAttribute[] keyValueAttrs, IStatement stmt )
+	this( CustLocation loc, string name, IDeclNode[] attributes )
 	{
 		_location = loc;
 		_name = name;
-		_plainAttrs = plainAttrs;
-		_keyValueAttrs = keyValueAttrs;
-		_statement = stmt;
+		_attrs = attributes;
 	}
 
 
@@ -120,32 +180,94 @@ public:
 		{
 			return _name;
 		}
-		
-		IDeclNode[] plainAttributes()
-		{
-			return _plainAttrs;
-		}
-		
-		IKeyValueAttribute[] keyValueAttributes()
-		{
-			return _keyValueAttrs;
-		}
-		
-		IStatement statement()
-		{
-			return _statement;
-		}
 	}
 	
 	public @property override {
 		IDeclNode[] children()
 		{
-			return _plainAttrs ~ cast(IDeclNode[])(_keyValueAttrs) ~ cast(IDeclNode)(_statement);
+			return _attrs;
 		}
 		
 		string kind()
 		{
-			return "statement section";
+			return "directive section statement";
+		}
+	}
+	
+	public override {
+		IAttributesRange opSlice()
+		{
+			return new Range(this)
+		}
+		
+		IAttributesRange opSlice(size_t begin, size_t end)
+		{
+			return new Range(this, begin, end);
+		}
+	
+	}
+	
+	static class Range: IAttributesRange
+	{
+	private:
+		DirectiveSectionStatement!c _statement;
+		size_t _begin;
+		size_t _end;
+
+	public:
+
+		this(DirectiveSectionStatement!c statement)
+		{
+			_statement = statement;
+			_end = _statement._attrs.length - 1;
+		}
+		
+		this(DirectiveSectionStatement!c statement, size_t begin, size_t end)
+		{
+			_statement = statement;
+			_begin = begin;
+			_end = end;
+		}
+		
+		public override {
+			@property IDeclNode front()
+			{
+				return _statement._attrs[_begin];
+			}
+			
+			void popFront() 
+			{
+				++_begin;
+			}
+			
+			@property IDeclNode back()
+			{ 
+				return _statement._attrs[_end];
+			}
+			
+			void popBack()
+			{
+				--_end;
+			}
+			
+			bool empty()
+			{
+				if( _begin <= _end && _end < _statement._attrs.length )
+					return false;
+					
+				return true;
+			}
+			//@property size_t length();
+			
+			@property IAttributesRange save()
+			{
+				return new Range(_statement, _begin, _end);
+			}
+			
+			IDeclNode opIndex(size_t index)
+			{
+				return _statement._attrs[index];
+			}
 		}
 	}
 
@@ -211,33 +333,14 @@ public:
 			return this;
 		}
 		
-		bool isDeclarativeStatement()
+		bool isDirectiveStatement()
 		{
 			return false;
 		}
 		
-		IDeclarativeStatement asDeclarativeStatement()
+		IDirectiveStatement asDirectiveStatement()
 		{
 			return null;
-		}
-	}
-	
-	import std.range: empty;
-	
-	override IStatement opIndex(size_t index)
-	{
-		return _statements[index];
-	}
-	
-	override @property {
-		IStatement first()
-		{
-			return _statements.empty ? null : _statements[0];
-		}
-		
-		IStatement last()
-		{
-			return _statements.empty ? null : _statements[_statements.length - 1];
 		}
 	}
 	
@@ -245,6 +348,82 @@ public:
 		IDeclNode[] children()
 		{
 			return cast(IDeclNode[]) _statements.dup;
+		}
+	}
+	
+	IStatementRange opSlice()
+	{
+		return new Range(this);
+	}
+	
+	IStatementRange opSlice(size_t begin, size_t end)
+	{
+		return new Range(this, begin, end);
+	}
+	
+	alias TStatement = typeof(this);
+	
+	static class Range: IStatementRange
+	{
+	private:
+		TStatement _statement;
+		size_t _begin;
+		size_t _end;
+
+	public:
+
+		this(TStatement statement)
+		{
+			_statement = statement;
+			_end = _statement._statements.length - 1;
+		}
+		
+		this(TStatement statement, size_t begin, size_t end)
+		{
+			_statement = statement;
+			_begin = begin;
+			_end = end;
+		}
+		
+		public override {
+			@property IStatement front()
+			{
+				return _statement._statements[_begin];
+			}
+			
+			void popFront() 
+			{
+				++_begin;
+			}
+			
+			@property IStatement back()
+			{ 
+				return _statement._statements[_end];
+			}
+			
+			void popBack()
+			{
+				--_end;
+			}
+			
+			bool empty()
+			{
+				if( _begin <= _end && _end < _statement._statements.length )
+					return false;
+					
+				return true;
+			}
+			//@property size_t length();
+			
+			@property IDirectiveSectionStatementRange save()
+			{
+				return new Range(_statement, _begin, _end);
+			}
+			
+			IStatement opIndex(size_t index)
+			{
+				return _statement._statements[index];
+			}
 		}
 	}
 
@@ -292,7 +471,6 @@ public:
 	}
 
 }
-
 
 class DataFragmentStatement(LocationConfig c): IStatement
 {

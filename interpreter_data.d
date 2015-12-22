@@ -20,6 +20,44 @@ class DataNodeException : Exception
 	}
 }
 
+interface IDeclObject
+{
+	@property int typeId();
+	@property string typeName();
+
+}
+
+class Symbol
+{
+	@property string name()
+	{
+		assert(0);
+	
+	
+	}
+	
+	@property int kind()
+	{
+		assert(0);
+	
+	}
+
+}
+
+class SymbolTable
+{
+
+
+
+}
+
+
+class DataStorage
+{
+	
+
+}
+
 struct DataNode(S)
 {
 	alias String = S;
@@ -32,6 +70,7 @@ struct DataNode(S)
 			String str;
 			DataNode[] array;
 			DataNode[String] dict;
+			IDeclObject declObj;
 			Object custom;
 		}
 	}

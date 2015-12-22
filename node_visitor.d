@@ -17,6 +17,7 @@ class AbstractNodeVisitor
 	//Statements
 	void visit(IStatement node) { visit( cast(IDeclNode) node ); }
 	void visit(IDeclarationSection node) { visit( cast(IStatement) node ); }
+	void visit(IKeyValueAttribute node) { visit( cast(IDeclNode) node ); }
 	void visit(IDeclarativeStatement node) { visit( cast(IStatement) node ); }
 	void visit(ICompoundStatement node) { visit( cast(IStatement) node ); }
 }

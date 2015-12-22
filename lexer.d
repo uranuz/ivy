@@ -8,19 +8,18 @@ static immutable whitespaceChars = " \n\t\r";
 static immutable delimChars = "()[]{}%*-+/#,:|.<>=!";
 static immutable intChars = "0123456789";
 
-static immutable codeBlockBegin = "{%";
-static immutable codeBlockEnd = "%}";
+static immutable codeBlockBegin = "{#";
+static immutable codeBlockEnd = "#}";
 static immutable mixedBlockBegin = "{*" ;
 static immutable mixedBlockEnd = "*}";
-static immutable commentBlockBegin = "{#";
-static immutable commentBlockEnd = "#}";
+static immutable commentBlockBegin = "/*";
+static immutable commentBlockEnd = "*/";
 static immutable rawDataBlockBegin = "{$$";
 static immutable rawDataBlockEnd = "$$}";
 static immutable exprBlockBegin = "{{";
 static immutable exprBlockEnd = "}}";
+static immutable subDirectiveSep = "#"
 
-static immutable lineStatementBegin = "%%";
-static immutable lineCommentBegin = "##";
 
 enum LexemeType {
 	Unknown = 0,
@@ -49,6 +48,7 @@ enum LexemeType {
 	Semicolon,
 	Sub, 
 	Tilde,
+	Hash,
 	// WhiteSpace,
 	Integer,
 	Float,
@@ -92,7 +92,7 @@ enum LexemeFlag: uint
 	Right = 1 << 5,
 	Arithmetic = 1 << 6,
 	Compare = 1 << 7,
-	
+	Separator = 1 << 8
 }
 
 //Minimal information about type of lexeme
@@ -476,9 +476,10 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		staticRule( "}", LexemeType.RBrace, LexemeFlag.Paren, LexemeFlag.Right ),
 		staticRule( "]", LexemeType.RBracket, LexemeFlag.Paren, LexemeFlag.Right ),
 		staticRule( ")", LexemeType.RParen, LexemeFlag.Paren, LexemeFlag.Right ),
-		staticRule( ";", LexemeType.Semicolon, LexemeFlag.Operator),
+		staticRule( ";", LexemeType.Semicolon, LexemeFlag.Separator),
 		staticRule( "-", LexemeType.Sub, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "~", LexemeType.Tilde, LexemeFlag.Operator),
+		staticRule( "#", LexemeType.Hash, LexemeFlag.Separator),
 		
 		dynamicRule( &parseFloat, LexemeType.Float, LexemeFlag.Literal ),
 		dynamicRule( &parseInteger, LexemeType.Integer, LexemeFlag.Literal ),

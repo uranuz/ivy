@@ -23,7 +23,7 @@ public:
 
 interface IDeclarationInterpreter
 {
-	void interpret(IDeclarativeStatement statement, IInterpreterContext context);
+	void interpret(IDeclarativeStatement statement, Interpreter interp);
 
 }
 
@@ -40,7 +40,7 @@ shared static this()
 class ForInterpreter : IDeclarationInterpreter
 {
 public:
-	void interpret(IDeclarativeStatement statement, IInterpreterContext context)
+	override void interpret(IDeclarativeStatement statement, Interpreter interp)
 	{
 	
 	}
@@ -50,9 +50,57 @@ public:
 class IfInterpreter : IDeclarationInterpreter
 {
 public:
-	void interpret(IDeclarativeStatement statement, IInterpreterContext context)
+	override void interpret(IDeclarativeStatement statement, Interpreter interp)
 	{
-	
+		assert( statement && statement.name == "if", "If statement must exist and it's name must be 'if'!!!" );
+		auto mainSect = statement.mainSection;
+		assert( mainSect, "Main section expected!" );
+		
+		IDeclarationSection[] ifSects = [ mainSect ];
+		IDeclarationSection elseSect;
+		
+		foreach( sect; statement.sections )
+		{
+			if( sect.name == "elif" )
+			{
+				ifSects ~= sect;
+			}
+			else if( sect.name == "else" )
+			{
+				assert( !elseSect, "Multiple else sections are not alowed!!!" );
+				elseSect = sect;
+			}
+			else
+			{
+				assert( 0, "Unexpected type of declaration section: " ~ sect.name );
+			}
+		}
+		
+		bool lookElse = true;
+		
+		foreach( ifSect; ifSects )
+		{
+			auto condExpr = ifSect.plainAttributes[0];
+			assert( condExpr, "Conditional expression attribute expected in 'if'!!!" );
+			condExpr.accept(interp);
+			
+			assert( interp.opnd.type == DataNodeType.Boolean, "If conditional expression result must be boolean!!!" );
+			
+			if( interp.opnd.boolean )
+			{
+				lookElse = false;
+				ifSect.statement.accept(interp);
+				
+				break;
+			}
+		}
+		
+		if( lookElse )
+		{
+			elseSect.statement.accept(interp);
+		}
+		
+		
 	}
 
 }
@@ -60,7 +108,7 @@ public:
 class PassInterpreter : IDeclarationInterpreter
 {
 public:
-	void interpret(IDeclarativeStatement statement, IInterpreterContext context)
+	override void interpret(IDeclarativeStatement statement, Interpreter interp)
 	{
 	
 	}
@@ -79,6 +127,8 @@ public:
 		void visit(IDeclNode node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
+			if( node )
+				writeln( "Decl node kind: ", node.kind() );
 		}
 		
 		//Expressions
@@ -501,16 +551,40 @@ public:
 		void visit(IDeclarationSection node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
+			writeln( "Declaration section name: ", node.name );
+			foreach( child; node.children )
+			{
+				if( child )
+					child.accept(this);
+			}
 		}
 		
+		void visit(IKeyValueAttribute node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+			writeln( "Key-value attribute name: ", node.name );
+			node.value.accept(this);
+		}
+
 		void visit(IDeclarativeStatement node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
+			writeln( "Declarative statement name: ", node.name );
+			foreach( child; node.children )
+			{
+				if( child )
+					child.accept(this);
+			}
 		}
 		
 		void visit(ICompoundStatement node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
+			foreach( child; node.children )
+			{
+				if( child )
+					child.accept(this);
+			}
 		}
 		
 	}
