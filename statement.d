@@ -34,20 +34,22 @@ class DirectiveStatement(LocationConfig c): IDirectiveStatement
 	mixin PlainStatementImpl!c;
 
 private:
-	IDirectiveSectionStatement[] _sections;
+	string _name;
+	IDeclNode[] _attrs;
 	
 public:
 
-	this(CustLocation location, IDirectiveSectionStatement[] sections)
+	this( CustLocation loc, string name, IDeclNode[] attributes )
 	{
-		_location = location;
-		_sections = sections;
+		_location = loc;
+		_name = name;
+		_attrs = attributes;
 	}
 
 	public @property override {
 		IDeclNode[] children()
 		{
-			return cast(IDeclNode[]) _sections;
+			return _attrs;
 		}
 		
 		string kind()
@@ -61,21 +63,8 @@ public:
 	public @property override {
 		string name()
 		{
-			if( _sections.length > 0 )
-				return _sections[0].name;
-				
-			return null;
+			return _name;
 		}
-	}
-	
-	public override IDirectiveSectionStatementRange opSlice()
-	{
-		return new Range(this);
-	}
-	
-	public override IDirectiveSectionStatementRange opSlice(size_t begin, size_t end)
-	{
-		return new Range(this, begin, end);
 	}
 	
 	public @property override {
@@ -87,109 +76,6 @@ public:
 		IDirectiveStatement asDirectiveStatement()
 		{
 			return this;
-		}
-	}
-	
-	static class Range: IDirectiveSectionStatementRange
-	{
-	private:
-		DirectiveStatement!c _statement;
-		size_t _begin;
-		size_t _end;
-
-	public:
-
-		this(DirectiveStatement!c statement)
-		{
-			_statement = statement;
-			_end = _statement._sections.length - 1;
-		}
-		
-		this(DirectiveStatement!c statement, size_t begin, size_t end)
-		{
-			_statement = statement;
-			_begin = begin;
-			_end = end;
-		}
-		
-		public override {
-			@property IStatement front()
-			{
-				return _statement._sections[_begin];
-			}
-			
-			void popFront() 
-			{
-				++_begin;
-			}
-			
-			@property IStatement back()
-			{ 
-				return _statement._sections[_end];
-			}
-			
-			void popBack()
-			{
-				--_end;
-			}
-			
-			bool empty()
-			{
-				if( _begin <= _end && _end < _statement._sections.length )
-					return false;
-					
-				return true;
-			}
-			//@property size_t length();
-			
-			@property IDirectiveSectionStatementRange save()
-			{
-				return new Range(_statement, _begin, _end);
-			}
-			
-			IStatement opIndex(size_t index)
-			{
-				return _statement._sections[index];
-			}
-		}
-	}
-}
-
-
-
-class DirectiveSectionStatement(LocationConfig c): IDirectiveSectionStatement
-{
-	mixin PlainStatementImpl!c;
-private:
-	string _name;
-	IDeclNode[] _attrs;
-
-
-public:
-	this( CustLocation loc, string name, IDeclNode[] attributes )
-	{
-		_location = loc;
-		_name = name;
-		_attrs = attributes;
-	}
-
-
-	public @property override {
-		string name()
-		{
-			return _name;
-		}
-	}
-	
-	public @property override {
-		IDeclNode[] children()
-		{
-			return _attrs;
-		}
-		
-		string kind()
-		{
-			return "directive section statement";
 		}
 	}
 	
@@ -209,19 +95,19 @@ public:
 	static class Range: IAttributesRange
 	{
 	private:
-		DirectiveSectionStatement!c _statement;
+		DirectiveStatement!c _statement;
 		size_t _begin;
 		size_t _end;
 
 	public:
 
-		this(DirectiveSectionStatement!c statement)
+		this(DirectiveStatement!c statement)
 		{
 			_statement = statement;
 			_end = _statement._attrs.length - 1;
 		}
 		
-		this(DirectiveSectionStatement!c statement, size_t begin, size_t end)
+		this(DirectiveStatement!c statement, size_t begin, size_t end)
 		{
 			_statement = statement;
 			_begin = begin;
@@ -269,7 +155,6 @@ public:
 			}
 		}
 	}
-
 }
 
 class KeyValueAttribute(LocationConfig c): IKeyValueAttribute

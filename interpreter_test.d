@@ -9,13 +9,13 @@ void main()
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
 	auto parser = new Parser!(TextRange)(
-	` statement attr= true == true {* "vasya" {% petya %} *} `, "source.tpl");
+	` for item in [1, 2, 3] {# expr 1 #} `, "source.tpl");
 	
 	IDeclNode ast;
 	
 	try {
 		parser.lexer.popFront();
-		ast = parser.parseDeclarativeStatement();
+		ast = parser.parseDirectiveStatement();
 	} catch(Throwable e) {
 // 		printLexemes();
 		
@@ -30,7 +30,7 @@ void main()
 	
 	auto visitor = new Interpreter();
 	
-	ast.children[0].children[0].children[0].accept(visitor);
+	ast.accept(visitor);
 	
 	writeln(visitor.opnd);
 	

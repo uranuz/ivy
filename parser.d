@@ -119,156 +119,45 @@ public:
 		return new KeyValueAttribute!(config)(loc, attrName, val);
 	}
 	
-	ICompoundStatement parseCodeBlock()
-	{
-		import std.conv: to;
-		
-		ICompoundStatement statement;
-		
-		IStatement[] statements;
-					
-		CustLocation blockLocation = this.currentLocation;
-		
-		if( lexer.front.test( LexemeType.LBrace ) )
-		{
-			auto lexerCopy = lexer.save();
-			lexer.popFront();
-			if( lexer.front.test( LexemeType.String ) )
-			{
-				lexer.popFront();
-				assert( lexer.front.test( LexemeType.Colon ), "parseCodeBlock: unexpected Colon found. Maybe it's assoc array" );
-				lexer = lexerCopy.save;
-			}
-			else
-			{
-				string attrName = parseQualifiedIdentifier();
-				assert( attrName.length > 0 && lexer.front.test( LexemeType.Colon ), "parseCodeBlock: unexpected Colon found. Maybe it's assoc array" );
-				lexer = lexerCopy.save;
-			}
-		
-		}
-		
-		assert( lexer.front.test( LexemeType.LBrace ) || lexer.front.test( LexemeType.CodeBlockBegin ), "parseCodeBlock: Expected LBrace or CodeBlockbegin" );
-		lexer.popFront();
-		
-		while( !lexer.empty && !lexer.front.test(LexemeType.CodeBlockEnd) )
-		{
-			IStatement stmt;
-
-			switch( lexer.front.info.typeIndex ) with( LexemeType )
-			{
-				case MixedBlockBegin:
-				{
-					lexer.popFront();
-					stmt = parseMixedBlock();
-					break;
-				}
-				case CodeBlockBegin:
-				{
-					lexer.popFront();
-					stmt = parseCodeBlock();
-					break;
-				}
-				case Name:
-				{
-					stmt = parseDirectiveStatement();
-					break;
-				}
-				default:
-					assert( 0, "parseCodeBlock: unexpected type of lexeme: " ~ lexer.frontValue.array.to!string );
-				
-			}
-			assert( stmt !is null, "parseCodeBlock: statement is null" );
-			statements ~= stmt;
-		}
-		
-		lexer.popFront(); //Skip CodeBlockEnd
-		
-		statement = new CodeBlockStatement!(config)(blockLocation, statements);
-		
-		return statement;
-	}
-	
-	ICompoundStatement parseMixedBlock()
-	{
-		import std.conv: to;
-		
-		ICompoundStatement statement;
-		
-		IStatement[] statements;
-		
-		CustLocation loc = this.currentLocation;
-		
- 		assert( lexer.front.test( LexemeType.MixedBlockBegin ), "parseMixedBlock: Expected MixedBlockBegin" );
- 		lexer.popFront();
-		
-		while( !lexer.empty && !lexer.front.test(LexemeType.MixedBlockEnd) )
-		{
-			CustLocation itemLoc = this.currentLocation;
-
-			
-			if( lexer.front.test( LexemeType.CodeBlockBegin ))
-			{
-				lexer.popFront();
-				statements ~= parseCodeBlock();
-			}
-			else if( lexer.front.test( LexemeType.Data ) )
-			{
-				statements ~= new DataFragmentStatement!(config)(itemLoc);
-				lexer.popFront();
-			}
-			else
-				assert( 0, "parseMixedBlock: unexpected lexeme type: " ~ (cast(LexemeType) lexer.front.info.typeIndex).to!string );
-		}
-		
-		lexer.popFront(); //Skip MixedBlockEnd
-		
-		statement = new MixedBlockStatement!(config)(loc, statements);
-		
-		return statement;
-	}
-	
-	IDirectiveSectionStatement parseDirectiveSection()
+	IDirectiveStatement parseDirectiveStatement()
 	{
 		import std.array: array;
 		import std.conv: to;
 		
+		IDirectiveStatement stmt = null;
 		CustLocation loc = this.currentLocation;
-		
-		IDirectiveSectionStatement section;
 		
 		assert( lexer.front.test( LexemeType.Name ), "Expected statement name, but got: " ~ lexer.frontValue.array.to!string );
 		
-		string sectionName = parseQualifiedIdentifier();
-		writeln("section identifier: ", sectionName);
+		string statementName = parseQualifiedIdentifier();
+		writeln("directive statement identifier: ", statementName);
 		
-		assert( !lexer.front.test( LexemeType.Colon ), "parseDirectiveSection: unexpected Colon. Maybe it's an assoc array instead of directive section" );;
-		
-		if( sectionName.empty )
+		if( statementName.empty )
 			return null;
 		
-		IDeclNode[] unnamedAttrs;
-		IKeyValueAttribute[] namedAttrs;
+		assert( !lexer.front.test( LexemeType.Colon ), "parseDirectiveStatement: unexpected Colon. Maybe it's an assoc array instead of directive section" );;
+
+		IDeclNode[] attrs;
 		
-		bool isUnnamedAfterNamed = false;
-		
-		while( !lexer.empty && !lexer.front.test( LexemeType.Semicolon ) )
+		while( !lexer.empty )
 		{
-			auto lexerCopy = lexer.save;
-			
-			IDeclNode attr;
+			if( lexer.front.test( LexemeType.Semicolon ) )
+			{
+				lexer.popFront();
+				break;
+			}
 			
 			//Try parse named attribute
-			IKeyValueAttribute namedAttr = parseNamedAttribute();
+			IDeclNode attr = parseNamedAttribute();
 			
-			writeln( "parseStatement: parsed named attr, frontValue: ", lexer.frontValue.array.to!string );
-			writeln( "parseStatement: attr is", ( namedAttr is null ? null : " not" ) ~ " null" );
+			writeln( "parseDirectiveStatement: parsed named attr, frontValue: ", lexer.frontValue.array.to!string );
+			writeln( "parseDirectiveStatement: attr is", ( attr is null ? null : " not" ) ~ " null" );
 			
 			//If no named attrs detected yet then we try parse unnamed attrs
-			if( namedAttr )
+			if( attr )
 			{	//Named attribute parsed, add it to list
 				writeln( "Named attribute detected!!!" );
-				namedAttrs ~= namedAttr;
+				attrs ~= attr;
 			}
 			else
 			{	//Named attribute was not found will try to parse unnamed one
@@ -277,56 +166,19 @@ public:
 				if( attr )
 				{
 					writeln( "Unnamed attribute detected!!!" );
-					
-					
-					if( !unnamedAttrs.empty )
-					{
-						isUnnamedAfterNamed = true;
-						writeln( "Found unnamed attr after named, possibly it's main body!!!" );
-						lexer = lexerCopy.save; //Restore lexer range to original at current step
-						break; //Exit loop after this situation detected
-					}
-					unnamedAttrs ~= attr;
-					
+					attrs ~= attr;
 				}
+				else
+					break; 
 			}
-			
-			if( !namedAttr && !attr )
-				break; //If no more attributes parsed then exit loop
 			
 			if( lexer.front.test( LexemeType.Comma ) )
 				lexer.popFront(); //Skip optional Comma
 		}
-
-		section = new DirectiveSectionStatement!(config)(loc, sectionName, cast(IDeclNode[]) unnamedAttrs ~ cast(IDeclNode[]) namedAttrs);
 		
-		return section;
-	}
-
-	IDirectiveStatement parseDirectiveStatement()
-	{
-		import std.array: array;
-		import std.conv: to;
-		
-		IDirectiveStatement stmt = null;
-		CustLocation loc = this.currentLocation;
-
-		IDirectiveSectionStatement[] sections;
-
-		while( !lexer.empty && !lexer.front.test( LexemeType.Semicolon ) )
-		{
-			IDirectiveSectionStatement sect = parseDirectiveSection();
-			if( !sect )
-				break;
-			
-			sections ~= sect;
-		}
-		
-		stmt = new DirectiveStatement!(config)(loc, sections);
-
-		writeln( "parseDirectiveStatement: front value is: ", lexer.frontValue.array.to!string );
-		
+		stmt = new DirectiveStatement!(config)(loc, statementName, attrs);
 		return stmt;
+
 	}
 	
 	IDeclNode parseBlockOrExpression()
@@ -339,7 +191,7 @@ public:
 		{
 			case LBrace:
 			{
-				result = parseExpression();
+				result = parseExpression(); //Try to parse assoc array
 				
 				if( !result )
 					result = parseCodeBlock();
@@ -377,6 +229,119 @@ public:
 		return result;
 	}
 	
+	ICompoundStatement parseCodeBlock()
+	{
+		import std.conv: to;
+		
+		ICompoundStatement statement;
+		
+		IStatement[] statements;
+					
+		CustLocation blockLocation = this.currentLocation;
+		
+		if( lexer.front.test( LexemeType.LBrace ) )
+		{
+			auto lexerCopy = lexer.save();
+			lexer.popFront();
+			if( lexer.front.test( LexemeType.String ) )
+			{
+				lexer.popFront();
+				assert( lexer.front.test( LexemeType.Colon ), "parseCodeBlock: unexpected Colon found. Maybe it's assoc array" );
+				lexer = lexerCopy.save;
+			}
+			else
+			{
+				string attrName = parseQualifiedIdentifier();
+				assert( attrName.length > 0 && lexer.front.test( LexemeType.Colon ), "parseCodeBlock: unexpected Colon found. Maybe it's assoc array" );
+				lexer = lexerCopy.save;
+			}
+		
+		}
+		
+		assert( lexer.front.test( LexemeType.LBrace ) || lexer.front.test( LexemeType.CodeBlockBegin ), "parseCodeBlock: Expected LBrace or CodeBlockbegin" );
+		lexer.popFront();
+		
+		lexer_loop:
+		while( !lexer.empty && !lexer.front.test(LexemeType.CodeBlockEnd) )
+		{
+			IStatement stmt;
+
+			switch( lexer.front.info.typeIndex ) with( LexemeType )
+			{
+				case MixedBlockBegin:
+				{
+					lexer.popFront();
+					stmt = parseMixedBlock();
+					break;
+				}
+				case CodeBlockBegin:
+				{
+					lexer.popFront();
+					stmt = parseCodeBlock();
+					break;
+				}
+				case Name:
+				{
+					stmt = parseDirectiveStatement();
+					break;
+				}
+				case Semicolon:
+				{
+					lexer.popFront(); //Accidental statement delimeters just should be skipped
+					continue lexer_loop;
+				}
+				default:
+					assert( 0, "parseCodeBlock: unexpected type of lexeme: " ~ lexer.frontValue.array.to!string );
+			}
+			assert( stmt !is null, "parseCodeBlock: statement is null" );
+			statements ~= stmt;
+		}
+		
+		lexer.popFront(); //Skip CodeBlockEnd
+		
+		statement = new CodeBlockStatement!(config)(blockLocation, statements);
+		
+		return statement;
+	}
+	
+	ICompoundStatement parseMixedBlock()
+	{
+		import std.conv: to;
+		
+		ICompoundStatement statement;
+		
+		IStatement[] statements;
+		
+		CustLocation loc = this.currentLocation;
+		
+ 		assert( lexer.front.test( LexemeType.MixedBlockBegin ), "parseMixedBlock: Expected MixedBlockBegin" );
+ 		lexer.popFront();
+		
+		while( !lexer.empty && !lexer.front.test(LexemeType.MixedBlockEnd) )
+		{
+			CustLocation itemLoc = this.currentLocation;
+			
+			if( lexer.front.test( LexemeType.CodeBlockBegin ))
+			{
+				lexer.popFront();
+				statements ~= parseCodeBlock();
+			}
+			else if( lexer.front.test( LexemeType.Data ) )
+			{
+				statements ~= new DataFragmentStatement!(config)(itemLoc);
+				lexer.popFront();
+			}
+			else
+				assert( 0, "parseMixedBlock: unexpected lexeme type: " ~ (cast(LexemeType) lexer.front.info.typeIndex).to!string );
+		}
+		
+		lexer.popFront(); //Skip MixedBlockEnd
+		
+		statement = new MixedBlockStatement!(config)(loc, statements);
+		
+		return statement;
+	}
+
 	IExpression parseExpression()
 	{
 		auto currRangeCopy = lexer.currentRange.save;
@@ -434,7 +399,7 @@ public:
 					Identifier ident;
 					string identName = frontValue.save.array.idup;
 					
-					lexer.popFront();					
+					lexer.popFront();
 					
 					while( !lexer.empty )
 					{
@@ -460,8 +425,6 @@ public:
 						//parsing arguments
 						while( !lexer.empty && !lexer.front.test( LexemeType.RParen ) )
 						{
-														
-							
 							IExpression arg = parseExpression();
 							
 							assert( arg, "Null call argument expression found!!!" );

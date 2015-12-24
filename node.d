@@ -142,6 +142,11 @@ public:
 
 }
 
+interface INameExpression: IExpression
+{
+	@property string name();
+}
+
 interface IKeyValueAttribute: IDeclNode
 {
 	@property {
@@ -191,22 +196,6 @@ interface IStatementRange
 
 }
 
-interface IDirectiveSectionStatementRange
-{
-	@property IStatement front();
-	void popFront();
-	
-	@property IStatement back();
-	void popBack();
-	
-	bool empty();
-	//@property size_t length();
-	
-	@property IDirectiveSectionStatementRange save();
-	
-	IStatement opIndex(size_t index);
-}
-
 interface IAttributesRange
 {
 	@property IDeclNode front();
@@ -223,21 +212,6 @@ interface IAttributesRange
 	IDeclNode opIndex(size_t index);
 }
 
-interface IDirectiveSectionStatement: IStatement
-{
-	@property {
-		string name(); //Returns name of this subdirective
-	}
-
-	//@property size_t length();
-	
-	IAttributesRange opSlice();
-	IAttributesRange opSlice(size_t begin, size_t end);
-	
-	//IDirectiveSectionStatement opIndex(size_t index);
-}
-
-
 interface IDirectiveStatement: IStatement
 {
 	@property {
@@ -249,8 +223,8 @@ interface IDirectiveStatement: IStatement
 	//@property IDirectiveSection first();
 	//@property IDirectiveSection last();
 
-	IDirectiveSectionStatementRange opSlice();
-	IDirectiveSectionStatementRange opSlice(size_t begin, size_t end);
+	IAttributesRange opSlice();
+	IAttributesRange opSlice(size_t begin, size_t end);
 	
 	//IDirectiveSectionStatement opIndex(size_t index);
 	//IDirectiveSectionStatementRange filterByName(string name);

@@ -321,7 +321,7 @@ public:
 	{
 		return LiteralType.Array;
 	}
-	
+
 /+
 	string toString() override
 	{
@@ -562,7 +562,7 @@ public:
 +/
 }
 
-class IdentifierExp(LocationConfig c): IExpression
+class IdentifierExp(LocationConfig c): INameExpression
 {
 	mixin BaseExpressionImpl!c;
 private:
@@ -583,6 +583,11 @@ public:
 	override @property IDeclNode[] children()
 	{
 		return null;
+	}
+	
+	override @property string name()
+	{
+		return _id.name;
 	}
 
 }

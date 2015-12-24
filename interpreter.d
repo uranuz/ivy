@@ -8,109 +8,310 @@ import declarative.interpreter_data;
 
 interface IInterpreterContext {}
 
-class InterpreterContext: IInterpreterContext
+class VariableTable
 {
-public:
+	alias TDataNode = DataNode!string;
 	
-
-
-public:
+private:
+	TDataNode[string] _vars;
 	
-
-
-
-}
-
-interface IDeclarationInterpreter
-{
-	void interpret(IDeclarativeStatement statement, Interpreter interp);
-
-}
-
-static IDeclarationInterpreter[string] declInterpreters;
-
-shared static this()
-{
-	declInterpreters["for"] = new ForInterpreter();
-	declInterpreters["if"] = new IfInterpreter();
-	declInterpreters["pass"] = new PassInterpreter();
-
-}
-
-class ForInterpreter : IDeclarationInterpreter
-{
 public:
-	override void interpret(IDeclarativeStatement statement, Interpreter interp)
+	TDataNode getValue( string varName )
 	{
+		auto varValuePtr = varName in _vars;
+		assert( varValuePtr, "VariableTable: Cannot find variable with name: " ~ varName );
+		return *varValuePtr;
+	}
 	
+	bool canFindValue( string varName )
+	{
+		return cast(bool)( varName in _vars );
+	}
+	
+	DataNodeType getDataNodeType( string varName )
+	{
+		auto varValuePtr = varName in _vars;
+		assert( varValuePtr, "VariableTable: Cannot find variable with name: " ~ varName );
+		return varValuePtr.type;
+	}
+	
+	void setValue( string varName, TDataNode value )
+	{
+		_vars[varName] = value;
+	}
+	
+	void removeValue( string varName )
+	{
+		_vars.remove( varName );
 	}
 
 }
 
-class IfInterpreter : IDeclarationInterpreter
+interface IDirectiveInterpreter
+{
+	void interpret(IDirectiveStatement statement, Interpreter interp);
+
+}
+
+static IDirectiveInterpreter[string] dirInterpreters;
+
+shared static this()
+{
+	dirInterpreters["for"] = new ForInterpreter();
+	dirInterpreters["if"] = new IfInterpreter();
+	dirInterpreters["expr"] = new ExprInterpreter();
+	dirInterpreters["pass"] = new PassInterpreter();
+
+}
+
+class ForInterpreter : IDirectiveInterpreter
 {
 public:
-	override void interpret(IDeclarativeStatement statement, Interpreter interp)
+	import std.algorithm : castSwitch;
+	
+	alias TDataNode = DataNode!string;
+
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
+	{
+		assert( statement && statement.name == "for", "For statement must exist and it's name must be 'for'!!!" );
+		
+		auto stmtRange = statement[];
+		assert( !stmtRange.empty, "Expected 4 attributes in 'for' directive" );
+		
+		INameExpression varNameExpr = cast(INameExpression) stmtRange.front; //1
+		
+		assert( varNameExpr && varNameExpr.name.length > 0, "For variable name expr must not be null or have empty name!!!" );
+		string varName = varNameExpr.name;
+		
+		stmtRange.popFront();
+		assert( !stmtRange.empty, "Expected 4 attributes in 'for' directive" );
+		
+		INameExpression inNameExpr = cast(INameExpression) stmtRange.front; //2
+		assert( inNameExpr.name == "in", "For: expected 'in' context keyword" );
+		
+		stmtRange.popFront();
+		assert( !stmtRange.empty, "Expected 4 attributes in 'for' directive" );
+		
+		IExpression aggregateExpr = cast(IExpression) stmtRange.front; //3
+		assert( aggregateExpr, "For: Expected aggregate expression" );
+		
+		aggregateExpr.accept(interp);
+		auto aggr = interp.opnd;
+		
+		assert( aggr.type == DataNodeType.Array, "For aggregate type must be array!!!" );
+
+		stmtRange.popFront();
+		assert( !stmtRange.empty, "Expected 4 attributes in 'for' directive" );
+		
+		IStatement bodyStmt = cast(IStatement) stmtRange.front; //4
+		
+		assert( bodyStmt, "For: expected for body statement!!!" );
+		
+		TDataNode[] results;
+		
+		foreach( aggrItem; aggr.array )
+		{
+			assert( !interp.varTable.canFindValue(varName), "For: variable name '" ~ varName ~ "' collides with existing variable!!!" );
+			
+			interp.varTable.setValue(varName, aggrItem);
+			bodyStmt.accept(interp);
+			interp.varTable.removeValue(varName);
+			results ~= interp.opnd;
+		}
+		
+		interp.opnd = results;
+	}
+
+}
+
+class IfInterpreter : IDirectiveInterpreter
+{
+public:
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
 		assert( statement && statement.name == "if", "If statement must exist and it's name must be 'if'!!!" );
-		auto mainSect = statement.mainSection;
-		assert( mainSect, "Main section expected!" );
 		
-		IDeclarationSection[] ifSects = [ mainSect ];
-		IDeclarationSection elseSect;
+		import std.typecons: Tuple;
+		import std.range: back, empty;
+		alias IfSect = Tuple!(IExpression, "cond", IStatement, "stmt");
 		
-		foreach( sect; statement.sections )
+		IfSect[] ifSects;
+		IStatement elseSect;
+		
+		
+		class AttrVisitor: AbstractNodeVisitor
 		{
-			if( sect.name == "elif" )
+		public:
+			alias visit = AbstractNodeVisitor.visit;
+			
+			override void visit(IExpression node)
 			{
-				ifSects ~= sect;
+				if( ifSects.empty )
+				{
+					ifSects ~= IfSect(node, null);
+				}
 			}
-			else if( sect.name == "else" )
-			{
-				assert( !elseSect, "Multiple else sections are not alowed!!!" );
-				elseSect = sect;
+		
+			override void visit(IStatement node)
+			{ 
+				assert( !elseSect, "No statements allowed after else attribute!!!");
+				if( ifSects.empty )
+				{
+					assert( 0, "Expression conditional expected!!!" );
+				}
+				else
+				{
+					//assert( !ifSects.back.stmt, "directive if: Expected elif or else attribute, but statement found!!!" );
+					ifSects.back.stmt = node; //Set statement to be executed
+				}
 			}
-			else
-			{
-				assert( 0, "Unexpected type of declaration section: " ~ sect.name );
+			
+			override void visit(IKeyValueAttribute node)
+			{ 
+				if( node.name == "elif" )
+				{
+					IExpression condExpr = cast(IExpression) node.value;
+					assert( condExpr, "Expression conditional expected!!!" );
+					ifSects ~= IfSect(condExpr, null);
+				}
+				else if( node.name == "else" )
+				{
+					assert( !elseSect, "Multiple else attributes are not allowed!!!" );
+					elseSect = cast(IStatement) node.value;
+					assert( elseSect, "Else attribute should be a statement!!!" );
+				}
+				else
+				{
+					assert( 0, "Unexpected type of named attribute: " ~ node.name );
+				}
 			}
+		}
+		
+		auto attrVisitor = new AttrVisitor;
+		
+		foreach( attr; statement )
+		{
+			attr.accept(attrVisitor);
 		}
 		
 		bool lookElse = true;
 		
-		foreach( ifSect; ifSects )
+		writeln( ifSects );
+		
+		foreach( i, ifSect; ifSects )
 		{
-			auto condExpr = ifSect.plainAttributes[0];
-			assert( condExpr, "Conditional expression attribute expected in 'if'!!!" );
-			condExpr.accept(interp);
+			interp.opnd = false;
+			ifSect.cond.accept(interp);
 			
 			assert( interp.opnd.type == DataNodeType.Boolean, "If conditional expression result must be boolean!!!" );
+			writeln( "if: section #", i, " is ", interp.opnd.boolean );
 			
 			if( interp.opnd.boolean )
 			{
 				lookElse = false;
-				ifSect.statement.accept(interp);
+				ifSect.stmt.accept(interp);
+				
+				import std.conv: to;
+				
+				interp.opnd = "if #" ~ to!string(i);
 				
 				break;
 			}
 		}
 		
-		if( lookElse )
+		if( lookElse && elseSect )
 		{
-			elseSect.statement.accept(interp);
+			elseSect.accept(interp);
+			interp.opnd = "else";
+		}
+	}
+}
+
+/+
+class ASTVisitingRange(T)
+{
+private:
+	IAttributesRange _attrRange;
+	T _currItem;
+
+public:
+	this(IAttributesRange attrRange)
+	{
+		_attrRange = attrRange;
+	}
+	
+	@property T front()
+	{
+		_attrRange.front.accept(this);
+		return _currItem;
+	}
+	
+	void popFront()
+	{
+		_attrRange.popFront();
+	}
+	
+	bool empty()
+	{
+		return _attrRange.empty;
+	}
+	
+	import std.meta;
+	
+	private static string generateVisitOverloads()
+	{
+		string result;
+		
+		string[] nodeTypes = [ 
+			"IDeclNode", "IExpression", "ILiteralExpression", "IOperatorExpression", 
+			"IUnaryExpression", "IBinaryExpression", "IStatement", "INameExpression",
+			"IKeyValueAttribute", "IDirectiveStatement", "ICompoundStatement"
+		];
+		
+		import std.algorithm: canFind;
+		import std.algorithm: remove;
+		if( nodeTypes.canFind( T.stringof ) )
+			nodeTypes = nodeTypes.remove( T.stringof );
+			
+		foreach( nodeType; nodeTypes )
+		{
+			result ~= "	public override void visit(" ~ nodeType ~ " node) { _currItem = null; }\r\n";
 		}
 		
+		result ~= "	public override void visit(" ~ T.stringof ~ " node) { _currItem = cast(T) _attrRange.front; }\r\n";
 		
+		return result;
+	}
+	
+	mixin(generateVisitOverloads());
+}
++/
+
+
+class PassInterpreter : IDirectiveInterpreter
+{
+public:
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
+	{
+	
 	}
 
 }
 
-class PassInterpreter : IDeclarationInterpreter
+class ExprInterpreter : IDirectiveInterpreter
 {
 public:
-	override void interpret(IDeclarativeStatement statement, Interpreter interp)
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
-	
+		assert( statement && statement.name == "expr", "Expr statement must exist and it's name must be 'expr'!!!" );
+		
+		auto stmtRange = statement[];
+		assert( !stmtRange.empty, "Expected 1 attribute in 'expr' directive" );
+		
+		IExpression expr = cast(IExpression) stmtRange.front;
+		assert( expr, "Expr: expected expression!!!" );
+		
+		expr.accept(interp);
 	}
 
 }
@@ -121,7 +322,13 @@ class Interpreter : AbstractNodeVisitor
 public:
 	alias TDataNode = DataNode!string;
 	
+	VariableTable varTable;
 	TDataNode opnd; //Current operand value
+	
+	this()
+	{
+		varTable = new VariableTable;
+	}
 
 	public override {
 		void visit(IDeclNode node)
@@ -139,6 +346,10 @@ public:
 		
 		void visit(ILiteralExpression node)
 		{
+			assert( node, "Interpreter.visit: ILiteralExpression node is null");
+			
+			writeln( "Interpreting literal type: ", node.literalType );
+			
 			switch( node.literalType ) with(LiteralType)
 			{
 				case NotLiteral:
@@ -173,7 +384,17 @@ public:
 				}
 				case Array:
 				{
-					assert( 0, "Not implemented yet!");
+					TDataNode[] dataNodes;
+					foreach( child; node.children )
+					{
+						writeln( "Interpret array element" );
+						child.accept(this);
+						dataNodes ~= opnd;
+					}
+					
+					writeln( "Array elements interpreted" );
+					opnd.array = dataNodes;
+					//assert( 0, "Not implemented yet!");
 					break;
 				}
 				case AssocArray:
@@ -185,7 +406,9 @@ public:
 					assert( 0 , "Unexpected LiteralType" );
 			}
 			
-			writeln( typeof(node).stringof ~ " visited" );
+			import std.conv: to;
+			
+			writeln( typeof(node).stringof ~ " visited: " ~ node.literalType.to!string );
 		}
 		
 		void visit(IOperatorExpression node)
@@ -548,17 +771,6 @@ public:
 			writeln( typeof(node).stringof ~ " visited" );
 		}
 		
-		void visit(IDeclarationSection node)
-		{
-			writeln( typeof(node).stringof ~ " visited" );
-			writeln( "Declaration section name: ", node.name );
-			foreach( child; node.children )
-			{
-				if( child )
-					child.accept(this);
-			}
-		}
-		
 		void visit(IKeyValueAttribute node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
@@ -566,14 +778,17 @@ public:
 			node.value.accept(this);
 		}
 
-		void visit(IDeclarativeStatement node)
+		void visit(IDirectiveStatement node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
-			writeln( "Declarative statement name: ", node.name );
-			foreach( child; node.children )
+			writeln( "Directive statement name: ", node.name );
+			if ( node.name in dirInterpreters )
 			{
-				if( child )
-					child.accept(this);
+				dirInterpreters[node.name].interpret(node, this);
+			}
+			else
+			{
+				writeln( "Interpreter for directive: ", node.name, " is not found!!!" );
 			}
 		}
 		

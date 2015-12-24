@@ -33,7 +33,7 @@ void main()
 	//` Qt.TextBox 10 {% Qt.Font size= 10 {% vasya name= vasya; petya name=petya; goblin name=vova, rank= 3, type="big"; do_nothing {* trololo abcd xyz *} %} %} `
 
 	auto parser = new Parser!(TextRange)(
-	` if {% doIf %} :else {% doElse %} `, "source.tpl");
+	` if x < 10 {# doIf; doIf2 ; ; #} else: x <= 20 {# doElse #} `, "source.tpl");
 
 	void printLexemes()
 	{
