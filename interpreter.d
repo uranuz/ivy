@@ -64,6 +64,71 @@ shared static this()
 
 }
 
+class ASTNodeTypeException: Exception
+{
+public:
+	pure nothrow @nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(msg, file, line, next);
+	}
+
+}
+
+class InterpretException: Exception
+{
+public:
+	pure nothrow @nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	{
+		super(msg, file, line, next);
+	}
+
+}
+
+T expectNode(T)( IDeclNode node, string msg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+{
+	import std.algorithm: splitter;
+	import std.range: retro, take, join;
+	import std.array: array;
+	import std.conv: to;
+
+	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+	enum shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
+	
+	T typedNode = cast(T) node;
+	if( !typedNode )
+		throw new ASTNodeTypeException( shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ msg, file, line );
+	
+	return typedNode;
+}
+
+T takeFrontAs(T)( IAttributesRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+{
+	import std.algorithm: splitter;
+	import std.range: retro, take, join;
+	import std.array: array;
+	import std.conv: to;
+
+	static immutable shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
+	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+	string longMsg = shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ errorMsg;
+	
+	if( range.empty )
+		throw new ASTNodeTypeException( longMsg, file, line );
+	
+	T typedAttr = cast(T) range.front;
+	if( !typedAttr )
+		throw new ASTNodeTypeException( longMsg, file, line );
+	
+	range.popFront();
+	
+	return typedAttr;
+}
+
+void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
+{
+	throw new InterpretException(msg, file, line);
+}
+
 class ForInterpreter : IDirectiveInterpreter
 {
 public:
@@ -73,45 +138,38 @@ public:
 
 	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
-		assert( statement && statement.name == "for", "For statement must exist and it's name must be 'for'!!!" );
+		if( !statement || statement.name != "for"  )
+			interpretError( "Expected 'for' directive" );
 		
 		auto stmtRange = statement[];
-		assert( !stmtRange.empty, "Expected 4 attributes in 'for' directive" );
+
+		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("For loop variable name expected");
 		
-		INameExpression varNameExpr = cast(INameExpression) stmtRange.front; //1
-		
-		assert( varNameExpr && varNameExpr.name.length > 0, "For variable name expr must not be null or have empty name!!!" );
 		string varName = varNameExpr.name;
+		if( varName.length == 0 )
+			interpretError("Loop variable name cannot be empty");
 		
-		stmtRange.popFront();
-		assert( !stmtRange.empty, "Expected 4 attributes in 'for' directive" );
+		INameExpression inNameExpr = stmtRange.takeFrontAs!INameExpression("Expected 'in' keyword");
 		
-		INameExpression inNameExpr = cast(INameExpression) stmtRange.front; //2
-		assert( inNameExpr.name == "in", "For: expected 'in' context keyword" );
+		if( inNameExpr.name != "in" )
+			interpretError( "Expected 'in' keyword" );
 		
-		stmtRange.popFront();
-		assert( !stmtRange.empty, "Expected 4 attributes in 'for' directive" );
-		
-		IExpression aggregateExpr = cast(IExpression) stmtRange.front; //3
-		assert( aggregateExpr, "For: Expected aggregate expression" );
+		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected loop aggregate expression");
 		
 		aggregateExpr.accept(interp);
 		auto aggr = interp.opnd;
 		
-		assert( aggr.type == DataNodeType.Array, "For aggregate type must be array!!!" );
+		if( aggr.type != DataNodeType.Array ) 
+			interpretError( "Aggregate type must be array" );
 
-		stmtRange.popFront();
-		assert( !stmtRange.empty, "Expected 4 attributes in 'for' directive" );
-		
-		IStatement bodyStmt = cast(IStatement) stmtRange.front; //4
-		
-		assert( bodyStmt, "For: expected for body statement!!!" );
+		IStatement bodyStmt = stmtRange.takeFrontAs!IStatement( "Expected loop body statement" );
 		
 		TDataNode[] results;
 		
 		foreach( aggrItem; aggr.array )
 		{
-			assert( !interp.varTable.canFindValue(varName), "For: variable name '" ~ varName ~ "' collides with existing variable!!!" );
+			if( interp.varTable.canFindValue(varName) )
+				interpretError( "For loop variable name '" ~ varName ~ "' already exists" );
 			
 			interp.varTable.setValue(varName, aggrItem);
 			bodyStmt.accept(interp);
@@ -129,84 +187,58 @@ class IfInterpreter : IDirectiveInterpreter
 public:
 	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
-		assert( statement && statement.name == "if", "If statement must exist and it's name must be 'if'!!!" );
+		if( !statement || statement.name != "if"  )
+			interpretError( "Expected 'if' directive" );
 		
 		import std.typecons: Tuple;
 		import std.range: back, empty;
 		alias IfSect = Tuple!(IExpression, "cond", IStatement, "stmt");
 		
 		IfSect[] ifSects;
-		IStatement elseSect;
+		IStatement elseBody;
 		
+		auto stmtRange = statement[];
 		
-		class AttrVisitor: AbstractNodeVisitor
+		IExpression condExpr = stmtRange.takeFrontAs!IExpression( "Conditional expression expected" );
+		IStatement bodyStmt = stmtRange.takeFrontAs!IStatement( "'If' directive body statement expected" );
+		
+		ifSects ~= IfSect(condExpr, bodyStmt);
+		
+		for( ; stmtRange.empty; stmtRange.popFront() )
 		{
-		public:
-			alias visit = AbstractNodeVisitor.visit;
-			
-			override void visit(IExpression node)
+			INameExpression keywordExpr = stmtRange.takeFrontAs!INameExpression("'elif' or 'else' keyword expected");
+			if( keywordExpr.name == "elif" )
 			{
-				if( ifSects.empty )
-				{
-					ifSects ~= IfSect(node, null);
-				}
+				condExpr = stmtRange.takeFrontAs!IExpression( "'elif' conditional expression expected" );
+				bodyStmt = stmtRange.takeFrontAs!IStatement( "'elif' body statement expected" );
+				
+				ifSects ~= IfSect(condExpr, bodyStmt);
 			}
-		
-			override void visit(IStatement node)
-			{ 
-				assert( !elseSect, "No statements allowed after else attribute!!!");
-				if( ifSects.empty )
-				{
-					assert( 0, "Expression conditional expected!!!" );
-				}
-				else
-				{
-					//assert( !ifSects.back.stmt, "directive if: Expected elif or else attribute, but statement found!!!" );
-					ifSects.back.stmt = node; //Set statement to be executed
-				}
+			else if( keywordExpr.name == "else" )
+			{
+				elseBody = stmtRange.takeFrontAs!IStatement( "'else' body statement expected" );
+				if( !stmtRange.empty )
+					interpretError("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
 			}
-			
-			override void visit(IKeyValueAttribute node)
-			{ 
-				if( node.name == "elif" )
-				{
-					IExpression condExpr = cast(IExpression) node.value;
-					assert( condExpr, "Expression conditional expected!!!" );
-					ifSects ~= IfSect(condExpr, null);
-				}
-				else if( node.name == "else" )
-				{
-					assert( !elseSect, "Multiple else attributes are not allowed!!!" );
-					elseSect = cast(IStatement) node.value;
-					assert( elseSect, "Else attribute should be a statement!!!" );
-				}
-				else
-				{
-					assert( 0, "Unexpected type of named attribute: " ~ node.name );
-				}
+			else
+			{
+				interpretError("'elif' or 'else' keyword expected");
 			}
-		}
-		
-		auto attrVisitor = new AttrVisitor;
-		
-		foreach( attr; statement )
-		{
-			attr.accept(attrVisitor);
 		}
 		
 		bool lookElse = true;
-		
-		writeln( ifSects );
 		
 		foreach( i, ifSect; ifSects )
 		{
 			interp.opnd = false;
 			ifSect.cond.accept(interp);
 			
-			assert( interp.opnd.type == DataNodeType.Boolean, "If conditional expression result must be boolean!!!" );
-			writeln( "if: section #", i, " is ", interp.opnd.boolean );
+			auto cond = interp.opnd;
 			
-			if( interp.opnd.boolean )
+			if( cond.type != DataNodeType.Boolean )
+				interpretError( "Conditional expression type must be boolean" );
+				
+			if( cond.boolean )
 			{
 				lookElse = false;
 				ifSect.stmt.accept(interp);
@@ -214,14 +246,14 @@ public:
 				import std.conv: to;
 				
 				interp.opnd = "if #" ~ to!string(i);
-				
 				break;
 			}
+		
 		}
 		
-		if( lookElse && elseSect )
+		if( lookElse && elseBody )
 		{
-			elseSect.accept(interp);
+			elseBody.accept(interp);
 			interp.opnd = "else";
 		}
 	}
@@ -303,14 +335,13 @@ class ExprInterpreter : IDirectiveInterpreter
 public:
 	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
-		assert( statement && statement.name == "expr", "Expr statement must exist and it's name must be 'expr'!!!" );
+		if( !statement || statement.name != "expr"  )
+			interpretError( "Expected 'expr' directive" );
 		
 		auto stmtRange = statement[];
-		assert( !stmtRange.empty, "Expected 1 attribute in 'expr' directive" );
 		
-		IExpression expr = cast(IExpression) stmtRange.front;
-		assert( expr, "Expr: expected expression!!!" );
-		
+		IExpression expr = stmtRange.takeFrontAs!IExpression("Expression expected");
+
 		expr.accept(interp);
 	}
 

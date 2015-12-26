@@ -9,7 +9,7 @@ void main()
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
 	auto parser = new Parser!(TextRange)(
-	` for item in [1, 2, 3] {# expr 1 #} `, "source.tpl");
+	` if 1 < -1 {# expr 1 #} elif 2 < 3 {# expr 2 #} `, "source.tpl");
 	
 	IDeclNode ast;
 	
