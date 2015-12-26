@@ -61,6 +61,8 @@ shared static this()
 	dirInterpreters["if"] = new IfInterpreter();
 	dirInterpreters["expr"] = new ExprInterpreter();
 	dirInterpreters["pass"] = new PassInterpreter();
+	dirInterpreters["var"] = new VarInterpreter();
+	dirInterpreters["set"] = new SetInterpreter();
 
 }
 
@@ -163,6 +165,9 @@ public:
 			interpretError( "Aggregate type must be array" );
 
 		IStatement bodyStmt = stmtRange.takeFrontAs!IStatement( "Expected loop body statement" );
+		
+		if( !stmtRange.empty )
+			interpretError( "Expected end of directive after loop body. Maybe ';' is missing" );
 		
 		TDataNode[] results;
 		
@@ -347,6 +352,59 @@ public:
 
 }
 
+class SetInterpreter : IDirectiveInterpreter
+{
+public:
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
+	{
+		if( !statement || statement.name != "set"  )
+			interpretError( "Expected 'set' directive" );
+		
+		auto stmtRange = statement[];
+		
+		IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
+		
+		if( !stmtRange.empty )
+			interpretError( "Expected end of directive after key-avlue pair. Maybe ';' is missing" );
+		
+		if( !interp.varTable.canFindValue( kwPair.name ) )
+			interpretError( "Undefined identifier '" ~ kwPair.name ~ "'" );
+		
+		if( !kwPair.value )
+			interpretError( "Expected value for 'set' directive" );
+		
+		kwPair.value.accept(interp); //Evaluating expression
+		interp.varTable.setValue(kwPair.name, interp.opnd);
+	}
+
+}
+
+class VarInterpreter : IDirectiveInterpreter
+{
+public:
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
+	{
+		if( !statement || statement.name != "var"  )
+			interpretError( "Expected 'var' directive" );
+		
+		auto stmtRange = statement[];
+		
+		IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
+		
+		if( !stmtRange.empty )
+			interpretError( "Expected end of directive after key-avlue pair. Maybe ';' is missing" );
+		
+		if( kwPair.name.length > 0 )
+		
+		if( !kwPair.value )
+			interpretError( "Expected value for 'var' directive" );
+		
+		kwPair.value.accept(interp); //Evaluating expression
+		interp.varTable.setValue(kwPair.name, interp.opnd);
+	}
+
+}
+
 
 class Interpreter : AbstractNodeVisitor
 {
@@ -440,6 +498,16 @@ public:
 			import std.conv: to;
 			
 			writeln( typeof(node).stringof ~ " visited: " ~ node.literalType.to!string );
+		}
+		
+		void visit(INameExpression node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+			
+			if( !varTable.canFindValue(node.name) )
+				interpretError( "Undefined identifier '" ~ node.name ~ "'" );
+			
+			opnd = varTable.getValue(node.name);
 		}
 		
 		void visit(IOperatorExpression node)

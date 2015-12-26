@@ -10,6 +10,7 @@ class AbstractNodeVisitor
 	//Expressions
 	void visit(IExpression node) { visit( cast(IDeclNode) node ); }
 	void visit(ILiteralExpression node) { visit( cast(IExpression) node ); }
+	void visit(INameExpression node) { visit( cast(IExpression) node ); }
 	void visit(IOperatorExpression node) { visit( cast(IExpression) node ); }
 	void visit(IUnaryExpression node) { visit( cast(IExpression) node ); }
 	void visit(IBinaryExpression node) { visit( cast(IExpression) node ); }

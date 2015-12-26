@@ -9,7 +9,7 @@ void main()
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
 	auto parser = new Parser!(TextRange)(
-	` if 1 < -1 {# expr 1 #} elif 2 < 3 {# expr 2 #} `, "source.tpl");
+	` var vova: true; if vova {# expr vasya #} elif 2 < 3 {# expr petya #} `, "source.tpl");
 	
 	IDeclNode ast;
 	
@@ -29,6 +29,9 @@ void main()
 	stdout.writeln(toJSON(&astJSON, true));
 	
 	auto visitor = new Interpreter();
+// 	alias TDataNode = DataNode!string;
+// 	visitor.varTable.setValue("vova", TDataNode(true));
+// 	visitor.varTable.setValue("vasya", TDataNode(5));
 	
 	ast.accept(visitor);
 	
