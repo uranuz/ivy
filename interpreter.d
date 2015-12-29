@@ -69,7 +69,7 @@ shared static this()
 class ASTNodeTypeException: Exception
 {
 public:
-	pure nothrow @nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
 	{
 		super(msg, file, line, next);
 	}
@@ -79,7 +79,7 @@ public:
 class InterpretException: Exception
 {
 public:
-	pure nothrow @nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
 	{
 		super(msg, file, line, next);
 	}
@@ -387,12 +387,20 @@ public:
 		if( !statement || statement.name != "var"  )
 			interpretError( "Expected 'var' directive" );
 		
+		writeln( "VarInterpreter: attrs list:" );
+		foreach( stmt; statement )
+		{
+			writeln( "stmt.kind: ", stmt.kind );
+		
+		}
+		writeln( "VarInterpreter: attrs list end^" );
+		
 		auto stmtRange = statement[];
 		
 		IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
 		
 		if( !stmtRange.empty )
-			interpretError( "Expected end of directive after key-avlue pair. Maybe ';' is missing" );
+			interpretError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
 		
 		if( kwPair.name.length > 0 )
 		
@@ -409,12 +417,13 @@ public:
 class Interpreter : AbstractNodeVisitor
 {
 public:
-	alias TDataNode = DataNode!string;
+	alias String = string;
+	alias TDataNode = DataNode!String;
 	
 	VariableTable varTable;
 	TDataNode opnd; //Current operand value
 	
-	this()
+	this(String src)
 	{
 		varTable = new VariableTable;
 	}
@@ -468,7 +477,10 @@ public:
 				}
 				case String:
 				{
-					assert( 0, "Not implemented yet!");
+					Location loc = node.location;
+					
+					opnd = node.toStr();
+					writeln( "ILiteralExpression: opnd.str: ", opnd.str );
 					break;
 				}
 				case Array:
@@ -593,6 +605,7 @@ public:
 			with(Operator)
 				assert( 
 					op == Add || op == Sub || op == Mul || op == Div || op == Mod || //Arithmetic
+					op == Concat ||
 					op == And || op == Or || op == Xor || //Boolean
 					op == Equal || op == NotEqual || op == LT || op == GT || op == LTEqual || op == GTEqual,  //Comparision
 					"Incorrect binary operator " ~ (cast(Operator) op).to!string 
@@ -696,6 +709,20 @@ public:
 					else if( leftOpnd.type == DataNodeType.Floating )
 					{
 						opnd = leftOpnd.floating % rightOpnd.floating;
+					}
+					
+					break;
+				}
+				case Concat:
+				{
+					assert( 
+						leftOpnd.type == DataNodeType.String,
+						"Unsupported Concat operator for type: " ~ leftOpnd.type.to!string
+					);
+					
+					if( leftOpnd.type == DataNodeType.String )
+					{
+						opnd = leftOpnd.str ~ rightOpnd.str;
 					}
 					
 					break;

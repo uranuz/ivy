@@ -2,9 +2,9 @@ module declarative.expression;
 
 import declarative.node, declarative.common;
 
-mixin template BaseExpressionImpl(LocationConfig c, T = IDeclNode)
+mixin template BaseExpressionImpl(LocationConfig c)
 {
-	mixin BaseDeclNodeImpl!(c, T);
+	mixin BaseDeclNodeImpl!c;
 	
 	public @property override
 	{
@@ -50,7 +50,7 @@ mixin template BaseExpressionImpl(LocationConfig c, T = IDeclNode)
 			assert( 0, "Expression is not floating!" );
 		}
 		
-		IExpression toStringExpr()
+		string toStr()
 		{
 			assert( 0, "Expression is not string!" );
 		}
@@ -257,15 +257,14 @@ alias StringType = string;
 class StringExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
-
 private:
-	StringType _value;
-	
+	StringType _str;
+
 public:
-	this(CustLocation loc, StringType val)
+	this(CustLocation location, StringType escapedStr)
 	{
-		_location = loc;
-		_value = val;
+		_location = location;
+		_str = escapedStr;
 	}
 
 	override @property string kind()
@@ -283,14 +282,10 @@ public:
 		return LiteralType.String;
 	}
 	
-/+
-	string toString() override
+	override string toStr() 
 	{
-		import std.conv: to;
-		
-		return _value.to!string;
+		return _str;
 	}
-+/
 }
 
 class ArrayLiteralExp(LocationConfig c): ILiteralExpression

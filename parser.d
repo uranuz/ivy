@@ -10,7 +10,7 @@ class ParserException : Exception
 {
 public:
 	
-	pure nothrow @nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null)
+	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
 	{
 		super(msg, file, line, next);
 	}
@@ -37,6 +37,11 @@ public:
 	{
 		this.lexer = LexerType(source);
 		this.fileName = fileName;
+	}
+	
+	IDeclNode parse()
+	{
+		return parseCodeBlock(true); //true - don't check type of block
 	}
 	
 	@property CustLocation currentLocation() //const
@@ -269,7 +274,7 @@ public:
 		return result;
 	}
 	
-	ICompoundStatement parseCodeBlock()
+	ICompoundStatement parseCodeBlock(bool parseInternals = false)
 	{
 		import std.conv: to;
 		
@@ -279,30 +284,33 @@ public:
 					
 		CustLocation blockLocation = this.currentLocation;
 		
-		if( lexer.front.test( LexemeType.LBrace ) )
+		if( !parseInternals )
 		{
-			auto lexerCopy = lexer.save();
-			lexer.popFront();
-			if( lexer.front.test( LexemeType.String ) )
+			if( lexer.front.test( LexemeType.LBrace ) )
 			{
+				auto lexerCopy = lexer.save();
 				lexer.popFront();
-				if( lexer.front.test( LexemeType.Colon ) )
-					error( "Unexpected Colon found. Maybe it's assoc array" );
-				lexer = lexerCopy.save;
+				if( lexer.front.test( LexemeType.String ) )
+				{
+					lexer.popFront();
+					if( lexer.front.test( LexemeType.Colon ) )
+						error( "Unexpected Colon found. Maybe it's assoc array" );
+					lexer = lexerCopy.save;
+				}
+				else
+				{
+					string attrName = parseQualifiedIdentifier();
+					if( attrName.length > 0 && lexer.front.test( LexemeType.Colon ) )
+						error( "Unexpected Colon found. Maybe it's assoc array" );
+					lexer = lexerCopy.save;
+				}
+			
 			}
-			else
-			{
-				string attrName = parseQualifiedIdentifier();
-				if( attrName.length > 0 && lexer.front.test( LexemeType.Colon ) )
-					error( "Unexpected Colon found. Maybe it's assoc array" );
-				lexer = lexerCopy.save;
-			}
-		
+			
+			if( !lexer.front.test( LexemeType.LBrace ) && !lexer.front.test( LexemeType.CodeBlockBegin ) )
+				error( "parseCodeBlock: Expected LBrace or CodeBlockbegin" );
+			lexer.popFront();
 		}
-		
-		if( !lexer.front.test( LexemeType.LBrace ) && !lexer.front.test( LexemeType.CodeBlockBegin ) )
-			error( "parseCodeBlock: Expected LBrace or CodeBlockbegin" );
-		lexer.popFront();
 		
 		lexer_loop:
 		while( !lexer.empty && !lexer.front.test(LexemeType.CodeBlockEnd) )
@@ -313,13 +321,11 @@ public:
 			{
 				case MixedBlockBegin:
 				{
-					lexer.popFront();
 					stmt = parseMixedBlock();
 					break;
 				}
 				case CodeBlockBegin:
 				{
-					lexer.popFront();
 					stmt = parseCodeBlock();
 					break;
 				}
@@ -328,11 +334,13 @@ public:
 					stmt = parseDirectiveStatement();
 					break;
 				}
+				/+
 				case Semicolon:
 				{
 					lexer.popFront(); //Accidental statement delimeters just should be skipped
 					continue lexer_loop;
 				}
+				+/
 				default:
 					error( "Unexpected type of lexeme: " ~ lexer.frontValue.array.to!string );
 			}
@@ -348,7 +356,7 @@ public:
 		return statement;
 	}
 	
-	ICompoundStatement parseMixedBlock()
+	ICompoundStatement parseMixedBlock(bool parseInternals = false)
 	{
 		import std.conv: to;
 		
@@ -358,9 +366,12 @@ public:
 		
 		CustLocation loc = this.currentLocation;
 		
-		if( !lexer.front.test( LexemeType.MixedBlockBegin ) )
-			error( "Expected MixedBlockBegin" );
- 		lexer.popFront();
+		if( !parseInternals )
+		{
+			if( !lexer.front.test( LexemeType.MixedBlockBegin ) )
+				error( "Expected MixedBlockBegin" );
+			lexer.popFront();
+		}
 		
 		while( !lexer.empty && !lexer.front.test(LexemeType.MixedBlockEnd) )
 		{
@@ -368,7 +379,6 @@ public:
 			
 			if( lexer.front.test( LexemeType.CodeBlockBegin ))
 			{
-				lexer.popFront();
 				statements ~= parseCodeBlock();
 			}
 			else if( lexer.front.test( LexemeType.Data ) )
@@ -393,7 +403,7 @@ public:
 		
 		auto expr = parseLogicalOrExp();
 				
-		//Restore currentRange if parser cannot found expression
+		//Restore currentRange if parser cannot find expression
 		if( !expr )
 			lexer.currentRange = currRangeCopy.save;
 		
@@ -521,7 +531,9 @@ public:
 			{
 				loger.write("case String: ");
 				
-				expr = new StringExp!(config)(loc, lexer.frontValue.array.to!string);
+				string escapedStr = parseQuotedString();
+				
+				expr = new StringExp!(config)(loc, escapedStr);
 				lexer.popFront();
 		
 				break;
@@ -639,6 +651,119 @@ public:
 		return expr;
 	}
 	
+	String parseQuotedString()
+	{
+		String result;
+		
+		if( !lexer.front.test(LexemeType.String) )
+			error( "Expected quoted string literal" );
+		
+		pragma( msg, "lexer.frontValue: " );
+		pragma( msg, typeof(lexer.frontValue) );
+		auto strRange = lexer.frontValue.save;
+		
+		if( strRange.front != '\"' )
+			error( "Expected \"" );
+		strRange.popFront();
+		
+		auto clearStrRange = strRange.save;
+		size_t clearCount;
+		
+		while( !strRange.empty && strRange.front != '\"' )
+		{
+			if( strRange.front == '\\' )
+			{
+				strRange.popFront();
+				
+				result ~= clearStrRange[0..clearCount].array;
+				
+				switch( strRange.front )
+				{
+					case 'b':
+					{
+						result ~= '\b';
+						break;
+					}
+					case 'f':
+					{
+						result ~= '\f';
+						break;
+					}
+					case 'n':
+					{
+						result ~= '\n';
+						break;
+					}
+					case 'r':
+					{
+						result ~= '\r';
+						break;
+					}
+					case 't':
+					{
+						result ~= '\t';
+						break;
+					}
+					case 'v':
+					{
+						result ~= '\v';
+						break;
+					}
+					case '0':
+					{
+						result ~= '\0';
+						break;
+					}
+					case '\'':
+					{
+						result ~= '\'';
+						break;
+					}
+					case '\"':
+					{
+						result ~= '\"';
+						break;
+					}
+					case '\\':
+					{
+						result ~= '\\';
+						break;
+					}
+					
+					case 'u':
+					{
+						assert( 0, "Unicode escaping is not implemented yet!");
+						break;
+					}
+					case 'x':
+					{
+						assert( 0, "Hex escaping is not implemented yet!");
+						break;
+					}
+					default:
+					{
+						result ~= strRange.front;
+						break;
+					}
+				}
+				
+				strRange.popFront();
+				clearCount = 0;
+				continue;
+			}
+			
+			++clearCount;
+			strRange.popFront();
+		}
+		
+		if( strRange.front != '\"' )
+			error( "Expected \"" );
+			
+		lexer.popFront(); //Skipping String lexeme
+		
+		return result;
+	}
+	
 	static int[int] lexToBinaryOpMap;
 	
 	shared static this()
@@ -648,7 +773,8 @@ public:
 			LexemeType.Sub: Operator.Sub,
 			LexemeType.Mul: Operator.Mul,
 			LexemeType.Div: Operator.Div,
-			LexemeType.Mod: Operator.Mod
+			LexemeType.Mod: Operator.Mod,
+			LexemeType.Tilde: Operator.Concat
 		];
 	}
 	

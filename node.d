@@ -48,7 +48,7 @@ interface IExpression: IDeclNode
 	bool toBoolean();
 	int toInteger();
 	double toFloating();
-	IExpression toStringExpr();
+	string toStr();
 }
 
 interface ILiteralExpression: IExpression
@@ -71,6 +71,9 @@ enum Operator {
 	Mul,
 	Div,
 	Mod,
+	
+	//Concatenation
+	Concat,
 	
 	//Logical operators
 	Not, //Unary

@@ -254,17 +254,17 @@ auto getCustomizedLocation(LexemeT)( LexemeT lex, string fileName )
 import declarative.node : IDeclNode;
 import declarative.node_visitor : AbstractNodeVisitor;
 
-mixin template BaseDeclNodeImpl(LocationConfig c, T = IDeclNode)
+mixin template BaseDeclNodeImpl(LocationConfig c)
 {
 	enum locConfig = c;
 	alias CustLocation = CustomizedLocation!locConfig;
 	
-	private T _parentNode;
+	private IDeclNode _parentNode;
 	private CustLocation _location;
 	
 	public @property override
 	{ 
-		T parent()
+		IDeclNode parent()
 		{
 			return _parentNode;
 		}

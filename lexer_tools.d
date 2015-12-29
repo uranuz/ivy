@@ -364,25 +364,6 @@ dchar decodeFront(SourceRange)(ref const(SourceRange) input)
 }
 
 
-// void main()
-// {
-	
-	// alias SourceRange = TextForwardRange!string;
-	
-	// auto sourceRange = SourceRange("iffd {}");
-	
-	// writeln("Hello!!!");
-	
-// // 	dchar c = stream.decodeFront();
-// // 	writeln(c);
-	// //writeln(replacementChar);
-	
-	
-	// writeln(sourceRange.matchWord("iffd"));
-
-// }
-
-
 bool isNameChar(dchar ch)
 {
 	import std.uni: isAlpha;

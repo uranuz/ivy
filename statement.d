@@ -2,9 +2,9 @@ module declarative.statement;
 
 import declarative.common, declarative.node;
 
-mixin template PlainStatementImpl(LocationConfig c, T = IDeclNode)
+mixin template PlainStatementImpl(LocationConfig c)
 {
-	mixin BaseDeclNodeImpl!(c, T);
+	mixin BaseDeclNodeImpl!c;
 
 	public @property override {
 		bool isCompoundStatement()
