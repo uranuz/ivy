@@ -4,6 +4,7 @@ import std.stdio, std.json;
 
 import declarative.const_folding, declarative.node, declarative.lexer_tools, declarative.lexer, declarative.common, declarative.parser, declarative.ast_writer;
 
+/+
 void main()
 {
 	alias TextRange = TextForwardRange!(string, LocationConfig());
@@ -15,7 +16,7 @@ void main()
 	
 	try {
 		parser.lexer.popFront();
-		ast = parser.parseDeclarativeStatement();
+		ast = parser.parseDirectiveStatement();
 	} catch(Throwable e) {
 // 		printLexemes();
 		
@@ -33,3 +34,4 @@ void main()
 	ast.children[0].children[0].children[0].accept(visitor);
 	
 }
++/

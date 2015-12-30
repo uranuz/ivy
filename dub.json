@@ -1,0 +1,38 @@
+{
+	"name": "declarative",
+	"description": "Declarative templating language",
+	"copyright": "Copyright © 2015, uranuz",
+	"authors": ["uranuz"],
+	"dependencies": {
+	},
+	"configurations": [
+		{
+			"name": "interpreter_test", 
+			"targetType": "executable",
+			"platforms": [],
+			"versions": [],
+			"libs": [],
+			"buildRequirements": ["silenceWarnings"],
+			"buildOptions": [],
+			"sourceFiles": [ "test/interpreter_test.d" ]
+		},
+		{
+			"name": "parser_test", 
+			"targetType": "executable",
+			"platforms": [],
+			"versions": [],
+			"libs": [],
+			"buildRequirements": ["silenceWarnings"],
+			"sourceFiles": [ "test/parser_test.d" ]
+		},
+		{
+			"name": "lexer_test", 
+			"targetType": "executable",
+			"platforms": [],
+			"versions": [],
+			"libs": [],
+			"buildRequirements": ["silenceWarnings"],
+			"sourceFiles": [ "test/lexer_test.d" ]
+		}
+	]
+}

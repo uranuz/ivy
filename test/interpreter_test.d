@@ -1,14 +1,20 @@
-module declarative.const_folding_test;
+module declarative.interpreter_test;
 
 import std.stdio, std.json;
 
 import declarative.interpreter, declarative.interpreter_data, declarative.node, declarative.lexer_tools, declarative.lexer, declarative.common, declarative.parser, declarative.ast_writer;
 
+
+
 void main()
 {
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
-	string source = ` var name: "Вова"; expr "Привет, " ~ name; `;
+	string source = 
+`	var name: "Вася"; 
+	var name2: "Петр"; 
+	expr "Привет, " ~ name ~ "!!! Здравствуй, " ~ name2 ~ "!!!"; `;
+	
 	
 	auto parser = new Parser!(TextRange)(source, "source.tpl");
 	

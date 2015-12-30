@@ -145,9 +145,13 @@ public:
 			return null;
 		}
 		
+		auto frontValue = lexer.frontValue.array.to!string;
+		
 		lexer.popFront(); //Skip key-value delimeter
 		
 		IDeclNode val = parseBlockOrExpression();
+		
+		frontValue = lexer.frontValue.array.to!string;
 		
 		if( !val )
 		{
@@ -186,6 +190,8 @@ public:
 		
 		while( !lexer.empty )
 		{
+			auto frontLex = (cast(LexemeType) lexer.front.info.typeIndex).to!string;
+			
 			if( lexer.front.test( LexemeType.Semicolon ) )
 			{
 				lexer.popFront();
@@ -194,6 +200,8 @@ public:
 			
 			//Try parse named attribute
 			IDeclNode attr = parseNamedAttribute();
+			
+			frontLex = (cast(LexemeType) lexer.front.info.typeIndex).to!string;
 			
 			loger.write( "parseDirectiveStatement: parsed named attr, frontValue: ", lexer.frontValue.array.to!string );
 			loger.write( "parseDirectiveStatement: attr is", ( attr is null ? null : " not" ) ~ " null" );
@@ -208,6 +216,8 @@ public:
 			{	//Named attribute was not found will try to parse unnamed one
 				attr = parseBlockOrExpression();
 				
+				frontLex = (cast(LexemeType) lexer.front.info.typeIndex).to!string;
+				
 				if( attr )
 				{
 					loger.write( "Unnamed attribute detected!!!" );
@@ -221,6 +231,8 @@ public:
 				lexer.popFront(); //Skip optional Comma
 		}
 		
+		auto frontLex = (cast(LexemeType) lexer.front.info.typeIndex).to!string;
+		
 		stmt = new DirectiveStatement!(config)(loc, statementName, attrs);
 		return stmt;
 
@@ -228,6 +240,9 @@ public:
 	
 	IDeclNode parseBlockOrExpression()
 	{
+		import std.array: array;
+		import std.conv: to;
+		
 		IDeclNode result;
 		
 		//CustLocation loc = this.currentLocation;
@@ -265,11 +280,13 @@ public:
 				break;
 			}
 			default:
-			{
+			{	auto frontValue = lexer.frontValue.array.to!string;
 				result = parseExpression();
+				frontValue = lexer.frontValue.array.to!string;
 				break;
 			}
 		}
+		auto frontValue = lexer.frontValue.array.to!string;
 	
 		return result;
 	}
@@ -399,9 +416,16 @@ public:
 
 	IExpression parseExpression()
 	{
+		import std.array: array;
+		import std.conv: to;
+		
 		auto currRangeCopy = lexer.currentRange.save;
 		
+		auto frontValue = lexer.frontValue.array.to!string;
+		
 		auto expr = parseLogicalOrExp();
+		
+		frontValue = lexer.frontValue.array.to!string;
 				
 		//Restore currentRange if parser cannot find expression
 		if( !expr )
@@ -531,10 +555,13 @@ public:
 			{
 				loger.write("case String: ");
 				
+				string frontValueS = lexer.frontValue.array.to!string;
+				
 				string escapedStr = parseQuotedString();
 				
+				frontValueS = lexer.frontValue.array.to!string;
+				
 				expr = new StringExp!(config)(loc, escapedStr);
-				lexer.popFront();
 		
 				break;
 			}
@@ -662,6 +689,8 @@ public:
 		pragma( msg, typeof(lexer.frontValue) );
 		auto strRange = lexer.frontValue.save;
 		
+		auto ch = strRange.front;
+		
 		if( strRange.front != '\"' )
 			error( "Expected \"" );
 		strRange.popFront();
@@ -671,11 +700,17 @@ public:
 		
 		while( !strRange.empty && strRange.front != '\"' )
 		{
+			ch = strRange.front;
+			
 			if( strRange.front == '\\' )
 			{
 				strRange.popFront();
 				
-				result ~= clearStrRange[0..clearCount].array;
+				ch = strRange.front;
+				
+				auto resPart = clearStrRange[0..clearCount].array;
+				
+				result ~= resPart;
 				
 				switch( strRange.front )
 				{
@@ -748,6 +783,9 @@ public:
 				}
 				
 				strRange.popFront();
+				
+				ch = strRange.front;
+				
 				clearCount = 0;
 				continue;
 			}
@@ -756,8 +794,12 @@ public:
 			strRange.popFront();
 		}
 		
+		ch = strRange.front;
+		
 		if( strRange.front != '\"' )
 			error( "Expected \"" );
+			
+		result ~= clearStrRange[0..clearCount].array; //Appending last part of string except last quote
 			
 		lexer.popFront(); //Skipping String lexeme
 		
@@ -780,6 +822,9 @@ public:
 	
 	IExpression parseMulExp()
 	{
+		import std.array: array;
+		import std.conv: to;
+		
 		loger.write("parseMulExp");
 		
 		IExpression left;
@@ -787,7 +832,11 @@ public:
 		
 		CustLocation loc = currentLocation;
 		
+		auto frontValue = lexer.frontValue.array.to!string;
+		
 		left = parseUnaryExp();
+		
+		frontValue = lexer.frontValue.array.to!string;
 		
 		lexerRangeLoop:
 		while( !lexer.empty )
@@ -813,6 +862,9 @@ public:
 	
 	IExpression parseAddExp()
 	{
+		import std.array: array;
+		import std.conv: to;
+		
 		loger.write("parseAddExp");
 		
 		IExpression left;
@@ -820,7 +872,11 @@ public:
 		
 		CustLocation loc = currentLocation;
 		
+		auto frontValue = lexer.frontValue.array.to!string;
+		
 		left = parseMulExp();
+		
+		frontValue = lexer.frontValue.array.to!string;
 		
 		lexerRangeLoop:
 		while( !lexer.empty )
@@ -837,7 +893,12 @@ public:
 					continue;
 				}
 				default:
+				{
+					frontValue = lexer.frontValue.array.to!string;
+					
+					//assert( 0, "Expected add, sub or tilde!!" );
 					break lexerRangeLoop;
+				}
 			}
 		}
 		
@@ -846,6 +907,9 @@ public:
 
 	IExpression parseUnaryExp()
 	{
+		import std.array: array;
+		import std.conv: to;
+		
 		loger.write("parseUnaryExp");
 		
 		IExpression expr;
@@ -884,8 +948,15 @@ public:
 				break;
 			}
 			default:
+			{
+				auto frontValue = lexer.frontValue.array.to!string;
+				
 				expr = parsePrimaryExp();
+				
+				frontValue = lexer.frontValue.array.to!string;
+				int a = 30;
 				break;
+			}
 		}
 		return expr;
 	}
@@ -926,6 +997,7 @@ public:
 				left = new CompareExp!(config)(loc, lexToCmpOpMap[lex.info.typeIndex], left, right);
 			}
 			default:
+				//assert( 0, "Expected compare lexeme!!!" );
 				break;
 		
 		}

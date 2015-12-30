@@ -1,4 +1,4 @@
-module declarative.parser_test;
+module declarative.lexer_test;
 
 import std.stdio;
 
