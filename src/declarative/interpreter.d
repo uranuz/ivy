@@ -53,6 +53,12 @@ interface IDirectiveInterpreter
 
 }
 
+class BlockScope
+{
+private:
+	
+}
+
 static IDirectiveInterpreter[string] dirInterpreters;
 
 shared static this()
@@ -63,6 +69,7 @@ shared static this()
 	dirInterpreters["pass"] = new PassInterpreter();
 	dirInterpreters["var"] = new VarInterpreter();
 	dirInterpreters["set"] = new SetInterpreter();
+	dirInterpreters["text"] = new TextBlockInterpreter();
 
 }
 
@@ -264,67 +271,6 @@ public:
 	}
 }
 
-/+
-class ASTVisitingRange(T)
-{
-private:
-	IAttributesRange _attrRange;
-	T _currItem;
-
-public:
-	this(IAttributesRange attrRange)
-	{
-		_attrRange = attrRange;
-	}
-	
-	@property T front()
-	{
-		_attrRange.front.accept(this);
-		return _currItem;
-	}
-	
-	void popFront()
-	{
-		_attrRange.popFront();
-	}
-	
-	bool empty()
-	{
-		return _attrRange.empty;
-	}
-	
-	import std.meta;
-	
-	private static string generateVisitOverloads()
-	{
-		string result;
-		
-		string[] nodeTypes = [ 
-			"IDeclNode", "IExpression", "ILiteralExpression", "IOperatorExpression", 
-			"IUnaryExpression", "IBinaryExpression", "IStatement", "INameExpression",
-			"IKeyValueAttribute", "IDirectiveStatement", "ICompoundStatement"
-		];
-		
-		import std.algorithm: canFind;
-		import std.algorithm: remove;
-		if( nodeTypes.canFind( T.stringof ) )
-			nodeTypes = nodeTypes.remove( T.stringof );
-			
-		foreach( nodeType; nodeTypes )
-		{
-			result ~= "	public override void visit(" ~ nodeType ~ " node) { _currItem = null; }\r\n";
-		}
-		
-		result ~= "	public override void visit(" ~ T.stringof ~ " node) { _currItem = cast(T) _attrRange.front; }\r\n";
-		
-		return result;
-	}
-	
-	mixin(generateVisitOverloads());
-}
-+/
-
-
 class PassInterpreter : IDirectiveInterpreter
 {
 public:
@@ -413,6 +359,38 @@ public:
 
 }
 
+class TextBlockInterpreter: IDirectiveInterpreter
+{
+public:
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
+	{
+		if( !statement || statement.name != "text"  )
+			interpretError( "Expected 'var' directive" );
+			
+		auto stmtRange = statement[];
+		
+		auto block = stmtRange.takeFrontAs!ICompoundStatement( "Expected block statement" );
+		
+		interp.opnd = null;
+		
+		block.accept(interp);
+		
+		if( interp.opnd.type != DataNodeType.Array )
+			interpretError( "Expected array as result of block statement" );
+			
+		string str;
+		foreach( el; interp.opnd.array )
+		{
+			import std.conv: to;
+			str ~= el.str.to!string;
+		}
+		
+		interp.opnd = str;
+			
+	}
+
+}
+
 
 class Interpreter : AbstractNodeVisitor
 {
@@ -423,11 +401,24 @@ public:
 	VariableTable varTable;
 	TDataNode opnd; //Current operand value
 	
-	this(String src)
+	AbstractNodeVisitor typeChecker;
+	
+	this(AbstractNodeVisitor typeCheckerVisitor)
 	{
 		varTable = new VariableTable;
+		typeChecker = typeCheckerVisitor;
 	}
-
+	
+	void enterBlock()
+	{
+		
+	}
+	
+	void exitBlock()
+	{
+		
+	}
+	
 	public override {
 		void visit(IDeclNode node)
 		{
@@ -477,10 +468,7 @@ public:
 				}
 				case String:
 				{
-					Location loc = node.location;
-					
 					opnd = node.toStr();
-					writeln( "ILiteralExpression: opnd.str: ", opnd.str );
 					break;
 				}
 				case Array:
@@ -605,7 +593,7 @@ public:
 			with(Operator)
 				assert( 
 					op == Add || op == Sub || op == Mul || op == Div || op == Mod || //Arithmetic
-					op == Concat ||
+					op == Concat || //Concat
 					op == And || op == Or || op == Xor || //Boolean
 					op == Equal || op == NotEqual || op == LT || op == GT || op == LTEqual || op == GTEqual,  //Comparision
 					"Incorrect binary operator " ~ (cast(Operator) op).to!string 
@@ -921,11 +909,23 @@ public:
 		void visit(ICompoundStatement node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
-			foreach( child; node.children )
+			
+			enterBlock();
+			
+			TDataNode[] nodes;
+			
+			foreach( stmt; node )
 			{
-				if( child )
-					child.accept(this);
+				if( stmt )
+				{
+					stmt.accept(this);
+					nodes ~= opnd;
+				}
 			}
+			
+			opnd = nodes;
+			
+			exitBlock();
 		}
 		
 	}

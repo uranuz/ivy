@@ -11,9 +11,14 @@ void main()
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
 	string source = 
-`	var name: "Вася"; 
-	var name2: "Петр"; 
-	expr "Привет, " ~ name ~ "!!! Здравствуй, " ~ name2 ~ "!!!"; `;
+`	text {#
+		var name: "Вася"; 
+		var name2: "Петр"; 
+		expr "Привет, " ~ name ~ "!!! Здравствуй, " ~ name2 ~ "!!!";
+		html {#
+			expr "Еще какой-то текст";
+		#}
+	#}`;
 	
 	
 	auto parser = new Parser!(TextRange)(source, "source.tpl");
@@ -35,7 +40,7 @@ void main()
 	
 	stdout.writeln(toJSON(&astJSON, true));
 	
-	auto visitor = new Interpreter(source);
+	auto visitor = new Interpreter(null);
 // 	alias TDataNode = DataNode!string;
 // 	visitor.varTable.setValue("vova", TDataNode(true));
 // 	visitor.varTable.setValue("vasya", TDataNode(5));

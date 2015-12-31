@@ -336,6 +336,7 @@ public:
 
 			switch( lexer.front.info.typeIndex ) with( LexemeType )
 			{
+				/+
 				case MixedBlockBegin:
 				{
 					stmt = parseMixedBlock();
@@ -346,6 +347,7 @@ public:
 					stmt = parseCodeBlock();
 					break;
 				}
+				+/
 				case Name:
 				{
 					stmt = parseDirectiveStatement();

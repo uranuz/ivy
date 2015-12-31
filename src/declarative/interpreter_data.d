@@ -3,7 +3,7 @@ module declarative.interpreter_data;
 import std.exception: enforceEx;
 import std.traits;
 
-enum DataNodeType { Null, Boolean, Integer, Floating, String, Array, AssocArray, CustomObject };
+enum DataNodeType { Null, Boolean, Integer, Floating, String, Array, AssocArray, ClassObject };
 
 class DataNodeException : Exception
 {
@@ -20,7 +20,7 @@ class DataNodeException : Exception
 	}
 }
 
-interface IDeclObject
+interface IClassObject
 {
 	@property int typeId();
 	@property string typeName();
@@ -69,9 +69,8 @@ struct DataNode(S)
 			double floating;
 			String str;
 			DataNode[] array;
-			DataNode[String] dict;
-			IDeclObject declObj;
-			Object custom;
+			DataNode[String] assocArray;
+			IClassObject obj;
 		}
 	}
 
@@ -138,13 +137,24 @@ struct DataNode(S)
 		assign(val);
 	}
 	
-	DataNode[String] dict() @property
+	ref DataNode[String] assocArray() @property
 	{
 		enforceEx!DataNodeException( type == DataNodeType.AssocArray, "DataNode is not dict");
-		return storage.dict;
+		return storage.assocArray;
 	}
 	
-	void dict(DataNode[String] val) @property
+	void assocArray(DataNode[String] val) @property
+	{
+		assign(val);
+	}
+	
+	IClassObject obj() @property
+	{
+		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not dict");
+		return storage.obj;
+	}
+	
+	void obj(IClassObject val) @property
 	{
 		assign(val);
 	}
@@ -184,20 +194,25 @@ struct DataNode(S)
 			typeTag = DataNodeType.Floating;
 			storage.floating = arg;
 		}
+		else static if( is( T : IClassObject ) )
+		{
+			typeTag = DataNodeType.ClassObject;
+			storage.obj = arg;
+		}
 		else static if( is(T : Value[Key], Key, Value) )
 		{
 			static assert(is(Key : String), "AA key must be string");
 				typeTag = DataNodeType.AssocArray;
 			static if(is(Value : DataNode)) 
 			{
-				storage.dict = arg;
+				storage.assocArray = arg;
 			}
 			else
 			{
 				DataNode[String] aa;
 				foreach(key, value; arg)
 					aa[key] = DataNode(value);
-				storage.dict = aa;
+				storage.assocArray = aa;
 			}
 		}
 		else static if( isArray!T )
@@ -281,15 +296,15 @@ struct DataNode(S)
 		if( type == DataNodeType.Null )
 			this = (DataNode[String]).init;
 		
-		storage.dict[key] = value;
+		storage.assocArray[key] = value;
 	}
 	
 	ref DataNode opIndex(String key)
 	{
 		enforceEx!DataNodeException( type == DataNodeType.AssocArray, "DataNode is not a dict");
-		enforceEx!DataNodeException( key in storage.dict, "DataNode dict has no such key");
+		enforceEx!DataNodeException( key in storage.assocArray, "DataNode dict has no such key");
 		
-		return storage.dict[key];
+		return storage.assocArray[key];
 	}
 	
 	auto opBinaryRight(string op: "in")()
@@ -299,7 +314,7 @@ struct DataNode(S)
 		if( type == DataNodeType.Null )
 			return null;
 		
-		return key in storage.dict;
+		return key in storage.assocArray;
 	}
 	
 	import std.array;
@@ -343,7 +358,7 @@ struct DataNode(S)
 				break;
 			} case DataNodeType.AssocArray : {
 				size_t i = 0;
-				foreach( key, ref el; storage.dict )
+				foreach( key, ref el; storage.assocArray )
 				{
 					string dictStr = indentText( el.toString(), 1 );
 					result ~= ( i > 0 ? ",\r\n" : "" ) ~ key ~  ":" ~ dictStr;
