@@ -33,6 +33,15 @@
 			"libs": [],
 			"buildRequirements": ["silenceWarnings"],
 			"sourceFiles": [ "test/lexer_test.d" ]
+		},
+		{
+			"name": "lexer_tools_test", 
+			"targetType": "executable",
+			"platforms": [],
+			"versions": [],
+			"libs": [],
+			"buildRequirements": ["silenceWarnings"],
+			"sourceFiles": [ "test/lexer_tools_test.d" ]
 		}
 	]
 }

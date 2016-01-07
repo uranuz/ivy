@@ -23,7 +23,7 @@ public:
 	import std.traits: Unqual;
 
 	alias SourceRange = R;
-	enum config = GetSourceRangeConfig!R;
+	enum LocationConfig config = GetSourceRangeConfig!R;
 	alias Char = Unqual!( ElementEncodingType!R );
 	alias String = immutable(Char)[];
 	alias LexemeT = Lexeme!(config);
@@ -32,6 +32,7 @@ public:
 	
 	LexerType lexer;
 	string fileName;
+	size_t spacesPerTab = 4;
 	
 	this(String source, string fileName)
 	{
@@ -375,8 +376,26 @@ public:
 		return statement;
 	}
 	
+	string parseMixedBlockData()
+	{
+		import std.array: array, join;
+		import std.conv: to;
+		import std.range: repeat;
+		
+		import std.array;
+		import std.algorithm: canFind;
+		
+		auto lex = lexer.front;
+		auto dataRange = lexer.frontValue.save;
+		
+		
+		
+		return null;
+	}
+	
 	ICompoundStatement parseMixedBlock(bool parseInternals = false)
 	{
+		import std.array: array;
 		import std.conv: to;
 		
 		ICompoundStatement statement;
@@ -396,13 +415,21 @@ public:
 		{
 			CustLocation itemLoc = this.currentLocation;
 			
+			auto frontVal = lexer.frontValue();
+			
+			auto str = lexer.frontValue().array;
+			
 			if( lexer.front.test( LexemeType.CodeBlockBegin ))
 			{
 				statements ~= parseCodeBlock();
 			}
 			else if( lexer.front.test( LexemeType.Data ) )
 			{
-				statements ~= new DataFragmentStatement!(config)(itemLoc);
+				str = lexer.frontValue().array;
+				
+				string data = parseMixedBlockData();
+
+				statements ~= new DataFragmentStatement!(config)(itemLoc, data);
 				lexer.popFront();
 			}
 			else
@@ -785,8 +812,7 @@ public:
 				}
 				
 				strRange.popFront();
-				
-				ch = strRange.front;
+				clearStrRange = strRange.save;
 				
 				clearCount = 0;
 				continue;

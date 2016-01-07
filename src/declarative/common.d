@@ -303,3 +303,4 @@ mixin template BaseDeclNodeImpl(LocationConfig c)
 		visitor.visit(this);
 	}
 }
+

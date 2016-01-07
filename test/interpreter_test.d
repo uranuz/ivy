@@ -11,14 +11,10 @@ void main()
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
 	string source = 
-`	text {#
-		var name: "Вася"; 
-		var name2: "Петр"; 
-		expr "Привет, " ~ name ~ "!!! Здравствуй, " ~ name2 ~ "!!!";
-		html {#
-			expr "Еще какой-то текст";
-		#}
-	#}`;
+`	text {*
+				Текст
+				Другой текст!
+	*}`;
 	
 	
 	auto parser = new Parser!(TextRange)(source, "source.tpl");

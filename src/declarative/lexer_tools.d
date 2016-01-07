@@ -10,7 +10,9 @@ import std.stdio;
 
 import declarative.common;
 
-struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
+enum IndentStyle: char { tab = '\t', space = ' ' };
+
+struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 	if( isSomeString!S )
 {
 	alias String = S;
@@ -26,6 +28,13 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
 	
 	@disable this(this);
 	
+	this( String source )
+	{
+		str = source;
+		
+		analyzeIndents();
+	}
+	
 	static if( config.withGraphemeIndex )
 		size_t graphemeIndex = 0;
 	
@@ -39,6 +48,12 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
 		static if( config.withGraphemeColumnIndex )
 			size_t graphemeColumnIndex = 0;
 	}
+
+	size_t lineStartIndex;
+
+	private bool isIndenting = true;
+	IndentStyle indentStyle;
+	size_t indentCount;	
 	
 	bool empty() @property inout
 	{
@@ -64,14 +79,56 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
 		return ch;
 	}
 	
-	void popFront()
+	private void analyzeIndents()
 	{
 		if( index >= this.sliceEndIndex )
 			return;
 		
+		if( isNewLine )
+		{
+			indentCount = 0;
+			isIndenting = true;
+		}
+		
+		if( isIndenting )
+		{
+			if( indentCount == 0 )
+			{
+				if( str[index] == '\t' )
+				{
+					indentStyle = IndentStyle.tab;
+					++indentCount;
+				}
+				else if( str[index] == ' ' )
+				{
+					indentStyle = IndentStyle.space;
+					++indentCount;
+				}
+				else
+					isIndenting = false;
+			}
+			else
+			{
+				if( str[index] == indentStyle )
+					++indentCount;
+				else
+					isIndenting = false;
+			}
+		}
+	}
+	
+	void popFront()
+	{
+		index++;
+		
+		if( index >= this.sliceEndIndex )
+			return;
+			
+		analyzeIndents();
+		
 		static if( config.withLineIndex )
 		{
-			if( ( str[index] == '\r' && !str.startsWith("\r\n") ) || str[index] == '\n' )
+			if( isNewLine )
 			{
 				lineIndex++;
 				
@@ -81,10 +138,9 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
 				static if( config.withGraphemeColumnIndex )
 					graphemeColumnIndex = 0;
 			}
-			else
-			{
+
+			static if( config.withColumnIndex )
 				columnIndex++;
-			}
 		}
 
 		import std.traits: Unqual;
@@ -122,8 +178,6 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
 		}
 		else
 			static assert( false, "Code unit type '" ~ Char.stringof ~ "' is not valid!" );
-			
-		index++;
 	}
 	
 	void popFrontN(size_t N)
@@ -134,6 +188,51 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
 	
 	Char front() @property inout
 	{	return index >= this.sliceEndIndex ? '\0' : str[index];
+	}
+	
+	@property bool isNewLine()
+	{
+		return index == 0 || str[index-1] == '\n' || ( str[index-1] == '\r' && str[index] != '\n' );
+	}
+	
+	@property bool isIndentation()
+	{
+		return isIndenting && ( str[index] == '\t' || str[index] == ' ' );
+	}
+	
+	void getLineIndent( ref size_t count, ref IndentStyle style )
+	{
+		bool isInd = this.isIndentation;
+		
+		if( !isInd )
+		{
+			count = indentCount;
+			style = indentStyle;
+			return;
+		}
+		
+		auto tmp = this.save;
+		isInd = tmp.isIndentation;
+		
+		while( isInd && !tmp.empty )
+		{
+			tmp.popFront();
+			isInd = tmp.isIndentation;
+		}
+			
+		count = tmp.indentCount;
+		style = tmp.indentStyle;
+		
+		return;
+	}
+	
+	void parseLineIndent( ref size_t count, ref IndentStyle style )
+	{
+		while( isIndentation && !this.empty )
+			this.popFront();
+			
+		count = indentCount;
+		style = indentStyle;
 	}
 	
 	bool match(String input)
@@ -223,17 +322,16 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
 		
 		return thisSlice;
 	}
-	
-	// bool matchDottedIdentifier(String input)
-	// {
-		// auto thisSlice = this.save;
-		
-		// return false;
-	// }
-	
+
 	auto save() @property inout
 	{
-		auto thisCopy = ThisType(str, index, endIndex);
+		auto thisCopy = ThisType(str);
+		
+		thisCopy.index = this.index;
+		thisCopy.endIndex = this.endIndex;
+		thisCopy.isIndenting = this.isIndenting;
+		thisCopy.indentCount = this.indentCount;
+		thisCopy.indentStyle = this.indentStyle;
 		
 		static if( config.withGraphemeIndex )
 			thisCopy.graphemeIndex = this.graphemeIndex;
@@ -257,6 +355,115 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init )
 		//writeln("toString: index: ", index, ", this.sliceEndIndex: ", this.sliceEndIndex);
 		return str[index .. this.sliceEndIndex];
 	}
+}
+
+struct ByLine(Range)
+{
+private:
+	import std.range: ElementType;
+	
+	alias Char = ElementType!Range;
+
+	Range _source;
+	Range _front;
+	bool _isEmpty;	
+
+public:
+	@disable this(this);
+
+	this(Range src)
+	{
+		_source = src.save;
+		popFront();
+	}
+
+	auto front()
+	{
+		return _front.save;
+	}
+	
+	void popFront()
+	{
+		if( _source.empty )
+		{
+			_isEmpty = true;
+			return;
+		}
+	
+		auto lineRange = _source.save;
+	
+		size_t sliceLen = 0;
+		bool br = false;
+		
+		
+		size_t indentCount;
+		IndentStyle indentStyle;
+		
+		range_loop:
+		while( !br && !_source.empty )
+		{
+			char_select:
+			switch( _source.front )
+			{
+				case '\n', '\v', '\f', '\u0085':
+				{
+					_source.getLineIndent( indentCount, indentStyle );
+					br = true;
+					break;
+				}
+				case '\r':
+				{
+					auto tmp = _source.save;
+					tmp.popFront();
+					if( tmp.empty || tmp.front != '\n' )
+					{
+						_source.getLineIndent( indentCount, indentStyle );
+						br = true;
+					}
+					else
+						break char_select;
+					break;
+				}
+				default:
+					break;
+			}
+			
+			
+			_source.popFront();
+			++sliceLen;
+		}
+		
+		_front = lineRange[0 .. sliceLen];
+		_front.indentCount = indentCount;
+		_front.indentStyle = indentStyle;
+		_front.isIndenting = false; 
+	}
+	
+	auto opSlice()
+	{
+		return this.save;
+	}
+	
+	@property auto save()
+	{
+		auto tmp = ByLine!Range(_source.save);
+		
+		tmp._source = _source.save;
+		tmp._front = _front.save;
+		tmp._isEmpty = _isEmpty;
+		
+		return tmp;
+	}
+	
+	bool empty()
+	{
+		return _isEmpty;
+	}
+}
+
+auto byLine(Range)(auto ref Range range)
+{
+	return ByLine!Range(range.save);
 }
 
 enum dchar replacementChar = 0xFFFD;

@@ -356,15 +356,17 @@ public:
 
 }
 
-class DataFragmentStatement(LocationConfig c): IStatement
+class DataFragmentStatement(LocationConfig c): IDataFragmentStatement
 {
 	mixin PlainStatementImpl!c;
 private:
+	string _data;
 
 public:
-	this(CustLocation loc)
+	this(CustLocation loc, string data)
 	{
 		_location = loc;
+		_data = data;
 	}
 	
 	public @property override {
@@ -376,6 +378,13 @@ public:
 		string kind()
 		{
 			return "data fragment statement";
+		}
+	}
+	
+	public @property override {
+		string data()
+		{
+			return _data;
 		}
 	}
 }

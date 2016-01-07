@@ -8,44 +8,9 @@ import declarative.interpreter_data;
 
 interface IInterpreterContext {}
 
-class VariableTable
-{
-	alias TDataNode = DataNode!string;
-	
-private:
-	TDataNode[string] _vars;
-	
-public:
-	TDataNode getValue( string varName )
-	{
-		auto varValuePtr = varName in _vars;
-		assert( varValuePtr, "VariableTable: Cannot find variable with name: " ~ varName );
-		return *varValuePtr;
-	}
-	
-	bool canFindValue( string varName )
-	{
-		return cast(bool)( varName in _vars );
-	}
-	
-	DataNodeType getDataNodeType( string varName )
-	{
-		auto varValuePtr = varName in _vars;
-		assert( varValuePtr, "VariableTable: Cannot find variable with name: " ~ varName );
-		return varValuePtr.type;
-	}
-	
-	void setValue( string varName, TDataNode value )
-	{
-		_vars[varName] = value;
-	}
-	
-	void removeValue( string varName )
-	{
-		_vars.remove( varName );
-	}
+alias TDataNode = DataNode!string;
 
-}
+
 
 interface IDirectiveInterpreter
 {
@@ -180,12 +145,11 @@ public:
 		
 		foreach( aggrItem; aggr.array )
 		{
-			if( interp.varTable.canFindValue(varName) )
+			if( interp.canFindValue(varName) )
 				interpretError( "For loop variable name '" ~ varName ~ "' already exists" );
 			
-			interp.varTable.setValue(varName, aggrItem);
+			interp.setValue(varName, aggrItem);
 			bodyStmt.accept(interp);
-			interp.varTable.removeValue(varName);
 			results ~= interp.opnd;
 		}
 		
@@ -311,16 +275,18 @@ public:
 		IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
 		
 		if( !stmtRange.empty )
-			interpretError( "Expected end of directive after key-avlue pair. Maybe ';' is missing" );
+			interpretError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
 		
-		if( !interp.varTable.canFindValue( kwPair.name ) )
+		if( !interp.canFindValue( kwPair.name ) )
 			interpretError( "Undefined identifier '" ~ kwPair.name ~ "'" );
 		
 		if( !kwPair.value )
 			interpretError( "Expected value for 'set' directive" );
 		
 		kwPair.value.accept(interp); //Evaluating expression
-		interp.varTable.setValue(kwPair.name, interp.opnd);
+		interp.setValue(kwPair.name, interp.opnd);
+		
+		interp.opnd = TDataNode.init; //Doesn't return value
 	}
 
 }
@@ -354,7 +320,9 @@ public:
 			interpretError( "Expected value for 'var' directive" );
 		
 		kwPair.value.accept(interp); //Evaluating expression
-		interp.varTable.setValue(kwPair.name, interp.opnd);
+		interp.setValue(kwPair.name, interp.opnd);
+		
+		interp.opnd = TDataNode.init; //Doesn't return value
 	}
 
 }
@@ -371,7 +339,7 @@ public:
 		
 		auto block = stmtRange.takeFrontAs!ICompoundStatement( "Expected block statement" );
 		
-		interp.opnd = null;
+		interp.opnd = TDataNode.init;
 		
 		block.accept(interp);
 		
@@ -382,7 +350,8 @@ public:
 		foreach( el; interp.opnd.array )
 		{
 			import std.conv: to;
-			str ~= el.str.to!string;
+			if( el.type == DataNodeType.String )
+				str ~= el.str;
 		}
 		
 		interp.opnd = str;
@@ -391,6 +360,42 @@ public:
 
 }
 
+class InterpreterScope
+{
+private:
+	TDataNode[string] _vars;
+	
+public:
+	TDataNode getValue( string varName )
+	{
+		auto varValuePtr = varName in _vars;
+		assert( varValuePtr, "VariableTable: Cannot find variable with name: " ~ varName );
+		return *varValuePtr;
+	}
+	
+	bool canFindValue( string varName )
+	{
+		return cast(bool)( varName in _vars );
+	}
+	
+	DataNodeType getDataNodeType( string varName )
+	{
+		auto varValuePtr = varName in _vars;
+		assert( varValuePtr, "VariableTable: Cannot find variable with name: " ~ varName );
+		return varValuePtr.type;
+	}
+	
+	void setValue( string varName, TDataNode value )
+	{
+		_vars[varName] = value;
+	}
+	
+	void removeValue( string varName )
+	{
+		_vars.remove( varName );
+	}
+
+}
 
 class Interpreter : AbstractNodeVisitor
 {
@@ -398,24 +403,126 @@ public:
 	alias String = string;
 	alias TDataNode = DataNode!String;
 	
-	VariableTable varTable;
+	InterpreterScope[] scopeStack;
 	TDataNode opnd; //Current operand value
 	
 	AbstractNodeVisitor typeChecker;
 	
 	this(AbstractNodeVisitor typeCheckerVisitor)
 	{
-		varTable = new VariableTable;
 		typeChecker = typeCheckerVisitor;
 	}
 	
-	void enterBlock()
+	void enterScope()
 	{
-		
+		scopeStack ~= new InterpreterScope;
 	}
 	
-	void exitBlock()
+	void exitScope()
 	{
+		import std.range: popBack;
+		scopeStack.popBack();
+	}
+	
+	bool canFindValue( string varName )
+	{
+		import std.range: empty, popBack, back;
+		
+		if( scopeStack.empty )
+			return false;
+			
+		auto scopeStackSlice = scopeStack[];
+		
+		for( ; !scopeStackSlice.empty; scopeStackSlice.popBack() )
+		{
+			if( scopeStack.back.canFindValue(varName) )
+				return true;
+		}
+		
+		return false;
+	}
+	
+	TDataNode getValue( string varName )
+	{
+		import std.range: empty, popBack, back;
+		
+		if( scopeStack.empty )
+			interpretError("Cannot get var value, because scope stack is empty!");
+			
+		auto scopeStackSlice = scopeStack[];
+		
+		for( ; !scopeStackSlice.empty; scopeStackSlice.popBack() )
+		{
+			if( scopeStack.back.canFindValue(varName) )
+				return scopeStack.back.getValue(varName);
+		}
+		
+		interpretError("Undefined variable with name '" ~ varName ~ "'");
+		assert(0);
+	}
+	
+	void setValue( string varName, TDataNode value )
+	{
+		import std.range: empty, popBack, back;
+		
+		if( scopeStack.empty )
+			interpretError("Cannot set var value, because scope stack is empty!");
+		
+		scopeStack.back.setValue( varName, value );
+	}
+	
+	/+
+	DataNodeType getCommonTypeFor( ref const(TDataNode) left, ref const(TDataNode) right )
+	{
+		import std.algorithm: canFind;
+		
+		if( left.type == right.type )
+			return left.type;
+		
+		DataNodetype[2] types = [ left.type, right.type ];
+		
+		with(DataNodeType)
+		{
+			if( types.canFind(Floating, Integer) )
+			{
+				return Floating;
+			}
+			else if( types.canFind(Null, Boolean) )
+			{
+				return Boolean;
+			}
+		}
+
+		assert(0);
+	}
+	+/
+	
+	void makeDataPromotions( ref TDataNode left, ref TDataNode right )
+	{
+		import std.conv: to;
+		
+		if( left.type == right.type )
+			return;
+		
+		with( DataNodeType )
+		{
+			if( left.type == Integer && right.type == Floating )
+			{
+				left = left.integer.to!double;
+			}
+			else if( left.type == Floating && right.type == Integer )
+			{
+				left = right.integer.to!double;
+			}
+			else if( left.type == Null && right.type == Boolean )
+			{
+				left = false;
+			}
+			else if( left.type == Boolean && right.type == Null )
+			{
+				right = false;
+			}
+		}
 		
 	}
 	
@@ -504,10 +611,10 @@ public:
 		{
 			writeln( typeof(node).stringof ~ " visited" );
 			
-			if( !varTable.canFindValue(node.name) )
+			if( !canFindValue(node.name) )
 				interpretError( "Undefined identifier '" ~ node.name ~ "'" );
 			
-			opnd = varTable.getValue(node.name);
+			opnd = getValue(node.name);
 		}
 		
 		void visit(IOperatorExpression node)
@@ -606,6 +713,8 @@ public:
 			opnd = TDataNode.init;
 			rightExpr.accept(this);
 			TDataNode rightOpnd = opnd;
+			
+			makeDataPromotions(leftOpnd, rightOpnd);
 			
 			assert( leftOpnd.type == rightOpnd.type, "Operands tags in binary expr must match!!!" );
 			
@@ -906,11 +1015,18 @@ public:
 			}
 		}
 		
+		void visit(IDataFragmentStatement node)
+		{ 
+			writeln( typeof(node).stringof ~ " visited" );
+			
+			opnd = node.data;
+		}
+		
 		void visit(ICompoundStatement node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
 			
-			enterBlock();
+			enterScope();
 			
 			TDataNode[] nodes;
 			
@@ -925,7 +1041,7 @@ public:
 			
 			opnd = nodes;
 			
-			exitBlock();
+			exitScope();
 		}
 		
 	}

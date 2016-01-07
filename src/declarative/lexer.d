@@ -569,7 +569,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		import std.conv: to;
 		
 		LexemeT lex;
-		// if( inCode )
+		if( ctx.state == ContextState.CodeContext )
 			skipWhiteSpaces(source);
 			
 		if( source.empty )

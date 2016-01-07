@@ -169,6 +169,13 @@ interface IStatement: IDeclNode
 	}
 }
 
+interface IDataFragmentStatement: IStatement
+{
+	@property {
+		string data();
+	}
+}
+
 interface ICompoundStatement: IStatement
 {
 	//@property size_t length();
