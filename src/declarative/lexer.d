@@ -1007,7 +1007,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 	static LexemeT parseData(ref SourceRange source, ref const(LexRule) rule)
 	{
-		writeln("lexer.parseData");
+		//writeln("lexer.parseData");
 		
 		SourceRange parsedRange = source.save;
 		

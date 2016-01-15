@@ -10,8 +10,6 @@ import std.stdio;
 
 import declarative.common;
 
-enum IndentStyle: char { tab = '\t', space = ' ' };
-
 struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 	if( isSomeString!S )
 {

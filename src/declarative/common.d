@@ -80,11 +80,15 @@ struct LocationConfig
 	bool withSize = true;
 }
 
+enum IndentStyle: char { tab = '\t', space = ' ' };
+
 struct Location
 {
 	string fileName;  // Name of source file
 	size_t index;     // Start code unit index or grapheme index (if available)
 	size_t length;    // Length of source text in code units or in graphemes (if available)
+	size_t firstIndent;
+	IndentStyle firstIndentStyle;
 }
 
 struct PlainLocation
@@ -105,6 +109,8 @@ struct ExtendedLocation
 	size_t lineCount;
 	size_t columnIndex;
 	size_t graphemeColumnIndex;
+	size_t firstIndent;
+	IndentStyle firstIndentStyle;
 }
 
 struct CustomizedLocation(LocationConfig c)
@@ -140,11 +146,16 @@ struct CustomizedLocation(LocationConfig c)
 			size_t graphemeColumnIndex;
 	}
 	
+	size_t firstIndent;
+	IndentStyle firstIndentStyle;
+	
 	Location toLocation() const
 	{
 		Location loc;
 		loc.fileName = fileName;
 		loc.index = index;
+		loc.firstIndent = firstIndent;
+		loc.firstIndentStyle = firstIndentStyle;
 		
 		static if( config.withSize )
 			loc.length = length;
@@ -203,6 +214,9 @@ struct CustomizedLocation(LocationConfig c)
 			static if( config.withGraphemeColumnIndex )
 				loc.graphemeColumnIndex = graphemeColumnIndex;
 		}
+		
+		loc.firstIndent = firstIndent;
+		loc.firstIndentStyle = firstIndentStyle;
 		
 		return loc;
 	}

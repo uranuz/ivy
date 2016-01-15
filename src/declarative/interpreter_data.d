@@ -24,6 +24,7 @@ interface IClassObject
 {
 	@property int typeId();
 	@property string typeName();
+	//override string toString();
 
 }
 

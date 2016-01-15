@@ -65,14 +65,16 @@ public:
 		
 		void write(T...)(T data)
 		{
-			import std.stdio;
-			import std.algorithm: splitter;
-			import std.range: retro;
-			import std.range: take;
-			import std.array: array;
-
-			string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
-			writeln( shortFuncName, "[", line, "]:  ", data );
+			debug {
+				import std.stdio;
+				import std.algorithm: splitter;
+				import std.range: retro;
+				import std.range: take;
+				import std.array: array;
+	
+				string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+				writeln( shortFuncName, "[", line, "]:  ", data );
+			}
 		}
 	}
 
@@ -376,23 +378,6 @@ public:
 		return statement;
 	}
 	
-	string parseMixedBlockData()
-	{
-		import std.array: array, join;
-		import std.conv: to;
-		import std.range: repeat;
-		
-		import std.array;
-		import std.algorithm: canFind;
-		
-		auto lex = lexer.front;
-		auto dataRange = lexer.frontValue.save;
-		
-		
-		
-		return null;
-	}
-	
 	ICompoundStatement parseMixedBlock(bool parseInternals = false)
 	{
 		import std.array: array;
@@ -425,10 +410,7 @@ public:
 			}
 			else if( lexer.front.test( LexemeType.Data ) )
 			{
-				str = lexer.frontValue().array;
-				
-				string data = parseMixedBlockData();
-
+				string data = lexer.frontValue().array.to!string;
 				statements ~= new DataFragmentStatement!(config)(itemLoc, data);
 				lexer.popFront();
 			}

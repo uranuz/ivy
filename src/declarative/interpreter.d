@@ -98,9 +98,27 @@ T takeFrontAs(T)( IAttributesRange range, string errorMsg = null, string file = 
 	return typedAttr;
 }
 
+T testFrontIs(T)( IAttributesRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+{
+	if( range.empty )
+		return false;
+	
+	T typedNode = cast(T) range.front;
+	
+	return typedNode !is null;
+}
+
 void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
 {
 	throw new InterpretException(msg, file, line);
+}
+
+auto unindent(Range)(Range source, size_t firstIndent, size_t firstIndentStyle)
+{
+	while( !source.empty )
+	{
+		
+	}
 }
 
 class ForInterpreter : IDirectiveInterpreter
@@ -136,11 +154,11 @@ public:
 		if( aggr.type != DataNodeType.Array ) 
 			interpretError( "Aggregate type must be array" );
 
-		IStatement bodyStmt = stmtRange.takeFrontAs!IStatement( "Expected loop body statement" );
-		
+		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement( "Expected loop body statement" );
+
 		if( !stmtRange.empty )
 			interpretError( "Expected end of directive after loop body. Maybe ';' is missing" );
-		
+
 		TDataNode[] results;
 		
 		foreach( aggrItem; aggr.array )
@@ -152,6 +170,11 @@ public:
 			bodyStmt.accept(interp);
 			results ~= interp.opnd;
 		}
+		
+		Location bodyStmtLoc = bodyStmt.location;
+		size_t bodyFirstIndent = bodyStmtLoc.firstIndent;
+		IndentStyle bodyFirstIndentStyle = bodyStmtLoc.firstIndentStyle;
+		
 		
 		interp.opnd = results;
 	}
@@ -240,7 +263,7 @@ class PassInterpreter : IDirectiveInterpreter
 public:
 	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
-	
+		interp.opnd = TDataNode.init;
 	}
 
 }
@@ -327,6 +350,9 @@ public:
 
 }
 
+
+
+
 class TextBlockInterpreter: IDirectiveInterpreter
 {
 public:
@@ -337,25 +363,81 @@ public:
 			
 		auto stmtRange = statement[];
 		
-		auto block = stmtRange.takeFrontAs!ICompoundStatement( "Expected block statement" );
-		
+		if( stmtRange.empty )
+			throw new ASTNodeTypeException("Expected compound statement or expression, but got end of directive");
+			
 		interp.opnd = TDataNode.init;
 		
-		block.accept(interp);
-		
-		if( interp.opnd.type != DataNodeType.Array )
-			interpretError( "Expected array as result of block statement" );
-			
-		string str;
-		foreach( el; interp.opnd.array )
+		if( auto expr = cast(IExpression) stmtRange.front )
 		{
-			import std.conv: to;
-			if( el.type == DataNodeType.String )
-				str ~= el.str;
+			expr.accept(interp);
+		}
+		else if( auto block = cast(ICompoundStatement) stmtRange.front )
+		{
+			block.accept(interp);
+		}
+		else
+			new ASTNodeTypeException("Expected compound statement or expression");
+
+		string str;
+		
+		final switch( interp.opnd.type ) with(DataNodeType)
+		{
+			case Null: 
+				str = null; 
+				break;
+			case Boolean: 
+				str = interp.opnd.boolean ? "true" : "false";
+				break;
+			case Integer:
+				str = interp.opnd.integer.to!string;
+				break;
+			case Floating:
+				str = interp.opnd.floating.to!string;
+				break;
+			case String:
+				str = interp.opnd.str;
+				break;
+			case Array:
+			{
+				writeln( "TextBlock: array data:" );
+				writeln( interp.opnd.array );
+				
+				foreach( el; interp.opnd.array )
+				{
+					import std.conv: to;
+					writeln("TextBlock array element type: ", el.type);
+					
+					if( el.type == DataNodeType.String )
+						str ~= el.str;
+					else if( el.type == DataNodeType.Array )
+					{						
+						foreach( innerEl; el.array )
+						{
+							if( innerEl.type == String )
+								str ~= innerEl.str;
+							else							
+								str ~= innerEl.toString();
+						}
+					}
+					else
+						interpretError("Unexpected type of data");
+				}
+				break;
+			}
+			case AssocArray:
+			{
+				interpretError("Assoc array string conversion not implemented yet");
+				break;	
+			}
+			case ClassObject:
+			{
+				interpretError("Class object string conversion not implemented yet");
+				break;
+			}				
 		}
 		
 		interp.opnd = str;
-			
 	}
 
 }
@@ -411,17 +493,18 @@ public:
 	this(AbstractNodeVisitor typeCheckerVisitor)
 	{
 		typeChecker = typeCheckerVisitor;
+		scopeStack ~= new InterpreterScope;
 	}
 	
 	void enterScope()
 	{
-		scopeStack ~= new InterpreterScope;
+		//scopeStack ~= new InterpreterScope;
 	}
 	
 	void exitScope()
 	{
 		import std.range: popBack;
-		scopeStack.popBack();
+		//scopeStack.popBack();
 	}
 	
 	bool canFindValue( string varName )
@@ -611,7 +694,9 @@ public:
 		{
 			writeln( typeof(node).stringof ~ " visited" );
 			
-			if( !canFindValue(node.name) )
+			auto varName = node.name;
+			
+			if( !canFindValue(varName) )
 				interpretError( "Undefined identifier '" ~ node.name ~ "'" );
 			
 			opnd = getValue(node.name);
@@ -1035,11 +1120,15 @@ public:
 				if( stmt )
 				{
 					stmt.accept(this);
+					string str = opnd.toString();
 					nodes ~= opnd;
 				}
 			}
 			
 			opnd = nodes;
+			
+			string result = opnd.toString();
+			writeln(result);
 			
 			exitScope();
 		}
