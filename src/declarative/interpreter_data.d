@@ -331,46 +331,124 @@ struct DataNode(S)
 	
 	string toString()
 	{
-		string result;
-		
-		switch( typeTag ) 
-		{
-			case DataNodeType.Null : {
-				result ~= "null";
-				break;
-			} case DataNodeType.Boolean : {
-				result ~= storage.boolean.to!string;
-				break;
-			} case DataNodeType.Integer : {
-				result ~= storage.integer.to!string;
-				break;
-			} case DataNodeType.Floating : {
-				result ~= storage.floating.to!string;
-				break;
-			} case DataNodeType.String : {
-				result ~= `"` ~ storage.str ~ `"`;
-				break;
-			} case DataNodeType.Array : {
-				foreach( i, ref el; storage.array )
-				{
-					string arrayStr = indentText( el.toString() );
-					result ~= ( i > 0 ? ",\r\n" : "" ) ~ arrayStr ;
-				}
-				break;
-			} case DataNodeType.AssocArray : {
-				size_t i = 0;
-				foreach( key, ref el; storage.assocArray )
-				{
-					string dictStr = indentText( el.toString(), 1 );
-					result ~= ( i > 0 ? ",\r\n" : "" ) ~ key ~  ":" ~ dictStr;
-					i++;
-				}
-				break;
-			}	default:  {
-				assert( false, "Shit happens!!!" );
-			}
-		}
-		result = "\r\n" ~ result;
-		return result;
+		import std.array: appender;
+		auto result = appender!string();
+		writeDataNodeAsString(this, result);		
+		return result.data;
 	}
+}
+
+void writeDataNodeLines(TDataNode, OutRange)(
+	TDataNode node, ref OutRange outRange, size_t linesRecursion = 1 , size_t maxRecursion = size_t.max)
+{	
+	import std.range: put;
+	import std.conv: to;
+	
+	assert( maxRecursion, "Recursion is too deep!" );
+	
+	final switch( node.type ) with( DataNodeType )
+	{
+		case Null : {
+			outRange.put( "");
+			break;
+		} case Boolean : {
+			outRange.put( node.boolean ? "true" : "false"  );
+			break;
+		} case Integer : {
+			outRange.put( node.integer.to!string );
+			break;
+		} case Floating : {
+			outRange.put( node.floating.to!string );
+			break;
+		} case String : {
+			outRange.put( node.str );
+			break;
+		} case Array : {
+			foreach( i, ref el; node.array )
+			{
+				if( linesRecursion == 0 )
+				{
+					writeDataNodeAsString(el, outRange, maxRecursion - 1);
+				}
+				else
+				{			
+					if( i != 0 )
+						outRange.put( "\r\n" );
+						
+					writeDataNodeLines(el, outRange, linesRecursion - 1, maxRecursion - 1);
+				}
+			}
+			break;
+		} case AssocArray : {
+			writeDataNodeAsString(node, outRange, maxRecursion - 1);
+			break;
+		} case ClassObject : {
+			assert(0);
+			//outRange.put( node.obj.toString() );
+			break;
+		}		
+	}
+}
+
+void writeDataNodeAsString(TDataNode, OutRange)(
+	TDataNode node, ref OutRange outRange, size_t maxRecursion = size_t.max)
+{
+	import std.range: put;
+	import std.conv: to;
+	
+	assert( maxRecursion, "Recursion is too deep!" );
+	
+	final switch( node.type ) with( DataNodeType )
+	{
+		case Null : {
+			outRange.put( "");
+			break;
+		} case Boolean : {
+			outRange.put( node.boolean ? "true" : "false"  );
+			break;
+		} case Integer : {
+			outRange.put( node.integer.to!string );
+			break;
+		} case Floating : {
+			outRange.put( node.floating.to!string );
+			break;
+		} case String : {
+			outRange.put( "\"" );
+			outRange.put(  node.str );
+			outRange.put( "\"" );
+			break;
+		} case Array : {
+			outRange.put( "[" );
+			foreach( i, ref el; node.array )
+			{
+				if( i != 0 )
+					outRange.put( ", " );
+
+				writeDataNodeAsString(el, outRange, maxRecursion - 1);	
+			}
+			outRange.put( "]");
+			break;
+		} case AssocArray : {
+			outRange.put( "{");
+			size_t i = 0;
+			foreach( ref key, ref val; node.assocArray )
+			{
+				if( i != 0 )
+					outRange.put( ", ");
+				
+				outRange.put( key);
+				outRange.put( ": ");
+
+				writeDataNodeAsString(val, outRange, maxRecursion - 1);	
+				++i;
+			}
+			outRange.put( "}");
+			break;
+		} case ClassObject : {
+			assert(0);
+			//outRange.put(  node.obj.toString() );
+			break;
+		}		
+	}
+	
 }

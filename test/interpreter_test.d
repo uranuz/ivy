@@ -36,9 +36,11 @@ void main()
  	alias TDataNode = DataNode!string;
  	visitor.setValue("content", TDataNode("<div>Основное содержимое формы</div>"));
  	visitor.setValue("content2", TDataNode("Еще какое-то содержимое страницы"));
+ 	visitor.setValue("content3", TDataNode("Здравствуй, Вася"));
+ 	visitor.setValue("x", TDataNode(20));
  	
- 	bool hasContent = visitor.canFindValue("content");
- 	auto content = visitor.getValue("content");
+ 	bool hasContent = visitor.canFindValue("content2");
+ 	auto content = visitor.getValue("content2");
 	
 	ast.accept(visitor);
 	

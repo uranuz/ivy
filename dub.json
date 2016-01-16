@@ -9,6 +9,8 @@
 		{
 			"name": "interpreter_test", 
 			"targetType": "executable",
+			"targetPath": "./",
+			"targetName": "interpreter_test",
 			"platforms": [],
 			"versions": [],
 			"libs": [],

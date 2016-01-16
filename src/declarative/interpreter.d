@@ -203,7 +203,7 @@ public:
 		
 		ifSects ~= IfSect(condExpr, bodyStmt);
 		
-		for( ; stmtRange.empty; stmtRange.popFront() )
+		while( !stmtRange.empty )
 		{
 			INameExpression keywordExpr = stmtRange.takeFrontAs!INameExpression("'elif' or 'else' keyword expected");
 			if( keywordExpr.name == "elif" )
@@ -218,6 +218,7 @@ public:
 				elseBody = stmtRange.takeFrontAs!IStatement( "'else' body statement expected" );
 				if( !stmtRange.empty )
 					interpretError("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
+				break;
 			}
 			else
 			{
@@ -226,13 +227,16 @@ public:
 		}
 		
 		bool lookElse = true;
+		interp.opnd = false;
 		
 		foreach( i, ifSect; ifSects )
 		{
-			interp.opnd = false;
+			
 			ifSect.cond.accept(interp);
 			
 			auto cond = interp.opnd;
+			
+			bool boolCond = cond.boolean;
 			
 			if( cond.type != DataNodeType.Boolean )
 				interpretError( "Conditional expression type must be boolean" );
@@ -242,18 +246,22 @@ public:
 				lookElse = false;
 				ifSect.stmt.accept(interp);
 				
-				import std.conv: to;
+				import std.array: appender;
 				
-				interp.opnd = "if #" ~ to!string(i);
+				auto opndText = appender!string();
+				
+				writeDataNodeAsString(interp.opnd, opndText);
+
 				break;
 			}
 		
+			int a = 100500;
+			a++;
 		}
 		
 		if( lookElse && elseBody )
 		{
 			elseBody.accept(interp);
-			interp.opnd = "else";
 		}
 	}
 }
@@ -378,66 +386,16 @@ public:
 		}
 		else
 			new ASTNodeTypeException("Expected compound statement or expression");
+			
+		import std.array: appender;
 
-		string str;
+		auto result = appender!string();
 		
-		final switch( interp.opnd.type ) with(DataNodeType)
-		{
-			case Null: 
-				str = null; 
-				break;
-			case Boolean: 
-				str = interp.opnd.boolean ? "true" : "false";
-				break;
-			case Integer:
-				str = interp.opnd.integer.to!string;
-				break;
-			case Floating:
-				str = interp.opnd.floating.to!string;
-				break;
-			case String:
-				str = interp.opnd.str;
-				break;
-			case Array:
-			{
-				writeln( "TextBlock: array data:" );
-				writeln( interp.opnd.array );
-				
-				foreach( el; interp.opnd.array )
-				{
-					import std.conv: to;
-					writeln("TextBlock array element type: ", el.type);
-					
-					if( el.type == DataNodeType.String )
-						str ~= el.str;
-					else if( el.type == DataNodeType.Array )
-					{						
-						foreach( innerEl; el.array )
-						{
-							if( innerEl.type == String )
-								str ~= innerEl.str;
-							else							
-								str ~= innerEl.toString();
-						}
-					}
-					else
-						interpretError("Unexpected type of data");
-				}
-				break;
-			}
-			case AssocArray:
-			{
-				interpretError("Assoc array string conversion not implemented yet");
-				break;	
-			}
-			case ClassObject:
-			{
-				interpretError("Class object string conversion not implemented yet");
-				break;
-			}				
-		}
+		writeDataNodeLines( interp.opnd, result, 15 );
 		
-		interp.opnd = str;
+		string dat = result.data;
+
+		interp.opnd = result.data;
 	}
 
 }
@@ -799,7 +757,7 @@ public:
 			rightExpr.accept(this);
 			TDataNode rightOpnd = opnd;
 			
-			makeDataPromotions(leftOpnd, rightOpnd);
+			//makeDataPromotions(leftOpnd, rightOpnd);
 			
 			assert( leftOpnd.type == rightOpnd.type, "Operands tags in binary expr must match!!!" );
 			
@@ -1127,8 +1085,8 @@ public:
 			
 			opnd = nodes;
 			
-			string result = opnd.toString();
-			writeln(result);
+			//string result = opnd.toString();
+			//writeln(result);
 			
 			exitScope();
 		}
