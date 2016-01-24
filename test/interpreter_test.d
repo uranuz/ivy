@@ -38,6 +38,7 @@ void main()
  	visitor.setValue("content2", TDataNode("Еще какое-то содержимое страницы"));
  	visitor.setValue("content3", TDataNode("Здравствуй, Вася"));
  	visitor.setValue("x", TDataNode(20));
+ 	visitor.setValue("y", TDataNode("no"));
  	
  	bool hasContent = visitor.canFindValue("content2");
  	auto content = visitor.getValue("content2");

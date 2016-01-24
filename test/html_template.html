@@ -15,8 +15,22 @@ text {*
 						{# text content2 #}
 						else
 						{# text content3 #};
+						
+						if y == "yes" {*
+							Вход выполнен
+						*} else {*
+							Вход не выполнен
+						*};
 					#}
 				#}
+				<ul>
+					{# text
+						{# for item in ["Vasya", "Petya", "Vova"] 
+							{*	Человек {# text item #}!!!	*}
+						#}					
+					#}
+				
+				</ul>
 				
 			</section>
 		</body>

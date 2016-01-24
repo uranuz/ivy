@@ -45,20 +45,6 @@ class Symbol
 
 }
 
-class SymbolTable
-{
-
-
-
-}
-
-
-class DataStorage
-{
-	
-
-}
-
 struct DataNode(S)
 {
 	alias String = S;
@@ -372,8 +358,8 @@ void writeDataNodeLines(TDataNode, OutRange)(
 				}
 				else
 				{			
-					if( i != 0 )
-						outRange.put( "\r\n" );
+					//if( i != 0 )
+						//outRange.put( "\r\n" );
 						
 					writeDataNodeLines(el, outRange, linesRecursion - 1, maxRecursion - 1);
 				}
