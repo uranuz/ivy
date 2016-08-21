@@ -1,18 +1,17 @@
 module declarative.lexer_test;
 
-import std.stdio;
+import std.stdio, std.file;
 
 import declarative.lexer, declarative.lexer_tools, declarative.common;
 
 void main()
 {
-	string str = 
-` statement {% {* abcd xyz + - * *}  %} ` ;
-	
+	string source = cast(string) std.file.read("test/html_template.html");
+
 	import std.uni: isAlpha;
 	alias MyLexer = Lexer!(string, LocationConfig.init);
 	
-	MyLexer lexer = MyLexer(str);
+	MyLexer lexer = MyLexer(source);
 	
 	void printResults()
 	{

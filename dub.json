@@ -25,6 +25,7 @@
 			"versions": [],
 			"libs": [],
 			"buildRequirements": ["silenceWarnings"],
+			"buildOptions": ["debugInfo"],
 			"sourceFiles": [ "test/parser_test.d" ]
 		},
 		{
@@ -34,6 +35,7 @@
 			"versions": [],
 			"libs": [],
 			"buildRequirements": ["silenceWarnings"],
+			"buildOptions": ["debugInfo"],
 			"sourceFiles": [ "test/lexer_test.d" ]
 		},
 		{
@@ -43,6 +45,7 @@
 			"versions": [],
 			"libs": [],
 			"buildRequirements": ["silenceWarnings"],
+			"buildOptions": ["debugInfo"],
 			"sourceFiles": [ "test/lexer_tools_test.d" ]
 		}
 	]

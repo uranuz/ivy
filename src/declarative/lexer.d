@@ -18,8 +18,6 @@ static immutable rawDataBlockBegin = "{$$";
 static immutable rawDataBlockEnd = "$$}";
 static immutable exprBlockBegin = "{{";
 static immutable exprBlockEnd = "}}";
-static immutable subDirectiveSep = "#";
-
 
 enum LexemeType {
 	Unknown = 0,
@@ -225,6 +223,12 @@ struct Lexeme(LocationConfig c)
 	bool test(int testType) const
 	{
 		return this.info.typeIndex == testType;
+	}
+
+	bool test(int[] testTypes) const
+	{
+		import std.algorithm: canFind;
+		return testTypes.canFind( this.info.typeIndex );
 	}
 
 	auto getSlice(SourceRange)(ref SourceRange sourceRange) const
@@ -479,7 +483,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		staticRule( ";", LexemeType.Semicolon, LexemeFlag.Separator),
 		staticRule( "-", LexemeType.Sub, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "~", LexemeType.Tilde, LexemeFlag.Operator),
-		staticRule( "#", LexemeType.Hash, LexemeFlag.Separator),
+		//staticRule( "#", LexemeType.Hash, LexemeFlag.Separator),
 		
 		dynamicRule( &parseFloat, LexemeType.Float, LexemeFlag.Literal ),
 		dynamicRule( &parseInteger, LexemeType.Integer, LexemeFlag.Literal ),
@@ -590,8 +594,11 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			rules = codeContextRules;
 		else if( ctx.state == ContextState.MixedContext )
 			rules = mixedContextRules;
-		else
+		else {
+			assert( false, "No lexer context detected!" );
 			rules = null;
+		}
+
 
 		foreach( rule; rules )
 		{

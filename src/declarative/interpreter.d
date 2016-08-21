@@ -362,6 +362,10 @@ public:
 				}
 				case AssocArray:
 				{
+					writeln( "Interpret assoc array element" );
+					//TDataNode[string] dataNodes;
+					//foreach( key, value; node )
+
 					assert( 0, "Not implemented yet!");
 					break;
 				}

@@ -10,10 +10,10 @@ void main()
 {
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
-	//writeln(std.file.getcwd());
-	string source = cast(string) std.file.read("test/html_template.html");
+	string sourceFileName = "test/html_template.html";
+	string source = cast(string) std.file.read(sourceFileName);
 	
-	auto parser = new Parser!(TextRange)(source, "source.tpl");
+	auto parser = new Parser!(TextRange)(source, sourceFileName);
 	
 	IDeclNode ast;
 	

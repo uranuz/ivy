@@ -1,6 +1,6 @@
 module declarative.expression;
 
-import declarative.node, declarative.common;
+import declarative.node, declarative.common, declarative.node_visitor;
 
 mixin template BaseExpressionImpl(LocationConfig c)
 {
@@ -557,6 +557,38 @@ public:
 +/
 }
 
+class AssocArrayKeyExpression(LocationConfig c): INameExpression
+{
+	mixin BaseExpressionImpl!c;
+private:
+	string _name;
+
+public:
+	this( CustLocation loc, string key )
+	{
+		_location = loc;
+		_name = key;
+	}
+
+	override @property string kind()
+	{
+		return "assoc array key expr";
+	}
+
+	override @property IDeclNode[] children()
+	{
+		return null;
+	}
+
+	override @property string name()
+	{
+		return _name;
+	}
+
+}
+
+
+//Identifier for IdentifierExp should ne registered somewhere in symbols table
 class IdentifierExp(LocationConfig c): INameExpression
 {
 	mixin BaseExpressionImpl!c;

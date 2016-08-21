@@ -1,6 +1,6 @@
 module declarative.statement;
 
-import declarative.common, declarative.node;
+import declarative.common, declarative.node, declarative.node_visitor;
 
 mixin template PlainStatementImpl(LocationConfig c)
 {

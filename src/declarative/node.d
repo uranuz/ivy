@@ -1,6 +1,7 @@
 module declarative.node;
 
 import declarative.common;
+import declarative.node_visitor;
 
 interface IDeclNode
 {

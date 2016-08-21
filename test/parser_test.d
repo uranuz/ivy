@@ -1,6 +1,6 @@
 module declarative.parser_test;
 
-import std.stdio;
+import std.stdio, std.file;
 
 import declarative.node, declarative.common, declarative.parser, declarative.lexer, declarative.lexer_tools, declarative.ast_writer;
 
@@ -27,13 +27,10 @@ void main()
 		
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 	
-	// auto parser = new Parser!(TextRange)(
-// ` [ ( 10 + 20 * ( 67 - 22 ) ) ] + [ 100 * 100, 15 ] - [ 16.6 - 7 ] + { "aaa": "bbb" } ~ doIt(  checkIt( [] + {} ) + 15 ) ;`, "source.tpl");
+	string sourceFileName = "test/html_template.html";
+	string source = cast(string) std.file.read(sourceFileName);
 
-	//` Qt.TextBox 10 {% Qt.Font size= 10 {% vasya name= vasya; petya name=petya; goblin name=vova, rank= 3, type="big"; do_nothing {* trololo abcd xyz *} %} %} `
-
-	auto parser = new Parser!(TextRange)(
-	` if x < 10 {# doIf; doIf2 ; ; #} else: x <= 20 {# doElse #} `, "source.tpl");
+	auto parser = new Parser!(TextRange)(source, sourceFileName);
 
 	void printLexemes()
 	{
