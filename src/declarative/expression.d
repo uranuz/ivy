@@ -331,21 +331,87 @@ public:
 +/
 }
 
+class ArrayIndexExp(LocationConfig c): IExpression
+{
+	mixin BaseExpressionImpl!c;
+
+private:
+	IExpression _arrayExp;
+	IExpression _indexExp;
+
+public:
+	this(CustLocation loc, IExpression arrayExp, IExpression indexExp )
+	{
+		_location = loc;
+		_arrayExp = arrayExp;
+		_indexExp = indexExp;
+	}
+
+	override @property string kind()
+	{
+		return "array index expression";
+	}
+
+	override @property IDeclNode[] children()
+	{
+		return cast(IDeclNode[]) [_arrayExp, _indexExp];
+	}
+
+
+}
+
+class AssocArrayPair(LocationConfig c): IAssocArrayPair
+{
+	mixin BaseExpressionImpl!c;
+
+private:
+	string _key;
+	IExpression _valueExpr;
+
+public:
+	this(CustLocation loc, string name, IExpression value)
+	{
+		_location = loc;
+		_key = name;
+		_valueExpr = value;
+	}
+
+	override @property {
+		string key()
+		{
+			return _key;
+		}
+
+		IExpression value()
+		{
+			return _valueExpr;
+		}
+	}
+
+	override @property string kind()
+	{
+		return "assoc array pair";
+	}
+
+	override @property IDeclNode[] children()
+	{
+		return cast(IDeclNode[])  [_valueExpr];
+	}
+
+}
 
 class AssocArrayLiteralExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 
 private:
-	IExpression[] _keys;
-	IExpression[] _values;
+	IAssocArrayPair[] _pairs;
 
 public:
-	this(CustLocation loc, IExpression[] keys, IExpression[] values)
+	this(CustLocation loc, IAssocArrayPair[] pairs)
 	{
 		_location = loc;
-		_keys = keys;
-		_values = values;
+		_pairs = pairs;
 	}
 	
 	override @property string kind()
@@ -355,7 +421,7 @@ public:
 	
 	override @property IDeclNode[] children()
 	{
-		return cast(IDeclNode[])( _keys ~ _values );
+		return cast(IDeclNode[]) _pairs;
 	}
 	
 	override @property LiteralType literalType()
@@ -557,37 +623,6 @@ public:
 +/
 }
 
-class AssocArrayKeyExpression(LocationConfig c): INameExpression
-{
-	mixin BaseExpressionImpl!c;
-private:
-	string _name;
-
-public:
-	this( CustLocation loc, string key )
-	{
-		_location = loc;
-		_name = key;
-	}
-
-	override @property string kind()
-	{
-		return "assoc array key expr";
-	}
-
-	override @property IDeclNode[] children()
-	{
-		return null;
-	}
-
-	override @property string name()
-	{
-		return _name;
-	}
-
-}
-
-
 //Identifier for IdentifierExp should ne registered somewhere in symbols table
 class IdentifierExp(LocationConfig c): INameExpression
 {
@@ -624,14 +659,14 @@ class CallExp(LocationConfig c): IExpression
 {
 	mixin BaseExpressionImpl!c;
 private:
-	IIdentifier _id;
-	IExpression[] _argList;
+	IExpression _callable;
+	IDeclNode[] _argList;
 
 public:
-	this( CustLocation loc, IIdentifier id, IExpression[] argList )
+	this( CustLocation loc, IExpression callable, IDeclNode[] argList )
 	{
 		_location = loc;
-		_id = id;
+		_callable = callable;
 		_argList = argList;
 	}
 	
@@ -642,7 +677,7 @@ public:
 	
 	override @property IDeclNode[] children()
 	{
-		return cast(IDeclNode[]) _argList;
+		return (cast(IDeclNode) _callable) ~ _argList;
 	}
 
 }

@@ -200,6 +200,8 @@ struct Lexeme(LocationConfig c)
 	size_t index; //Index of UTF code unit that starts lexeme
 	size_t length; //Length of lexeme in code units
 	LexemeInfo info; //Field containing information about this lexeme
+	size_t indentCount; // Indent count for line where lexeme is located
+	IndentStyle indentStyle; // Determines if lexeme lines indented with tabs or spaces
 	
 	static if( config.withGraphemeIndex )
 	{
@@ -229,6 +231,11 @@ struct Lexeme(LocationConfig c)
 	{
 		import std.algorithm: canFind;
 		return testTypes.canFind( this.info.typeIndex );
+	}
+
+	int typeIndex() const @property
+	{
+		return info.typeIndex;
 	}
 
 	auto getSlice(SourceRange)(ref SourceRange sourceRange) const
@@ -315,6 +322,48 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 		static if( config.withGraphemeColumnIndex )
 			lex.graphemeColumnIndex = beginRange.graphemeColumnIndex;
 	}
+
+	// Getting slice of this lexeme in order to parse indents
+	auto parsedRange = beginRange[0..lex.length];
+
+	IndentStyle indentStyle;
+	size_t minIndentCount = size_t.max;
+
+	by_line_loop:
+	while( !parsedRange.empty )
+	{
+		size_t lineIndentCount;
+		IndentStyle lineIndentStyle;
+		parsedRange.parseLineIndent( lineIndentCount, lineIndentStyle );
+
+		bool isEmptyLine = true;
+		// Inner loop check if line contains meaningful characters
+		while( !parsedRange.empty )
+		{
+			auto ch = parsedRange.popChar();
+			if( !" \t\r\n".canFind(ch) )
+			{
+				isEmptyLine = false;
+			}
+
+			if( ch == ' ' && ch == '\t' )
+			{
+				continue; //Just skip rest empty spaces
+			}
+			else if( parsedRange.isNewLine || parsedRange.empty )
+			{
+				if( !isEmptyLine )
+				{
+					minIndentCount = min(minIndentCount, lineIndentCount);
+					indentStyle = lineIndentStyle;
+				}
+
+				continue by_line_loop;
+			}
+		}
+	}
+	lex.indentCount = minIndentCount;
+	lex.indentStyle = indentStyle;
 	
 	beginRange = endRange.save; //Move start currentRange to point of end currentRange
 	return lex;

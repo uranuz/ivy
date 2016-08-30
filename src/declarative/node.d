@@ -160,6 +160,14 @@ interface IKeyValueAttribute: IDeclNode
 
 }
 
+interface IAssocArrayPair: IExpression
+{
+	@property {
+		string key();
+		IExpression value();
+	}
+}
+
 interface IStatement: IDeclNode
 {
 	@property {

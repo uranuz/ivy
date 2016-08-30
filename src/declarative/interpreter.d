@@ -363,10 +363,18 @@ public:
 				case AssocArray:
 				{
 					writeln( "Interpret assoc array element" );
-					//TDataNode[string] dataNodes;
-					//foreach( key, value; node )
+					TDataNode[string] dataNodes;
+					foreach( child; node.children )
+					{
+						child.accept(this);
+						assert( opnd.type == DataNodeType.Array && opnd.array.length == 2,
+							`Assoc array pair is expected to be array of 2 elements`
+						);
+						assert( opnd.array[0].type == DataNodeType.String, `Assoc array key should be a string` );
+						dataNodes[ opnd.array[0].str ] = opnd.array[1];
+					}
 
-					assert( 0, "Not implemented yet!");
+					opnd = dataNodes;
 					break;
 				}
 				default:
@@ -765,6 +773,14 @@ public:
 		void visit(IStatement node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
+		}
+
+		void visit(IAssocArrayPair node)
+		{
+			writeln( typeof(node).stringof ~ " visited" );
+			writeln( "Assoc array pair key: ", node.key );
+			node.value.accept(this);
+			opnd = [TDataNode(node.key), opnd];
 		}
 		
 		void visit(IKeyValueAttribute node)

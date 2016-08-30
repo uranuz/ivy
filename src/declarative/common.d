@@ -80,15 +80,15 @@ struct LocationConfig
 	bool withSize = true;
 }
 
-enum IndentStyle: char { tab = '\t', space = ' ' };
+enum IndentStyle: char { none = 0, tab = '\t', space = ' ' };
 
 struct Location
 {
 	string fileName;  // Name of source file
 	size_t index;     // Start code unit index or grapheme index (if available)
 	size_t length;    // Length of source text in code units or in graphemes (if available)
-	size_t firstIndent;
-	IndentStyle firstIndentStyle;
+	size_t indentCount;
+	IndentStyle indentStyle;
 }
 
 struct PlainLocation
@@ -109,8 +109,8 @@ struct ExtendedLocation
 	size_t lineCount;
 	size_t columnIndex;
 	size_t graphemeColumnIndex;
-	size_t firstIndent;
-	IndentStyle firstIndentStyle;
+	size_t indentCount;
+	IndentStyle indentStyle;
 }
 
 struct CustomizedLocation(LocationConfig c)
@@ -146,16 +146,16 @@ struct CustomizedLocation(LocationConfig c)
 			size_t graphemeColumnIndex;
 	}
 	
-	size_t firstIndent;
-	IndentStyle firstIndentStyle;
+	size_t indentCount;
+	IndentStyle indentStyle;
 	
 	Location toLocation() const
 	{
 		Location loc;
 		loc.fileName = fileName;
 		loc.index = index;
-		loc.firstIndent = firstIndent;
-		loc.firstIndentStyle = firstIndentStyle;
+		loc.indentCount = indentCount;
+		loc.indentStyle = indentStyle;
 		
 		static if( config.withSize )
 			loc.length = length;
@@ -215,8 +215,8 @@ struct CustomizedLocation(LocationConfig c)
 				loc.graphemeColumnIndex = graphemeColumnIndex;
 		}
 		
-		loc.firstIndent = firstIndent;
-		loc.firstIndentStyle = firstIndentStyle;
+		loc.indentCount = indentCount;
+		loc.indentStyle = indentStyle;
 		
 		return loc;
 	}
@@ -236,6 +236,8 @@ auto getCustomizedLocation(LexemeT)( LexemeT lex, string fileName )
 	
 	loc.fileName = fileName;
 	loc.index = lex.index;
+	loc.indentCount = lex.indentCount;
+	loc.indentStyle = lex.indentStyle;
 	
 	static if( config.withSize )
 		loc.length = lex.length;

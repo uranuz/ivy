@@ -39,6 +39,8 @@ void writeASTasJSON(SourceRange)(ref const(SourceRange) source, IDeclNode node, 
 		json["index"] = index;
 		json["length"] = length;
 		json["source"] = source[index .. index + length].array.to!string;
+		json["indentCount"] = node.location.indentCount;
+		json["indentStyle"] = node.location.indentStyle;
 		
 		JSONValue[] childrenJSON;
 		foreach( child; node.children )

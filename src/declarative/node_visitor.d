@@ -14,6 +14,7 @@ class AbstractNodeVisitor
 	void visit(IOperatorExpression node) { visit( cast(IExpression) node ); }
 	void visit(IUnaryExpression node) { visit( cast(IExpression) node ); }
 	void visit(IBinaryExpression node) { visit( cast(IExpression) node ); }
+	void visit(IAssocArrayPair node) { visit( cast(IExpression) node ); }
 	
 	//Statements
 	void visit(IStatement node) { visit( cast(IDeclNode) node ); }
