@@ -635,12 +635,30 @@ public:
 			}
 			case LBracket:
 			{
+				auto backup = lexer.save;
+
 				lexer.popFront();
 
 				IExpression indexExpr = parseExpression();
 
 				if( !indexExpr )
 					error( "Null index expression found!!!" );
+
+				if( !lexer.front.test( LexemeType.RBracket ) )
+				{
+					if( lexer.front.test( LexemeType.Comma ) )
+					{
+						lexer = backup.save;
+						loger.write( "Couldn't parse array index expression. It could be array, so lexer is restored'" );
+						return preExpr;
+					}
+					else
+					{
+						error( "Expected right bracket, closing array index expression!!! " );
+					}
+				}
+
+				lexer.popFront(); // Skip RBracket
 
 				expr = new ArrayIndexExp!(config)(loc, preExpr, indexExpr);
 

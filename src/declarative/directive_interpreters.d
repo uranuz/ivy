@@ -29,12 +29,15 @@ public:
 		if( varName.length == 0 )
 			interpretError("Loop variable name cannot be empty");
 		
-		INameExpression inNameExpr = stmtRange.takeFrontAs!INameExpression("Expected 'in' keyword");
+		IKeyValueAttribute inAttribute = stmtRange.takeFrontAs!IKeyValueAttribute("Expected 'in' attribute");
 		
-		if( inNameExpr.name != "in" )
+		if( inAttribute.name != "in" )
 			interpretError( "Expected 'in' keyword" );
 		
-		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected loop aggregate expression");
+		IExpression aggregateExpr = cast(IExpression) inAttribute.value;
+
+		if( !aggregateExpr )
+			interpretError("Expected loop aggregate expression");
 		
 		aggregateExpr.accept(interp);
 		auto aggr = interp.opnd;
