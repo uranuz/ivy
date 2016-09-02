@@ -1,6 +1,6 @@
-jinjed
+ivy
 ======
 
-Template engine inspired by jinja2 implemented in D programming language
+Extensible declarative templating language implemented in D programming language
 
 Boost License 1.0
