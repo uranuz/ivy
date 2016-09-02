@@ -1,4 +1,4 @@
-import declarative.lexer_tools, declarative.common;
+import ivy.lexer_tools, ivy.common;
 
 import std.stdio;
 import std.array: array;

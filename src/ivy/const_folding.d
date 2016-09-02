@@ -1,8 +1,8 @@
-module declarative.const_folding;
+module ivy.const_folding;
 
 import std.stdio;
 
-import declarative.node, declarative.expression, declarative.node_visitor;
+import ivy.node, ivy.expression, ivy.node_visitor;
 
 /+
 class ConstFoldVisitor: AbstractNodeVisitor

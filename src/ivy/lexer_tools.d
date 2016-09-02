@@ -1,4 +1,4 @@
-module declarative.lexer_tools;
+module ivy.lexer_tools;
 
 import std.range;
 import std.traits;
@@ -8,7 +8,7 @@ import std.algorithm: equal;
 
 import std.stdio;
 
-import declarative.common;
+import ivy.common;
 
 struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 	if( isSomeString!S )

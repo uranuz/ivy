@@ -1,6 +1,6 @@
-module declarative.ast_writer;
+module ivy.ast_writer;
 
-import declarative.node;
+import ivy.node;
 
 void writeAST(SourceRange, OutRange)(ref const(SourceRange) source, IDeclNode node, ref OutRange output, int indent = 0)
 {

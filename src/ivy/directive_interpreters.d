@@ -1,6 +1,6 @@
-module declarative.directive_interpreters;
+module ivy.directive_interpreters;
 
-import declarative.interpreter, declarative.node, declarative.interpreter_data;
+import ivy.interpreter, ivy.node, ivy.interpreter_data;
 
 shared static this()
 {

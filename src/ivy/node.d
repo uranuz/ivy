@@ -1,7 +1,7 @@
-module declarative.node;
+module ivy.node;
 
-import declarative.common;
-import declarative.node_visitor;
+import ivy.common;
+import ivy.node_visitor;
 
 interface IDeclNode
 {

@@ -1,6 +1,6 @@
-module declarative.expression;
+module ivy.expression;
 
-import declarative.node, declarative.common, declarative.node_visitor;
+import ivy.node, ivy.common, ivy.node_visitor;
 
 mixin template BaseExpressionImpl(LocationConfig c)
 {

@@ -1,8 +1,8 @@
-module declarative.interpreter_test;
+module ivy.interpreter_test;
 
 import std.stdio, std.json, std.file;
 
-import declarative.interpreter, declarative.interpreter_data, declarative.node, declarative.lexer_tools, declarative.lexer, declarative.common, declarative.parser, declarative.ast_writer;
+import ivy.interpreter, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer;
 
 
 

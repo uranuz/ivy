@@ -1,6 +1,6 @@
-module declarative.node_visitor;
+module ivy.node_visitor;
 
-import declarative.node;
+import ivy.node;
 
 
 class AbstractNodeVisitor

@@ -1,8 +1,8 @@
-module declarative.parser_test;
+module ivy.parser_test;
 
 import std.stdio, std.file;
 
-import declarative.node, declarative.common, declarative.parser, declarative.lexer, declarative.lexer_tools, declarative.ast_writer;
+import ivy.node, ivy.common, ivy.parser, ivy.lexer, ivy.lexer_tools, ivy.ast_writer;
 
 // void printNodesRecursive(IDeclNode node, int indent = 0)
 // {

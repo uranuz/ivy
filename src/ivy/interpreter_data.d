@@ -1,4 +1,4 @@
-module declarative.interpreter_data;
+module ivy.interpreter_data;
 
 import std.exception: enforceEx;
 import std.traits;

@@ -1,10 +1,10 @@
-module declarative.interpreter;
+module ivy.interpreter;
 
 import std.stdio, std.conv;
 
-import declarative.node, declarative.node_visitor, declarative.common, declarative.expression;
+import ivy.node, ivy.node_visitor, ivy.common, ivy.expression;
 
-import declarative.interpreter_data;
+import ivy.interpreter_data;
 
 interface IInterpreterContext {}
 

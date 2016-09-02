@@ -1,10 +1,10 @@
-module declarative.parser;
+module ivy.parser;
 
 import std.stdio;
 import std.range;
 
-import declarative.lexer, declarative.lexer_tools, declarative.node, declarative.expression, 
-	declarative.statement, declarative.common;
+import ivy.lexer, ivy.lexer_tools, ivy.node, ivy.expression,
+	ivy.statement, ivy.common;
 
 class ParserException : Exception
 {

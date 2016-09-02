@@ -1,8 +1,8 @@
-module declarative.lexer_test;
+module ivy.lexer_test;
 
 import std.stdio, std.file;
 
-import declarative.lexer, declarative.lexer_tools, declarative.common;
+import ivy.lexer, ivy.lexer_tools, ivy.common;
 
 void main()
 {

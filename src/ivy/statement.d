@@ -1,6 +1,6 @@
-module declarative.statement;
+module ivy.statement;
 
-import declarative.common, declarative.node, declarative.node_visitor;
+import ivy.common, ivy.node, ivy.node_visitor;
 
 mixin template PlainStatementImpl(LocationConfig c)
 {

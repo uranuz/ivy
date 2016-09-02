@@ -1,8 +1,8 @@
-module declarative.lexer;
+module ivy.lexer;
 
 import std.range, std.algorithm, std.conv, std.stdio;
 
-import declarative.lexer_tools, declarative.common;
+import ivy.lexer_tools, ivy.common;
 
 static immutable whitespaceChars = " \n\t\r";
 static immutable delimChars = "()[]{}%*-+/#,:|.<>=!";

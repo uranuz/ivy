@@ -1,4 +1,4 @@
-module declarative.common;
+module ivy.common;
 
 /+
 enum LocationFlag
@@ -224,7 +224,7 @@ struct CustomizedLocation(LocationConfig c)
 }
 
 import std.traits: isInstanceOf;
-import declarative.lexer: Lexeme;
+import ivy.lexer: Lexeme;
 
 auto getCustomizedLocation(LexemeT)( LexemeT lex, string fileName )
 	//if( isInstanceOf!(Lexeme, LexemeT) )
@@ -267,8 +267,8 @@ auto getCustomizedLocation(LexemeT)( LexemeT lex, string fileName )
 	return loc;
 }
 
-import declarative.node : IDeclNode;
-import declarative.node_visitor : AbstractNodeVisitor;
+import ivy.node : IDeclNode;
+import ivy.node_visitor : AbstractNodeVisitor;
 
 mixin template BaseDeclNodeImpl(LocationConfig c)
 {
