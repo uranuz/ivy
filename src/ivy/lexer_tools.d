@@ -19,9 +19,12 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 	
 	alias ThisType = TextForwardRange!(S, c);
 	
+	// This range keeps original reference to data internally
 	String str;
 	
+	// Index of starting position to data this range points to
 	size_t index = 0;
+	// Index of tail of this range or size_t.max if range ends at end of original data buffer
 	size_t endIndex = size_t.max;
 	
 	@disable this(this);
@@ -38,7 +41,7 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 	
 	static if( config.withLineIndex )
 	{
-		size_t lineIndex = 0;
+		size_t lineIndex = 0; // Line index related to original data buffer
 		
 		static if( config.withColumnIndex )
 			size_t columnIndex = 0;
@@ -47,17 +50,21 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 			size_t graphemeColumnIndex = 0;
 	}
 
-	size_t lineStartIndex;
+	//size_t lineStartIndex; // TODO: Decide whether use or remove it
 
+	// If it set to true means that indents on current line have passed
 	private bool isIndenting = true;
-	IndentStyle indentStyle;
-	size_t indentCount;	
+	IndentStyle indentStyle; // Tabs or spaces indent style for current line
+	size_t indentCount; // Indentation count in number of tabs or spaces
 	
+
+	/// Test if current range is empty or fully consumed
 	bool empty() @property inout
 	{
 		return index >= this.sliceEndIndex;
 	}
 	
+	// Ending position of range in original data
 	private size_t sliceEndIndex() @property inout
 	{
 		import std.algorithm: min;
@@ -65,11 +72,13 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 		return min( str.length, endIndex );	
 	}
 	
+	/// Count of remaining symbols in range
 	size_t length() @property inout
 	{
 		return this.sliceEndIndex - index;
 	}
 	
+	/// Return current char and push the range forward
 	Char popChar()
 	{
 		Char ch = front();
@@ -77,6 +86,7 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 		return ch;
 	}
 	
+	// Tests if current item is line indentation symbol
 	private void analyzeIndents()
 	{
 		if( index >= this.sliceEndIndex )
@@ -115,6 +125,7 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 		}
 	}
 	
+	/// Push the range forward by one encoding element
 	void popFront()
 	{
 		index++;
@@ -178,26 +189,31 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 			static assert( false, "Code unit type '" ~ Char.stringof ~ "' is not valid!" );
 	}
 	
+	/// Push the range forward by N encoding elements
 	void popFrontN(size_t N)
 	{
 		foreach(i; 0..N)
 			popFront();
 	}
 	
+	/// Get current encoding element
 	Char front() @property inout
 	{	return index >= this.sliceEndIndex ? '\0' : str[index];
 	}
 	
+	/// Tests if current encoding element goes immediatly after new line chars or when it's start of buffer
 	@property bool isNewLine()
 	{
 		return index == 0 || str[index-1] == '\n' || ( str[index-1] == '\r' && str[index] != '\n' );
 	}
 	
+	/// Tests if range front currently points to indentation symbol
 	@property bool isIndentation()
 	{
 		return isIndenting && ( str[index] == '\t' || str[index] == ' ' );
 	}
 	
+	/// Get current's line indent info without pushing this range forward
 	void getLineIndent( ref size_t count, ref IndentStyle style )
 	{
 		bool isInd = this.isIndentation;
@@ -224,6 +240,7 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 		return;
 	}
 	
+	/// Parses current's line indent with pushing the range forward
 	void parseLineIndent( ref size_t count, ref IndentStyle style )
 	{
 		while( isIndentation && !this.empty )
@@ -364,7 +381,7 @@ private:
 
 	Range _source;
 	Range _front;
-	bool _isEmpty;	
+	bool _isEmpty;
 
 public:
 	@disable this(this);

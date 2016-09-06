@@ -74,7 +74,7 @@ enum LexemeType {
 	EndOfFile,
 	
 	
-	CoreTypesEnd,	
+	CoreTypesEnd,
 	ExtensionTypesStart = 100
 };
 
@@ -196,31 +196,10 @@ struct LexemeInfo
 struct Lexeme(LocationConfig c)
 {
 	enum config = c;
-	
-	size_t index; //Index of UTF code unit that starts lexeme
-	size_t length; //Length of lexeme in code units
-	LexemeInfo info; //Field containing information about this lexeme
-	size_t indentCount; // Indent count for line where lexeme is located
-	IndentStyle indentStyle; // Determines if lexeme lines indented with tabs or spaces
-	
-	static if( config.withGraphemeIndex )
-	{
-		size_t graphemeIndex; //Index of grapheme that starts lexeme
-		size_t graphemeLength; //Length of lexeme in graphemes
-	}
-	
-	static if( config.withLineIndex )
-	{
-		size_t lineIndex; //Index of line at which lexeme starts
-		size_t lineCount; //Number of lines in lexeme (number of CR LF/ CR / LF exactly)
-		
-		static if( config.withColumnIndex )
-			size_t columnIndex; //Index of code unit in line that starts lexeme
-		
-		static if( config.withGraphemeColumnIndex )
-			size_t graphemeColumnIndex; //Index of grapheme in line that starts lexeme
-	}
-	
+	alias CustLocation = CustomizedLocation!(config);
+
+	CustLocation loc; // Location of this lexeme in source text
+	LexemeInfo info; // Field containing information about this lexeme
 
 	bool test(int testType) const
 	{
@@ -240,7 +219,7 @@ struct Lexeme(LocationConfig c)
 
 	auto getSlice(SourceRange)(ref SourceRange sourceRange) const
 	{
-		return sourceRange[index .. index + length];
+		return sourceRange[loc.index .. loc.index + loc.length];
 	}
 }
 
@@ -261,6 +240,7 @@ template GetSourceRangeConfig(R)
 	}
 }
 
+// Just creates empty lexeme at specified position and of certain type (Unknown type by default)
 template createLexemeAt(SourceRange)
 {
 	alias config = GetSourceRangeConfig!SourceRange;
@@ -270,61 +250,76 @@ template createLexemeAt(SourceRange)
 	{
 		LexemeT lex;
 		lex.info = LexemeInfo(lexType);
-		lex.index = source.index;
-		lex.length = 0;
+		lex.loc.index = source.index;
+		lex.loc.length = 0;
 		
 		static if( config.withGraphemeIndex )
 		{
-			lex.graphemeIndex = source.graphemeIndex;
-			lex.graphemeLength = 0;
+			lex.loc.graphemeIndex = source.graphemeIndex;
+			lex.loc.graphemeLength = 0;
 		}
 		
 		static if( config.withLineIndex )
 		{
-			lex.lineIndex = source.lineIndex;
-			lex.lineCount = 0;
+			lex.loc.lineIndex = source.lineIndex;
+			lex.loc.lineCount = 0;
 		
 			static if( config.withColumnIndex )
-				lex.columnIndex = source.columnIndex;
+				lex.loc.columnIndex = source.columnIndex;
 			
 			static if( config.withGraphemeColumnIndex )
-				lex.graphemeColumnIndex = source.graphemeColumnIndex;
+				lex.loc.graphemeColumnIndex = source.graphemeColumnIndex;
 		}
 		
 		return lex;
 	}
 }
 
-
+// Universal super-duper extractor of lexemes by it's begin, end ranges and info about type of lexeme
 auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRange) endRange, ref const(LexemeInfo) lexemeInfo)
 {
 	enum LocationConfig config = GetSourceRangeConfig!SourceRange;
 	
 	Lexeme!(config) lex;
 	lex.info = lexemeInfo;
-	lex.index = beginRange.index;
-	lex.length = endRange.index - beginRange.index;
+
+	// TODO: Maybe we should just add Location field for Lexeme
+	lex.loc.index = beginRange.index;
+
+	assert( endRange.index >= beginRange.index,
+		"Index for end range must not be less than for begin range!"
+	);
+	// Not idiomatic range maybe approach, but effective
+	lex.loc.length = endRange.index - beginRange.index;
 	
 	static if( config.withGraphemeIndex )
 	{
-		lex.graphemeIndex = beginRange.graphemeIndex;
-		lex.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
+		lex.loc.graphemeIndex = beginRange.graphemeIndex;
+
+		assert( endRange.graphemeIndex >= beginRange.graphemeIndex,
+			"Grapheme index for end range must not be less than for begin range!"
+		);
+		lex.loc.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
 	}
 	
 	static if( config.withLineIndex )
 	{
-		lex.lineIndex = beginRange.lineIndex;
-		lex.lineCount = endRange.lineIndex - beginRange.lineIndex;
+		lex.loc.lineIndex = beginRange.lineIndex;
+
+		assert( endRange.lineIndex >= beginRange.lineIndex,
+			"Line index for end range must not be less than for begin range!"
+		);
+		lex.loc.lineCount = endRange.lineIndex - beginRange.lineIndex;
 	
 		static if( config.withColumnIndex )
-			lex.columnIndex = beginRange.columnIndex;
+			lex.loc.columnIndex = beginRange.columnIndex;
 		
 		static if( config.withGraphemeColumnIndex )
-			lex.graphemeColumnIndex = beginRange.graphemeColumnIndex;
+			lex.loc.graphemeColumnIndex = beginRange.graphemeColumnIndex;
 	}
 
 	// Getting slice of this lexeme in order to parse indents
-	auto parsedRange = beginRange[0..lex.length];
+	auto parsedRange = beginRange[0..lex.loc.length];
 
 	IndentStyle indentStyle;
 	size_t minIndentCount = size_t.max;
@@ -362,55 +357,23 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 			}
 		}
 	}
-	lex.indentCount = minIndentCount;
-	lex.indentStyle = indentStyle;
+	lex.loc.indentCount = minIndentCount;
+	lex.loc.indentStyle = indentStyle;
 	
 	beginRange = endRange.save; //Move start currentRange to point of end currentRange
 	return lex;
 }
 
-LexRule.LexemeT parseStaticLexeme(SourceRange, LexRule)(ref SourceRange source, ref const(LexRule) rule) 
+// Simple function for parsing static lexemes
+bool parseStaticLexeme(SourceRange, LexRule)(ref SourceRange source, ref const(LexRule) rule)
 {
-	import std.utf;
-	enum config = SourceRange.config;
-	
-	if( source.save.startsWith(rule.val) )
+	if( source.match(rule.val) )
 	{
-		LexRule.LexemeT newLexeme;
-		newLexeme.info = rule.lexemeInfo;
-		newLexeme.index = source.index;
-		newLexeme.length = rule.val.length;		
-		
-		static if( config.withGraphemeIndex )
-		{
-			newLexeme.graphemeIndex = source.graphemeIndex;
-			newLexeme.graphemeLength = std.utf.count(rule.val);
-		}
-		
-		static if( config.withLineIndex )
-		{
-			newLexeme.lineIndex = source.lineIndex;
-			newLexeme.lineCount = 0;
-			
-			static if( config.withColumnIndex )
-			{
-				newLexeme.columnIndex = rule.val.length;
-			}
-			
-			static if( config.withGraphemeColumnIndex )
-			{
-				newLexeme.graphemeColumnIndex = source.graphemeIndex;
-			}
-		}
-		
-		source.popFrontN(rule.val.length);
-		
-		return newLexeme;
+		return true;
 	}
-	
-	return createLexemeAt(source);
-}
 
+	return false;
+}
 
 struct LexicalRule(R)
 	if( isForwardRange!R )
@@ -422,14 +385,17 @@ struct LexicalRule(R)
 	alias Char = Unqual!( ElementEncodingType!R );
 	alias String = immutable(Char)[];
 	alias LexemeT = Lexeme!(config);
-	alias ParseMethodType = LexemeT function(ref SourceRange source, ref const(LexicalRule!R) rule);
+
+	// Methods of this type should return true if starting part of range matches this rule
+	// and consume this part. Otherwise it should return false
+	alias ParseMethodType = bool function(ref SourceRange source, ref const(LexicalRule!R) rule);
 	alias parseStaticMethod = parseStaticLexeme!( SourceRange, LexicalRule!R );
 	
 	String val;
 	ParseMethodType parseMethod;
 	LexemeInfo lexemeInfo;
 
-	LexemeT parse(ref SourceRange currentRange) inout
+	bool apply(ref SourceRange currentRange) inout
 	{
 		return parseMethod(currentRange, this);
 	}
@@ -620,11 +586,9 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	static LexemeT parseFront(ref SourceRange source, ref LexerContext ctx)
 	{
 		import std.conv: to;
-		
-		LexemeT lex;
 		if( ctx.state == ContextState.CodeContext )
 			skipWhiteSpaces(source);
-			
+
 		if( source.empty )
 		{
 			if( !ctx.parenStack.empty )
@@ -649,11 +613,14 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		}
 
 
+		LexemeT lex;
+		SourceRange currentRange;
 		foreach( rule; rules )
 		{
-			lex = rule.parse(source);
-			if( lex.info.isValidType )
+			currentRange = source.save;
+			if( rule.apply(currentRange) )
 			{
+				lex = extractLexeme( source, currentRange, rule.lexemeInfo );
 				break;
 			}
 		}
@@ -948,16 +915,15 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 	import std.traits;
 
-	static LexemeT parseString(ref SourceRange source, ref const(LexRule) rule)
+	static bool parseString(ref SourceRange source, ref const(LexRule) rule)
 	{
 		//writeln("lexer.parseString");
 		
 		String quoteLex;
-		SourceRange parsedRange = source.save;
-		
+
 		foreach( ref quote; stringQuotes )
 		{
-			if( parsedRange.match(quote) )
+			if( source.match(quote) )
 			{
 				quoteLex = quote;
 				break;
@@ -965,93 +931,91 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		}
 		
 		if( quoteLex.empty )
-			return createLexemeAt(source, LexemeType.EndOfFile);
+			return false;
 		
-		while( !parsedRange.empty )
+		while( !source.empty )
 		{
-			if( parsedRange.match(quoteLex) )
-				return extractLexeme(source, parsedRange, rule.lexemeInfo);
+			if( source.match(quoteLex) ) // Test and consume
+				return true;
 			else
-				parsedRange.popFront();
+				source.popFront();
 		}
 		
 		assert(0, `Expected <` ~ quoteLex.to!string ~ `> but end of input found!!!` );
 	}
 
-	static LexemeT parseInteger(ref SourceRange source, ref const(LexRule) rule)
+	static bool parseInteger(ref SourceRange source, ref const(LexRule) rule)
 	{
 		//writeln("lexer.parseInteger");
-		
-		SourceRange parsedRange = source.save;
+
 		Char ch;
 		
-		if( parsedRange.empty )
-			return createLexemeAt(source, LexemeType.EndOfFile);
+		if( source.empty )
+			return false;
 		
-		ch = parsedRange.front;
+		ch = source.front;
 		if( !('0' <= ch && ch <= '9') )
-			return createLexemeAt(source);
-		parsedRange.popFront();
+			return false;
+		source.popFront();
 		
-		while( !parsedRange.empty )
+		while( !source.empty )
 		{
-			ch = parsedRange.front;
+			ch = source.front;
 			if( !('0' <= ch && ch <= '9') )
 				break;
-			parsedRange.popFront();
+			source.popFront();
 		}
 		
-		return extractLexeme(source, parsedRange, rule.lexemeInfo);
+		return true;
 	}
 
-	static LexemeT parseFloat(ref SourceRange source, ref const(LexRule) rule)
+	static bool parseFloat(ref SourceRange source, ref const(LexRule) rule)
 	{
 		//writeln("lexer.parseFloat");
-		
-		SourceRange parsedRange = source.save;
+
 		Char ch;
 		
-		if( parsedRange.empty )
-			return createLexemeAt(source, LexemeType.EndOfFile);
+		if( source.empty )
+			return false;
 		
-		ch = parsedRange.front;
+		ch = source.front;
 		if( !('0' <= ch && ch <= '9') )
-			return createLexemeAt(source);
-		parsedRange.popFront();
+			return false;
+		source.popFront();
 		
-		while( !parsedRange.empty )
+		while( !source.empty )
 		{
-			ch = parsedRange.front;
+			ch = source.front;
 			if( !('0' <= ch && ch <= '9') )
 				break;
-			parsedRange.popFront();
+			source.popFront();
 		}
 		
-		if( parsedRange.empty )
-			return createLexemeAt(source, LexemeType.EndOfFile);
+		if( source.empty )
+			return false;
 		
-		ch = parsedRange.front;
+		ch = source.front;
 		if( ch != '.' )
-			return createLexemeAt(source);
-		parsedRange.popFront();
+			return false;
+		source.popFront();
 		
-		if( parsedRange.empty )
+		if( source.empty )
 			assert( false, `Expected decimal part of float!!!` );
 		
-		ch = parsedRange.front;
+		ch = source.front;
 		if( !('0' <= ch && ch <= '9') )
 			assert( false, `Expected decimal part of float!!!` );
-		parsedRange.popFront();
+		source.popFront();
 		
-		while( !parsedRange.empty )
+		while( !source.empty )
 		{
-			ch = parsedRange.front;
+			ch = source.front;
 			if( !('0' <= ch && ch <= '9') )
 				break;
-			parsedRange.popFront();
+			source.popFront();
 		}
 		
-		return extractLexeme(source, parsedRange, rule.lexemeInfo);
+		return true;
 	}
 	
 	static immutable notTextLexemes = [
@@ -1061,91 +1025,79 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		exprBlockBegin
 	];
 
-	static LexemeT parseData(ref SourceRange source, ref const(LexRule) rule)
+	static bool parseData(ref SourceRange source, ref const(LexRule) rule)
 	{
 		//writeln("lexer.parseData");
-		
-		SourceRange parsedRange = source.save;
-		
-		import std.algorithm;
-		
-		LexemeT lex;
-		
-		while( !parsedRange.empty )
+
+		while( !source.empty )
 		{
 			foreach( ref notText; notTextLexemes )
 			{
-				if( parsedRange.save.match(notText) )
+				if( source.save.match(notText) ) // Test only, but not consume
 				{
-					return extractLexeme(source, parsedRange, rule.lexemeInfo);
+					return true;
 				}
 			}
-			parsedRange.popFront();
+			source.popFront();
 		}
 		
-		return extractLexeme(source, parsedRange, rule.lexemeInfo);
+		return true;
 	}
 	
-	static LexemeT parseRawData(ref SourceRange source, ref const(LexRule) rule)
+	static bool parseRawData(ref SourceRange source, ref const(LexRule) rule)
 	{
-		import std.algorithm: startsWith;
+		if( source.empty )
+			return false;
 		
-		SourceRange parsedRange = source.save;
+		if( !source.match(rawDataBlockBegin) )
+			return false;
 		
-		if( parsedRange.empty )
-			return createLexemeAt(source, LexemeType.EndOfFile);
-		
-		if( !parsedRange.match(rawDataBlockBegin) )
-			return createLexemeAt(source);
-		
-		while( !parsedRange.empty )
+		while( !source.empty )
 		{
-			if( parsedRange.match(rawDataBlockEnd) )
-				return extractLexeme(source, parsedRange, rule.lexemeInfo);
+			if( source.match(rawDataBlockEnd) )
+				return true;
 				
-			parsedRange.popFront();
+			source.popFront();
 		}
 	
-		return extractLexeme(source, parsedRange, rule.lexemeInfo);
+		return true;
 	}
 	
-	static LexemeT parseName(ref SourceRange source, ref const(LexRule) rule)
+	static bool parseName(ref SourceRange source, ref const(LexRule) rule)
 	{
 		//writeln("lexer.parseName");
-		
-		SourceRange parsedRange = source.save;
-		
+
 		Char ch;
 		dchar dch;
 		ubyte len;
 		
-		if( parsedRange.empty )
-			return createLexemeAt(source, LexemeType.EndOfFile);
+		if( source.empty )
+			return false;
 		
-		ch = parsedRange.front();
+		ch = source.front();
 		
 		if( !isStartCodeUnit(ch) )
-			return createLexemeAt(source);
+			return false;
 		
-		dch = parsedRange.decodeFront();
-		len = parsedRange.frontUnitLength();
+		dch = source.decodeFront();
+		len = source.frontUnitLength();
 		if( !isNameChar(dch) || isNumberChar(dch) )
-			return createLexemeAt(source);
+			return false;
 		
-		parsedRange.popFrontN(len);
+		source.popFrontN(len);
 		
-		while( !parsedRange.empty )
+		while( !source.empty )
 		{
-			len = parsedRange.frontUnitLength();
-			dch = parsedRange.decodeFront();
+			len = source.frontUnitLength();
+			dch = source.decodeFront();
 			
 			if( !isNameChar(dch) )
 				break;
 			
-			parsedRange.popFrontN(len);
+			source.popFrontN(len);
 		}
 		
-		return extractLexeme(source, parsedRange, rule.lexemeInfo);
+		return true;
 	}
 	
 }

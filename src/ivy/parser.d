@@ -51,10 +51,10 @@ public:
 	
 	@property CustLocation currentLocation() //const
 	{
-		pragma( msg, "lexer.front type:" );
-		pragma( msg, typeof(lexer.front) )
+		CustLocation loc = lexer.front.loc;
+		loc.fileName = fileName;
 		
-		return getCustomizedLocation( lexer.front, fileName );
+		return loc;
 	}
 	
 	void error( string msg, string func = __FUNCTION__, int line = __LINE__ )
@@ -78,8 +78,8 @@ public:
 				import std.array: array;
 				import std.conv: to;
 	
-				string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
-				writeln( shortFuncName, "[", line, "]: ", data, ", frontValue is: ", parser.lexer.frontValue.array.to!string );
+				//string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+				//writeln( shortFuncName, "[", line, "]: ", data, ", frontValue is: "/*, parser.lexer.frontValue.array.to!string*/ );
 			}
 		}
 	}
@@ -105,6 +105,9 @@ public:
 		
 			error( "Expected Name" );
 		}
+		auto frontLex = lexer.front;
+		auto frValue = lexer.frontValue;
+
 		nameParts ~= lexer.frontValue.array.to!string;
 		lexer.popFront();
 		

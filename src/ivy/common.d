@@ -100,17 +100,17 @@ struct PlainLocation
 
 struct ExtendedLocation
 {
-	string fileName;
-	size_t index;
-	size_t length;
-	size_t graphemeIndex;
-	size_t graphemeLength;
-	size_t lineIndex;
-	size_t lineCount;
-	size_t columnIndex;
-	size_t graphemeColumnIndex;
-	size_t indentCount;
-	IndentStyle indentStyle;
+	string fileName; // File name for this source
+	size_t index; // Index of UTF code unit that starts element
+	size_t length; // Length of element in code units
+	size_t graphemeIndex; // Index of grapheme that starts element
+	size_t graphemeLength; // Length of element in graphemes
+	size_t lineIndex; // Index of line at which element starts
+	size_t lineCount; // Number of lines in element (number of CR LF/ CR / LF exactly)
+	size_t columnIndex; // Index of code unit in line that starts element
+	size_t graphemeColumnIndex; // Index of grapheme in line that starts element
+	size_t indentCount; // Line indent count for element
+	IndentStyle indentStyle; // Determines if element indented with tabs or spaces
 }
 
 struct CustomizedLocation(LocationConfig c)
@@ -221,50 +221,6 @@ struct CustomizedLocation(LocationConfig c)
 		return loc;
 	}
 	
-}
-
-import std.traits: isInstanceOf;
-import ivy.lexer: Lexeme;
-
-auto getCustomizedLocation(LexemeT)( LexemeT lex, string fileName )
-	//if( isInstanceOf!(Lexeme, LexemeT) )
-{
-	alias config = LexemeT.config;
-	alias LocationT = CustomizedLocation!config;
-	
-	LocationT loc;
-	
-	loc.fileName = fileName;
-	loc.index = lex.index;
-	loc.indentCount = lex.indentCount;
-	loc.indentStyle = lex.indentStyle;
-	
-	static if( config.withSize )
-		loc.length = lex.length;
-	
-	static if( config.withGraphemeIndex )
-	{
-		loc.graphemeIndex = lex.graphemeIndex;
-		
-		static if( config.withSize )
-			loc.graphemeLength = lex.graphemeLength;
-	}
-	
-	static if( config.withLineIndex )
-	{
-		loc.lineIndex = lex.lineIndex;
-		
-		static if( config.withSize )
-			loc.lineCount = lex.lineCount;
-		
-		static if( config.withColumnIndex )
-			loc.columnIndex = lex.columnIndex;
-		
-		static if( config.withGraphemeColumnIndex )
-			loc.graphemeColumnIndex = lex.graphemeColumnIndex;
-	}
-
-	return loc;
 }
 
 import ivy.node : IDeclNode;
