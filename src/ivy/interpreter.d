@@ -15,13 +15,66 @@ interface IDirectiveInterpreter
 	void interpret(IDirectiveStatement statement, Interpreter interp);
 }
 
-class BlockScope
+static IDirectiveInterpreter[string] dirInterpreters;
+
+interface IInterpretersController: IDirectiveInterpreter
 {
-private:
-	
+	string[] directiveNames() @property;
+	string[] directiveNamespaces() @property;
+
 }
 
-static IDirectiveInterpreter[string] dirInterpreters;
+
+class RootHTMLInterpreter: IInterpretersController
+{
+private:
+	IInterpretersController[] _ctrls;
+	IInterpretersController[string] _nameCtrlsIndex;
+	IInterpretersController[string] _namespaceCtrlsIndex;
+
+public:
+	void addController(IInterpretersController ctrl)
+	{
+		_ctrls ~= ctrl;
+		foreach( name; ctrl.directiveNames )
+		{
+			assert( name !in _nameCtrlsIndex, `Directive with name "` ~ name ~ `" already registered in controller!` );
+			_nameCtrlsIndex[name] = ctrl;
+		}
+
+		foreach( ns; ctrl.directiveNamespaces )
+		{
+			_namespaceCtrlsIndex[ns] = ctrl;
+		}
+	}
+
+	override {
+		void interpret(IDirectiveStatement statement, Interpreter interp)
+		{
+			auto nameInterp = _nameCtrlsIndex.get(statement.name, null);
+			if( nameInterp )
+			{
+				nameInterp.interpret(statement, interp);
+			}
+			else
+			{
+				interpretError( `Cannot find interperter for directive: ` ~ statement.name  );
+			}
+
+			// TODO: Implement search by namespace
+		}
+
+		string[] directiveNames() @property
+		{
+			return _nameCtrlsIndex.keys;
+		}
+
+		string[] directiveNamespaces() @property
+		{
+			return _namespaceCtrlsIndex.keys;
+		}
+	}
+}
 
 class ASTNodeTypeException: Exception
 {
@@ -98,14 +151,6 @@ void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
 	throw new InterpretException(msg, file, line);
 }
 
-auto unindent(Range)(Range source, size_t firstIndent, size_t firstIndentStyle)
-{
-	while( !source.empty )
-	{
-		
-	}
-}
-
 class InterpreterScope
 {
 private:
@@ -151,13 +196,12 @@ public:
 	
 	InterpreterScope[] scopeStack;
 	TDataNode opnd; //Current operand value
-	
-	AbstractNodeVisitor typeChecker;
-	
-	this(AbstractNodeVisitor typeCheckerVisitor)
+	IDirectiveInterpreter _dirController;
+
+	this(IDirectiveInterpreter dirController)
 	{
-		typeChecker = typeCheckerVisitor;
 		scopeStack ~= new InterpreterScope;
+		_dirController = dirController;
 	}
 	
 	void enterScope()
@@ -237,32 +281,6 @@ public:
 		
 		return scopeStack.back.removeValue( varName );
 	}
-	
-	/+
-	DataNodeType getCommonTypeFor( ref const(TDataNode) left, ref const(TDataNode) right )
-	{
-		import std.algorithm: canFind;
-		
-		if( left.type == right.type )
-			return left.type;
-		
-		DataNodetype[2] types = [ left.type, right.type ];
-		
-		with(DataNodeType)
-		{
-			if( types.canFind(Floating, Integer) )
-			{
-				return Floating;
-			}
-			else if( types.canFind(Null, Boolean) )
-			{
-				return Boolean;
-			}
-		}
-
-		assert(0);
-	}
-	+/
 	
 	void makeDataPromotions( ref TDataNode left, ref TDataNode right )
 	{
@@ -794,14 +812,8 @@ public:
 		{
 			writeln( typeof(node).stringof ~ " visited" );
 			writeln( "Directive statement name: ", node.name );
-			if ( node.name in dirInterpreters )
-			{
-				dirInterpreters[node.name].interpret(node, this);
-			}
-			else
-			{
-				writeln( "Interpreter for directive: ", node.name, " is not found!!!" );
-			}
+
+			_dirController.interpret( node, this );
 		}
 		
 		void visit(IDataFragmentStatement node)

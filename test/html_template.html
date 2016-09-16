@@ -1,4 +1,34 @@
 text {*
+	{# def custom.for [#
+				def.pos item;
+				def.pos_kwd in;
+				def.kwd if;
+		#]
+		{#
+			def.hash  + 3
+		#}
+	#}
+
+	[# set items: ["январь","февраль","март"];
+		text items.[0];
+		text items.at(1);
+		text items.at(2);
+	]
+
+	{# for in ,[] if ,() {#
+
+		}
+
+	#}
+
+	x, a + b + c
+
+	{. for..in..[1,2,3] }
+
+	{. set x: {#max a b}.{# } }
+
+	{. call def.hash.( a @kkk }.{# fold }  #}
+
 	<!doctype html>
 	<html>
 		<head>
@@ -25,7 +55,8 @@ text {*
 				#}
 				<ul>
 					{# text
-						{# for item in: ["Vasya", "Petya", "Vovan"] {*
+						{# set arr: ["Vasya", "Petya", "Vovan"] #}
+						{# for item if (a ~ b) ,["Vasya", "Petya", "Vovan"] {*
 								Человек {# text item #}!!!
 							*}
 						#};

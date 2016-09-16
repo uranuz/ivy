@@ -2,15 +2,53 @@ module ivy.directive_interpreters;
 
 import ivy.interpreter, ivy.node, ivy.interpreter_data;
 
-shared static this()
+/// Creates default root controller, that could be extended by adding child controllers
+RootHTMLInterpreter makeRootInterpreter()
 {
-	dirInterpreters["for"] = new ForInterpreter();
-	dirInterpreters["if"] = new IfInterpreter();
-	dirInterpreters["expr"] = new ExprInterpreter();
-	dirInterpreters["pass"] = new PassInterpreter();
-	dirInterpreters["var"] = new VarInterpreter();
-	dirInterpreters["set"] = new SetInterpreter();
-	dirInterpreters["text"] = new TextBlockInterpreter();
+	auto interp = new RootHTMLInterpreter();
+	interp.addController( new StandardDirectivesController() );
+	return interp;
+}
+
+/// Controller that provides acces to standard directives of template language
+class StandardDirectivesController: IInterpretersController
+{
+private:
+	IDirectiveInterpreter[string] _dirInterpreters;
+
+public:
+	this()
+	{
+		_dirInterpreters["for"] = new ForInterpreter();
+		_dirInterpreters["if"] = new IfInterpreter();
+		_dirInterpreters["expr"] = new ExprInterpreter();
+		_dirInterpreters["pass"] = new PassInterpreter();
+		_dirInterpreters["var"] = new VarInterpreter();
+		_dirInterpreters["set"] = new SetInterpreter();
+		_dirInterpreters["text"] = new TextBlockInterpreter();
+	}
+
+	override {
+		string[] directiveNames() @property
+		{
+			return _dirInterpreters.keys;
+		}
+
+		string[] directiveNamespaces() @property
+		{
+			return null;
+		}
+
+		void interpret(IDirectiveStatement statement, Interpreter interp)
+		{
+			auto dirInterp = _dirInterpreters.get( statement.name, null );
+			if( dirInterp )
+			{
+				dirInterp.interpret( statement, interp );
+			}
+		}
+	}
+
 }
 
 class ForInterpreter : IDirectiveInterpreter
@@ -53,7 +91,7 @@ public:
 		TDataNode[] results;
 		
 		if( interp.canFindValue(varName) )
-				interpretError( "For loop variable name '" ~ varName ~ "' already exists" );
+			interpretError( "For loop variable name '" ~ varName ~ "' already exists" );
 		
 		foreach( aggrItem; aggr.array )
 		{
@@ -286,3 +324,37 @@ public:
 	}
 
 }
+
+
+/// Defines directive using ivy language
+class DefInterpreter: IDirectiveInterpreter
+{
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
+	{
+		if( !statement || statement.name != "def"  )
+			interpretError( "Expected 'def' directive" );
+
+
+
+	}
+
+}
+
+
+/*
+/// Attaches defined symbols from another ivy template file
+class ImportInterpreter: IDirectiveInterpreter
+{
+
+
+}
+*/
+
+/*
+/// Used to inject another template file directly in current AST
+class MixinInterpreter: IDirectiveInterpreter
+{
+
+
+}
+*/

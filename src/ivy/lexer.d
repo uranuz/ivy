@@ -455,7 +455,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	public:
 
 	
-	static LexRule[] mixedContextRules = [
+	__gshared LexRule[] mixedContextRules = [
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right ),
@@ -463,7 +463,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		dynamicRule( &parseData, LexemeType.Data, LexemeFlag.Literal )
 	];
 	
-	static LexRule[] codeContextRules = [
+	__gshared LexRule[] codeContextRules = [
 		dynamicRule( &parseRawData, LexemeType.RawDataBlock, LexemeFlag.Literal ),
 	
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left ),
@@ -506,20 +506,10 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		dynamicRule( &parseString, LexemeType.String, LexemeFlag.Literal )
 	];
 
-	static LexRule[] allRules;
-	static LexRule[LexTypeIndex] allRulesByType;
+	__gshared LexTypeIndex[LexTypeIndex] matchingParens;
 	
-	static LexTypeIndex[LexTypeIndex] matchingParens;
-	
-	static this()
+	shared static this()
 	{
-		allRules = mixedContextRules ~ codeContextRules;
-		
-		foreach( rule; allRules )
-		{
-			allRulesByType[rule.lexemeInfo.typeIndex] = rule;
-		}
-
 		matchingParens = [
 			LexemeType.CodeBlockEnd: LexemeType.CodeBlockBegin,
 			LexemeType.MixedBlockEnd: LexemeType.MixedBlockBegin,
@@ -527,7 +517,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			LexemeType.RBrace: LexemeType.LBrace,
 			LexemeType.RBracket: LexemeType.LBracket,
 			LexemeType.RParen: LexemeType.LParen
-		];		
+		];
 	}
 	
 	struct LexerContext
@@ -769,6 +759,9 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			{
 				int backParen = _ctx.parenStack.back;
 				
+				import std.stdio;
+				writeln(matchingParens);
+
 				if( backParen == matchingParens[_front.info.typeIndex] )
 				{
 					_ctx.parenStack.popBack();
