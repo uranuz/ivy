@@ -34,6 +34,7 @@ public:
 	LexerType lexer;
 	string fileName;
 	size_t spacesPerTab = 4;
+	bool isDirectiveContext = true;
 	
 	this(String source, string fileName)
 	{
@@ -204,7 +205,8 @@ public:
 			{
 				loger.write( "Attempt to parse unnamed attribute" );
 				//Named attribute was not found will try to parse unnamed one
-				attr = parseBlockOrExpression();
+				//True means that we not catch some post expressions in this context
+				attr = parseBlockOrExpression( true );
 				
 				if( attr )
 				{
@@ -224,7 +226,7 @@ public:
 
 	}
 	
-	IDeclNode parseBlockOrExpression()
+	IDeclNode parseBlockOrExpression( bool isDirectiveContext = false )
 	{
 		loger.write( "Start parsing block or expression" );
 		import std.array: array;
@@ -258,7 +260,7 @@ public:
 			}
 			default:
 			{
-				result = parseExpression();
+				result = parseExpression( isDirectiveContext );
 				break;
 			}
 		}
@@ -361,7 +363,7 @@ public:
 		return statement;
 	}
 
-	IExpression parseExpression()
+	IExpression parseExpression( bool isDirectiveContext = false )
 	{
 		import std.array: array;
 		import std.conv: to;
@@ -573,7 +575,7 @@ public:
 		//Parse post expr here such as call syntax and array index syntax
 		if( expr )
 		{
-			expr = parsePostExp(expr);
+			expr = parsePostExp( expr, this.isDirectiveContext );
 		}
 		else
 		{
@@ -583,7 +585,7 @@ public:
 		return expr;
 	}
 
-	IExpression parsePostExp( IExpression preExpr )
+	IExpression parsePostExp( IExpression preExpr, bool isDirectiveContext )
 	{
 		import std.conv: to;
 
@@ -602,6 +604,12 @@ public:
 			}
 			case LParen:
 			{
+				if( isDirectiveContext )
+				{
+					expr = preExpr;
+					break; // Do not catch post expr in directive context
+				}
+				
 				// Parse call expression
 				lexer.popFront();
 
@@ -624,7 +632,7 @@ public:
 						break;
 
 					if( !lexer.front.test( LexemeType.Comma ) )
-						error( "Expected Comma" );
+						error( "Expected Comma as call arguments delimeter" );
 
 					lexer.popFront();
 				}
@@ -638,10 +646,12 @@ public:
 			}
 			case LBracket:
 			{
-				auto backup = lexer.save;
-
+				if( isDirectiveContext )
+				{
+					expr = preExpr;
+					break; // Do not catch post expr in directive context
+				}
 				lexer.popFront();
-
 				IExpression indexExpr = parseExpression();
 
 				if( !indexExpr )
@@ -649,18 +659,8 @@ public:
 
 				if( !lexer.front.test( LexemeType.RBracket ) )
 				{
-					if( lexer.front.test( LexemeType.Comma ) )
-					{
-						lexer = backup.save;
-						loger.write( "Couldn't parse array index expression. It could be array, so lexer is restored'" );
-						return preExpr;
-					}
-					else
-					{
-						error( "Expected right bracket, closing array index expression!!! " );
-					}
+					error( "Expected right bracket, closing array index expression!!! " );
 				}
-
 				lexer.popFront(); // Skip RBracket
 
 				expr = new ArrayIndexExp!(config)(loc, preExpr, indexExpr);
