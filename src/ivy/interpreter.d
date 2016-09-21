@@ -15,65 +15,99 @@ interface IDirectiveInterpreter
 	void interpret(IDirectiveStatement statement, Interpreter interp);
 }
 
-static IDirectiveInterpreter[string] dirInterpreters;
-
 interface IInterpretersController: IDirectiveInterpreter
 {
 	string[] directiveNames() @property;
-	string[] directiveNamespaces() @property;
+	//string[] directiveNamespaces() @property;
+	void _reindex();
+}
+
+interface ICompositeInterpretersController: IInterpretersController
+{
+	void addInterpreter( string dirName, IDirectiveInterpreter interp );
+	void addController( IInterpretersController controller  );
 
 }
 
-
-class RootHTMLInterpreter: IInterpretersController
+mixin template BaseInterpretersControllerImpl()
 {
 private:
-	IInterpretersController[] _ctrls;
-	IInterpretersController[string] _nameCtrlsIndex;
-	IInterpretersController[string] _namespaceCtrlsIndex;
+	IDirectiveInterpreter[string] _ownInterps; // AA of own interpreters for this controller
+	IInterpretersController[] _controllers; // List of child controllers
+	IDirectiveInterpreter[string] _childInterpsIndex; // Index of interpreters contained in child controllers
 
 public:
-	void addController(IInterpretersController ctrl)
-	{
-		_ctrls ~= ctrl;
-		foreach( name; ctrl.directiveNames )
-		{
-			assert( name !in _nameCtrlsIndex, `Directive with name "` ~ name ~ `" already registered in controller!` );
-			_nameCtrlsIndex[name] = ctrl;
-		}
-
-		foreach( ns; ctrl.directiveNamespaces )
-		{
-			_namespaceCtrlsIndex[ns] = ctrl;
-		}
-	}
-
 	override {
 		void interpret(IDirectiveStatement statement, Interpreter interp)
 		{
-			auto nameInterp = _nameCtrlsIndex.get(statement.name, null);
-			if( nameInterp )
+			IDirectiveInterpreter dirInterp = _ownInterps.get(statement.name, null);
+			if( dirInterp )
 			{
-				nameInterp.interpret(statement, interp);
-			}
-			else
-			{
-				interpretError( `Cannot find interperter for directive: ` ~ statement.name  );
+				dirInterp.interpret(statement, interp);
+				return;
 			}
 
+			dirInterp = _childInterpsIndex.get(statement.name, null);
+			if( dirInterp )
+			{
+				dirInterp.interpret(statement, interp);
+				return;
+			}
+
+			interpretError( `Cannot find interperter for directive: ` ~ statement.name  );
 			// TODO: Implement search by namespace
 		}
 
 		string[] directiveNames() @property
 		{
-			return _nameCtrlsIndex.keys;
+			return _childInterpsIndex.keys ~ _ownInterps.keys;
 		}
 
+		/*
 		string[] directiveNamespaces() @property
 		{
 			return _namespaceCtrlsIndex.keys;
 		}
+		*/
+
+		void addInterpreter( string dirName, IDirectiveInterpreter interp )
+		{
+			if( !interp || !dirName.length )
+				return;
+
+			_ownInterps[dirName] = interp;
+		}
+
+		void addController( IInterpretersController controller )
+		{
+			_controllers ~= controller;
+			foreach( name; controller.directiveNames )
+			{
+				_childInterpsIndex[name] = controller;
+			}
+		}
+
+		void _reindex()
+		{
+			import std.stdio;
+			_childInterpsIndex.clear;
+			writeln("reindexing controllers count: ", _controllers.length);
+			foreach( controller; _controllers )
+			{
+				controller._reindex();
+				writeln("reindexing: ", controller.directiveNames);
+				foreach( name; controller.directiveNames )
+				{
+					_childInterpsIndex[name] = controller;
+				}
+			}
+		}
 	}
+}
+
+class RootHTMLInterpreter: ICompositeInterpretersController
+{
+	mixin BaseInterpretersControllerImpl;
 }
 
 class ASTNodeTypeException: Exception
@@ -196,12 +230,14 @@ public:
 	
 	InterpreterScope[] scopeStack;
 	TDataNode opnd; //Current operand value
-	IDirectiveInterpreter _dirController;
+	IInterpretersController _dirController; // Root directives controller
+	ICompositeInterpretersController _inlineDirController; // Inline directives controller
 
-	this(IDirectiveInterpreter dirController)
+	this(IInterpretersController dirController, ICompositeInterpretersController inlineDirController)
 	{
 		scopeStack ~= new InterpreterScope;
 		_dirController = dirController;
+		_inlineDirController = inlineDirController;
 	}
 	
 	void enterScope()
@@ -812,6 +848,8 @@ public:
 		{
 			writeln( typeof(node).stringof ~ " visited" );
 			writeln( "Directive statement name: ", node.name );
+			writeln( "Available directives: ", _dirController.directiveNames );
+			writeln( "Available inline directives: ", _inlineDirController.directiveNames );
 
 			_dirController.interpret( node, this );
 		}

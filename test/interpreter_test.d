@@ -2,7 +2,7 @@ module ivy.interpreter_test;
 
 import std.stdio, std.json, std.file;
 
-import ivy.interpreter, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer;
+import ivy.interpreter, ivy.directive_interpreters, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer;
 
 
 
@@ -31,8 +31,12 @@ void main()
 	writeASTasJSON(parser.lexer.sourceRange, ast, astJSON);
 	
 	stdout.writeln(toJSON(&astJSON, true));
-	
-	auto visitor = new Interpreter(null);
+
+	ICompositeInterpretersController rootController = makeRootInterpreter();
+	ICompositeInterpretersController inlineDirController = new InlineDirectivesController();
+	rootController.addController(inlineDirController);
+
+	auto visitor = new Interpreter(rootController, inlineDirController);
  	alias TDataNode = DataNode!string;
  	visitor.setValue("content", TDataNode("<div>Основное содержимое формы</div>"));
  	visitor.setValue("content2", TDataNode("Еще какое-то содержимое страницы"));

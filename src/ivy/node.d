@@ -234,7 +234,7 @@ interface IAttributesRange
 interface IDirectiveStatement: IStatement
 {
 	@property {
-		string name(); //Returns name of the first subdirective
+		string name(); //Returns name of directive
 	}
 	
 	//@property size_t length();

@@ -106,8 +106,6 @@ public:
 		
 			error( "Expected Name" );
 		}
-		auto frontLex = lexer.front;
-		auto frValue = lexer.frontValue;
 
 		nameParts ~= lexer.frontValue.array.to!string;
 		lexer.popFront();
@@ -429,6 +427,7 @@ public:
 							error( "Expected identifier expression" );
 						
 						identName ~= "." ~ lexer.frontValue.save.array.idup;
+						lexer.popFront();
 					}
 
 					expr = new IdentifierExp!(config)( loc, new Identifier(identName) );

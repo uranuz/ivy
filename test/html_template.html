@@ -1,4 +1,8 @@
 text {*
+	{# def test.durak
+		{# def.kwAttr name #}
+		{# text "Дурак ты, " ~ name ~ "!" #}
+	#}
 	<!doctype html>
 	<html>
 		<head>
@@ -25,12 +29,14 @@ text {*
 				#}
 				<ul>
 					{# text
-						{# set arr: ["Vasya", "Petya", "Vovan"] #}
-						{# for item in ["AAA", "BBB", "CCC"] {*
+						{# var arr: ["Vasya", "Petya", "Vovan"] #};
+						text
+						{# for item in: ["AAA", "BBB", "CCC"] {*
 								Человек {# text item #}!!!
 							*}
-						#};
+						#}
 					#}
+					{# text {# test.durak name: "Вася" #} #}
 				
 				</ul>
 				
