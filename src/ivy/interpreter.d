@@ -147,7 +147,7 @@ T expectNode(T)( IDeclNode node, string msg = null, string file = __FILE__, stri
 	return typedNode;
 }
 
-T takeFrontAs(T)( IAttributesRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+T takeFrontAs(T)( IAttributeRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
 {
 	import std.algorithm: splitter;
 	import std.range: retro, take, join;
@@ -170,7 +170,7 @@ T takeFrontAs(T)( IAttributesRange range, string errorMsg = null, string file = 
 	return typedAttr;
 }
 
-T testFrontIs(T)( IAttributesRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+T testFrontIs(T)( IAttributeRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
 {
 	if( range.empty )
 		return false;

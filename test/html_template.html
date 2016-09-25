@@ -1,6 +1,18 @@
 text {*
-	{# def test.durak
-		{# def.kwAttr name #}
+	{# def test
+		{# def.kwAttr
+			name: str
+			items: array
+			config: object
+			variadic: any #}
+		{# def.expr
+			name: str
+			items: any #}
+		{# def.kwd in #}
+		{# def.ident  #}
+		{# def.block #}
+		{# def.block_ast #}
+		{# def.expr_ast #}
 		{# text "Дурак ты, " ~ name ~ "!" #}
 	#}
 	<!doctype html>

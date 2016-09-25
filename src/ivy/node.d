@@ -206,16 +206,30 @@ interface IStatementRange
 	@property IStatement back();
 	void popBack();
 	
-	bool empty();
+	@property bool empty();
 	//@property size_t length();
 	
 	@property IStatementRange save();
 	
 	IStatement opIndex(size_t index);
-
 }
 
-interface IAttributesRange
+interface IDirectiveStatementRange: IStatementRange
+{
+	// Covariant overrides
+	override @property IDirectiveStatement front();
+	override @property IDirectiveStatement back();
+	override @property IDirectiveStatementRange save();
+	override IDirectiveStatement opIndex(size_t index);
+}
+
+interface ICodeBlockStatement: ICompoundStatement
+{
+	override IDirectiveStatementRange opSlice();
+	override IDirectiveStatementRange opSlice(size_t begin, size_t end);
+}
+
+interface IAttributeRange
 {
 	@property IDeclNode front();
 	void popFront();
@@ -226,7 +240,7 @@ interface IAttributesRange
 	@property bool empty();
 	//@property size_t length();
 	
-	@property IAttributesRange save();
+	@property IAttributeRange save();
 	
 	IDeclNode opIndex(size_t index);
 }
@@ -236,15 +250,7 @@ interface IDirectiveStatement: IStatement
 	@property {
 		string name(); //Returns name of directive
 	}
-	
-	//@property size_t length();
-	
-	//@property IDirectiveSection first();
-	//@property IDirectiveSection last();
 
-	IAttributesRange opSlice();
-	IAttributesRange opSlice(size_t begin, size_t end);
-	
-	//IDirectiveSectionStatement opIndex(size_t index);
-	//IDirectiveSectionStatementRange filterByName(string name);
+	IAttributeRange opSlice();
+	IAttributeRange opSlice(size_t begin, size_t end);
 }

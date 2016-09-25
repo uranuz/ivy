@@ -335,7 +335,7 @@ class InlineDirectivesController: ICompositeInterpretersController
 }
 
 alias TDataNode = DataNode!(string);
-TDataNode[string] interpretNamedAttributes( IAttributesRange attrsRange, Interpreter interp )
+TDataNode[string] interpretNamedAttributes( IAttributeRange attrsRange, Interpreter interp )
 {
 	import std.range: empty;
 	TDataNode[string] attrValues;
@@ -384,8 +384,8 @@ public:
 		if( !statement )
 			interpretError( "Directive statement invokation expected!" );
 
-		IAttributesRange stmtRange = statement[];
-		IAttributesRange defStmtRange = _defAST[];
+		IAttributeRange stmtRange = statement[];
+		IAttributeRange defStmtRange = _defAST[];
 
 		INameExpression defDirNameExpr = defStmtRange.takeFrontAs!INameExpression(
 			"Name expression expected in inline directive definition");
@@ -443,6 +443,74 @@ public:
 
 }
 
+/// Basic interface for classes that store info about inline directive attribute definition
+/// and can be used to interpret node of attribute in directive invocation syntax
+interface IAttributesInterpreter
+{
+	void processAttributes( IAttributeRange attrRange, Interpreter interp );
+}
+
+class NamedAttributesHandler: IAttributesInterpreter
+{
+private:
+
+public:
+	override void processAttributes( IAtributeRange attrRange, Interpreter interp )
+	{
+
+	}
+
+}
+
+class InlineDirectiveInterpreter: IDirectiveInterpreter
+{
+private:
+	string _directiveName;
+	IAttributesInterpreter[] _attrInterpreters;
+
+
+public:
+	this( string dirName, IAttributesInterpreter[] interpreters )
+	{
+		_directiveName = dirName;
+		_attrInterpreters = interpreters;
+	}
+
+	string directiveName() @property
+	{
+		return _directiveName;
+	}
+
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
+	{
+		import std.range: empty;
+
+		if( !statement || statement.name != _directiveName )
+		{
+			interpretError( `Expected directive "` ~ _directiveName ~ `"` );
+		}
+
+		IAttributeRange attrRange = statement[];
+		while( !_attrInterpreters.empty )
+		{
+			if( attrRange.empty )
+			{
+				interpretError( `Unexpected end of directive attibutes list for directive "` ~ _directiveName ~ `"` );
+			}
+
+			_attrInterpreters.front.processAttributes( attrRange, interp );
+			_attrInterpreters.popFront();
+		}
+
+		if( !attrRange.empty )
+		{
+			interpretError( `Not all attributes of directive "` ~ _directiveName ~ `" were processed. Something is wrong!` );
+		}
+
+
+	}
+
+}
 
 /// Defines directive using ivy language
 class DefInterpreter: IDirectiveInterpreter
@@ -455,11 +523,73 @@ class DefInterpreter: IDirectiveInterpreter
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
 
+		while( !stmtRange.empty )
+		{
+			ICodeBlockStatement attrDefBlockStmt = cast(ICodeBlockStatement) stmtRange.front;
+			if( !attrDefBlockStmt )
+			{
+				break; // Expected to see some attribute declaration
+			}
+
+			IDirectiveStatementRange attrDefStmtRange = attrDefBlockStmt[];
+
+			while( !attrDefStmtRange.empty )
+			{
+				IDirectiveStatement attrDefStmt = attrDefStmtRange.front;
+				IAttributeRange attrDefStmtAttrRange = attrDefStmt[];
+
+				switch( attrDefStmt.name )
+				{
+					case "def.kwAttr": {
+
+						break;
+					}
+					case "def.expr": {
+
+						break;
+					}
+					case "def.name" {
+
+						break;
+					}
+					case "def.kwd" {
+
+						break;
+					}
+					default: {
+						interpretError( `Unexpected directive attribute definition statement "` ~ attrDefStmt.name ~ `"` );
+						break;
+					}
+				}
+
+			}
+
+		}
+
 		import std.stdio;
 		writeln( "NEW DIR NAME: ", defNameExpr.name );
 		interp._inlineDirController.addInterpreter( defNameExpr.name, new InlineDirectiveInterpreter(statement) );
 		interp._dirController._reindex();
 	}
+
+	// Method parses attributes of "def.kwAttr" directive
+	void interpretNamedAttrsBlock(IAttributeRange attrRange)
+	{
+		IAttributesHandler attrsHandler = new NamedAttributesHandler();
+
+
+		while( !attrRange.empty )
+		{
+			IKeyValueAttribute namedAttrDefExpr = cast(IKeyValueAttribute) attrRange.front;
+			if( namedAttrDefExpr ) {
+				namedAttrDefExpr.name =
+			}
+
+		}
+	}
+
+	void interpretTypeExpr()
+
 
 }
 

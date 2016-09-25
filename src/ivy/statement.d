@@ -80,19 +80,19 @@ public:
 	}
 	
 	public override {
-		IAttributesRange opSlice()
+		IAttributeRange opSlice()
 		{
 			return new Range(this);
 		}
 		
-		IAttributesRange opSlice(size_t begin, size_t end)
+		IAttributeRange opSlice(size_t begin, size_t end)
 		{
 			return new Range(this, begin, end);
 		}
 	
 	}
 	
-	static class Range: IAttributesRange
+	static class Range: IAttributeRange
 	{
 	private:
 		DirectiveStatement!c _statement;
@@ -144,7 +144,7 @@ public:
 			}
 			//@property size_t length();
 			
-			@property IAttributesRange save()
+			@property IAttributeRange save()
 			{
 				return new Range(_statement, _begin, _end);
 			}
@@ -313,7 +313,7 @@ public:
 
 }
 
-class CodeBlockStatement(LocationConfig c): ICompoundStatement
+class CodeBlockStatement(LocationConfig c): ICodeBlockStatement
 {
 	mixin BaseBlockStatementImpl!c;
 	
