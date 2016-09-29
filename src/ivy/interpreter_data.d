@@ -137,7 +137,7 @@ struct DataNode(S)
 	
 	IClassObject obj() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not dict");
+		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not class object");
 		return storage.obj;
 	}
 	

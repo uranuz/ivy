@@ -28,6 +28,7 @@ public:
 		_dirInterpreters["set"] = new SetInterpreter();
 		_dirInterpreters["text"] = new TextBlockInterpreter();
 		_dirInterpreters["def"] = new DefInterpreter();
+		_dirInterpreters["def.getAttr"] = new DefGetAttrInterpreter();
 	}
 
 	override {
@@ -363,110 +364,12 @@ TDataNode[string] interpretNamedAttributes( IAttributeRange attrsRange, Interpre
 	return attrValues;
 }
 
-
-
-/// Interpreter for inline directive
-class InlineDirectiveInterpreter: IDirectiveInterpreter
-{
-private:
-	IDirectiveStatement _defAST;
-
-public:
-	this( IDirectiveStatement defAST )
-	{
-		_defAST = defAST;
-	}
-
-	override void interpret( IDirectiveStatement statement, Interpreter interp )
-	{
-		import std.range: empty;
-
-		if( !statement )
-			interpretError( "Directive statement invokation expected!" );
-
-		IAttributeRange stmtRange = statement[];
-		IAttributeRange defStmtRange = _defAST[];
-
-		INameExpression defDirNameExpr = defStmtRange.takeFrontAs!INameExpression(
-			"Name expression expected in inline directive definition");
-
-		if( statement.name != defDirNameExpr.name )
-			interpretError( `Expected "` ~ defDirNameExpr.name ~ `" directive, but found "` ~ statement.name ~ `"!`);
-
-		TDataNode[string] attrValues = interpretNamedAttributes(stmtRange, interp);
-
-		while( !defStmtRange.empty )
-		{
-			IDirectiveStatement defDirStmt = cast(IDirectiveStatement) defStmtRange.front;
-			if( !defDirStmt )
-			{
-				break;
-			}
-
-			if( defDirStmt.name == "def.kwAttr" )
-			{
-				INameExpression defKwAttrNameExpr = cast(INameExpression) defDirStmt[].front;
-				if( !defKwAttrNameExpr )
-					interpretError( "Expected named attribute name definition" );
-
-				if( !defKwAttrNameExpr.name.empty )
-					interpretError( "Named attribute name for definition cannot be empty" );
-
-				if( defKwAttrNameExpr.name !in attrValues )
-					interpretError( `Expected named attribute "` ~ defKwAttrNameExpr.name ~ `"!` );
-
-			}
-			else
-			{
-				break;
-			}
-
-			defStmtRange.popFront();
-		}
-
-		interp.setValue( "attrs", TDataNode(attrValues) );
-
-		import std.stdio;
-		writeln( defStmtRange.front.kind );
-		ICompoundStatement defDirBody = cast(ICompoundStatement) defStmtRange.front;
-		if( !defDirBody )
-			interpretError( "Expected directive body in definition!" );
-
-		defDirBody.accept( interp );
-
-		defStmtRange.popFront();
-		if( !defStmtRange.empty )
-			interpretError( "Expected end of directive, maybe ; is missing somewhere" );
-
-
-	}
-
-}
-
-/// Basic interface for classes that store info about inline directive attribute definition
-/// and can be used to interpret node of attribute in directive invocation syntax
-interface IAttributesInterpreter
-{
-	void processAttributes( IAttributeRange attrRange, Interpreter interp );
-}
-
-class NamedAttributesHandler: IAttributesInterpreter
-{
-private:
-
-public:
-	override void processAttributes( IAtributeRange attrRange, Interpreter interp )
-	{
-
-	}
-
-}
-
 class InlineDirectiveInterpreter: IDirectiveInterpreter
 {
 private:
 	string _directiveName;
 	IAttributesInterpreter[] _attrInterpreters;
+	bool _withNewScope;
 
 
 public:
@@ -483,12 +386,15 @@ public:
 
 	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
-		import std.range: empty;
+		import std.range: empty, back, popBack;
 
 		if( !statement || statement.name != _directiveName )
 		{
 			interpretError( `Expected directive "` ~ _directiveName ~ `"` );
 		}
+
+		interp.enterScope();
+		scope(exit) interp.exitScope();
 
 		IAttributeRange attrRange = statement[];
 		while( !_attrInterpreters.empty )
@@ -504,10 +410,65 @@ public:
 
 		if( !attrRange.empty )
 		{
-			interpretError( `Not all attributes of directive "` ~ _directiveName ~ `" were processed. Something is wrong!` );
+			// Executing body of directive (if there is)
+			ICompoundStatement dirBodyStmt = attrRange.takeFrontAs!ICompoundStatement("Directive statement body expected!");
+			dirBodyStmt.accept(interp);
 		}
 
+		if( !attrRange.empty )
+		{
+			interpretError( `Not all attributes of directive "` ~ _directiveName ~ `" were processed. Something is wrong!` );
+		}
+	}
 
+}
+
+/// Basic interface for classes that store info about inline directive attribute definition
+/// and can be used to interpret node of attribute in directive invocation syntax
+interface IAttributesInterpreter
+{
+	void processAttributes( IAttributeRange attrRange, Interpreter interp );
+}
+
+class NamedAttributesInterpreter: IAttributesInterpreter
+{
+private:
+	import std.typecons: Tuple;
+
+	string[string] _attrDefs; // Mapping attribute name -> type string
+
+public:
+	override void processAttributes( IAttributeRange attrRange, Interpreter interp )
+	{
+		interp.getValue(`attr`)
+		while( !attrRange.empty )
+		{
+			IKeyValueAttribute kwAttrExpr = cast(IKeyValueAttribute) attrRange.front;
+			if( !kwAttrExpr )
+				break; // Parse only named attributes or break
+
+			if( kwAttrExpr.name !in _attrDefs )
+				interpretError( `Unexpected named attribute "` ~ kwAttrExpr.name ~ `"` );
+
+			if( !kwAttrExpr.value )
+				interpretError( `Expression for named attribute "` ~ kwAttrExpr.name ~ `" must not be null!` );
+
+			kwAttrExpr.value.accept(interp);
+
+			TDataNode attrsNode;
+			if( interp.canFindValue( attrNameExpr.name ) )
+			{
+				attrsNode = interp.getValue( attrNameExpr.name );
+			}
+
+			if( attrsNode != DataNodeType.AssocArray )
+				interpretError( `Expected assoc array as attributes dictionary` );
+
+			TDataNode[string] attrDict = attrsNode;
+			attrDict[kwAttrExpr.name] = interp.opnd;
+
+			attrRange.popFront();
+		}
 	}
 
 }
@@ -522,6 +483,8 @@ class DefInterpreter: IDirectiveInterpreter
 
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
+		bool withNewScope = false;
+		IAttributesInterpreter[] attrInterps;
 
 		while( !stmtRange.empty )
 		{
@@ -541,7 +504,11 @@ class DefInterpreter: IDirectiveInterpreter
 				switch( attrDefStmt.name )
 				{
 					case "def.kwAttr": {
-
+						IAttributesInterpreter namedAttrsInterp = interpretNamedAttrsBlock(attrDefStmtAttrRange);
+						if( namedAttrsInterp )
+						{
+							attrInterps ~= namedAttrsInterp;
+						}
 						break;
 					}
 					case "def.expr": {
@@ -556,6 +523,10 @@ class DefInterpreter: IDirectiveInterpreter
 
 						break;
 					}
+					case "def.newScope" {
+						withNewScope = true; // Option to create new scope to store data for this directive
+						break;
+					}
 					default: {
 						interpretError( `Unexpected directive attribute definition statement "` ~ attrDefStmt.name ~ `"` );
 						break;
@@ -566,70 +537,75 @@ class DefInterpreter: IDirectiveInterpreter
 
 		}
 
-		import std.stdio;
-		writeln( "NEW DIR NAME: ", defNameExpr.name );
-		interp._inlineDirController.addInterpreter( defNameExpr.name, new InlineDirectiveInterpreter(statement) );
+		IDirectiveInterpreter inlDirInterp = new InlineDirectiveInterpreter( defNameExpr.name, attrInterps, withNewScope );
+		interp._inlineDirController.addInterpreter( defNameExpr.name, inlDirInterp );
 		interp._dirController._reindex();
 	}
 
 	// Method parses attributes of "def.kwAttr" directive
-	void interpretNamedAttrsBlock(IAttributeRange attrRange)
+	IAttributesInterpreter interpretNamedAttrsBlock(IAttributeRange attrRange)
 	{
-		IAttributesHandler attrsHandler = new NamedAttributesHandler();
-
-
+		string[string] attrDefs;
 		while( !attrRange.empty )
 		{
 			IKeyValueAttribute namedAttrDefExpr = cast(IKeyValueAttribute) attrRange.front;
-			if( namedAttrDefExpr ) {
-				namedAttrDefExpr.name =
-			}
+			if( !namedAttrDefExpr )
+				break;
 
+			INameExpression attrTypeExpr = cast(INameExpression) namedAttrDefExpr.value;
+			if( !attrTypeExpr )
+				interpretError( `Expected attribute type expression!` );
+
+			attrDefs[ namedAttrDefExpr.name ] = attrTypeExpr.name;
+			attrRange.popFront();
 		}
+
+		if( attrDefs.length > 0 )
+		{
+			return new NamedAttributesInterpreter(attrDefs);
+		}
+		return null;
 	}
-
-	void interpretTypeExpr()
-
 
 }
 
-/+
-class DefNameInterpreter: IDirectiveInterpreter
+
+class DefGetAttrInterpreter: IDirectiveInterpreter
 {
 	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
-		if( !statement || statement.name != "def.name"  )
-			interpretError( "Expected 'def.name' directive" );
+		import std.range: empty, back;
+		if( !statement || statement.name != "def.getAttr"  )
+			interpretError( "Expected 'def.getAttr' directive" );
 
 		auto stmtRange = statement[];
 
-		if( stmtRange.empty )
-			throw new ASTNodeTypeException("Expected name expression, but got end of directive");
+		INameExpression attrNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name of directive attribute");
 
-		INameExpression nameExpr = stmtRange.takeFrontAs!INameExpression("Name expected");
+		TDataNode attrsNode;
+		if( interp.canFindValue( attrNameExpr.name ) )
+		{
+			attrsNode = interp.getValue( attrNameExpr.name );
+		}
 
+		if( interp._dirAttrsStack.back.type != DataNodeType.AssocArray )
+			interpretError( "Cannot get attrubute value, attributes node is not assoc array!" );
+
+		TDataNode[string] attrDict = attrsNode.assocArray;
+		if( attrNameExpr.name !in attrDict )
+		{
+			interp.opnd = TDataNode(null); // Issue an error or return null?
+		}
+		else
+		{
+			interp.opnd = attrDict[attrNameExpr.name];
+		}
+
+		if( !stmtRange.empty )
+			interpretError( "Something is going wrong, expected end of attributes list!" );
 	}
 }
 
-class DefKeywordInterpreter: IDirectiveInterpreter
-{
-	override void interpret(IDirectiveStatement statement, Interpreter interp)
-	{
-		if( !statement || statement.name != "def.kwd"  )
-			interpretError( "Expected 'def.kwd' directive" );
-
-		auto stmtRange = statement[];
-
-		if( stmtRange.empty )
-			throw new ASTNodeTypeException("Expected name expression, but got end of directive");
-
-		INameExpression kwdExpr = stmtRange.takeFrontAs!INameExpression("Keyword name expected");
-
-		if( kwdExpr.name )
-
-	}
-}
-+/
 
 
 /*

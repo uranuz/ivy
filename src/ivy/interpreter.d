@@ -238,17 +238,18 @@ public:
 		scopeStack ~= new InterpreterScope;
 		_dirController = dirController;
 		_inlineDirController = inlineDirController;
+		enterScope(); // Create global scope
 	}
 	
 	void enterScope()
 	{
-		//scopeStack ~= new InterpreterScope;
+		scopeStack ~= new InterpreterScope;
 	}
 	
 	void exitScope()
 	{
 		import std.range: popBack;
-		//scopeStack.popBack();
+		scopeStack.popBack();
 	}
 	
 	bool canFindValue( string varName )
@@ -864,9 +865,7 @@ public:
 		void visit(ICompoundStatement node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
-			
-			enterScope();
-			
+
 			TDataNode[] nodes;
 			
 			foreach( stmt; node )
@@ -880,11 +879,6 @@ public:
 			}
 			
 			opnd = nodes;
-			
-			//string result = opnd.toString();
-			//writeln(result);
-			
-			exitScope();
 		}
 		
 	}
