@@ -369,14 +369,17 @@ class InlineDirectiveInterpreter: IDirectiveInterpreter
 private:
 	string _directiveName;
 	IAttributesInterpreter[] _attrInterpreters;
+	ICompoundStatement _bodyStatement;
 	bool _withNewScope;
 
 
 public:
-	this( string dirName, IAttributesInterpreter[] interpreters )
+	this( string dirName, IAttributesInterpreter[] interpreters, ICompoundStatement bodyStmt, bool withNewScope = false )
 	{
 		_directiveName = dirName;
 		_attrInterpreters = interpreters;
+		_bodyStatement = bodyStmt;
+		_withNewScope = withNewScope;
 	}
 
 	string directiveName() @property
@@ -386,15 +389,19 @@ public:
 
 	override void interpret(IDirectiveStatement statement, Interpreter interp)
 	{
-		import std.range: empty, back, popBack;
+		import std.range: empty, back, front, popBack, popFront;
 
 		if( !statement || statement.name != _directiveName )
 		{
 			interpretError( `Expected directive "` ~ _directiveName ~ `"` );
 		}
 
-		interp.enterScope();
-		scope(exit) interp.exitScope();
+		if( _withNewScope )
+			interp.enterScope();
+		scope(exit) {
+			if( _withNewScope )
+				interp.exitScope();
+		}
 
 		IAttributeRange attrRange = statement[];
 		while( !_attrInterpreters.empty )
@@ -410,15 +417,10 @@ public:
 
 		if( !attrRange.empty )
 		{
-			// Executing body of directive (if there is)
-			ICompoundStatement dirBodyStmt = attrRange.takeFrontAs!ICompoundStatement("Directive statement body expected!");
-			dirBodyStmt.accept(interp);
-		}
-
-		if( !attrRange.empty )
-		{
 			interpretError( `Not all attributes of directive "` ~ _directiveName ~ `" were processed. Something is wrong!` );
 		}
+
+		_bodyStatement.accept(interp); // Running body of inline directive
 	}
 
 }
@@ -438,9 +440,19 @@ private:
 	string[string] _attrDefs; // Mapping attribute name -> type string
 
 public:
+	this( string[string] attrDefs )
+	{
+		_attrDefs = attrDefs;
+	}
+
 	override void processAttributes( IAttributeRange attrRange, Interpreter interp )
 	{
-		interp.getValue(`attr`)
+		if( !interp.canFindValue( "__attrs__" ) )
+		{
+			TDataNode[string] attrDict;
+			interp.setValue( "__attrs__", TDataNode(attrDict) );
+		}
+
 		while( !attrRange.empty )
 		{
 			IKeyValueAttribute kwAttrExpr = cast(IKeyValueAttribute) attrRange.front;
@@ -456,23 +468,25 @@ public:
 			kwAttrExpr.value.accept(interp);
 
 			TDataNode attrsNode;
-			if( interp.canFindValue( attrNameExpr.name ) )
+			if( interp.canFindValue( "__attrs__" ) )
 			{
-				attrsNode = interp.getValue( attrNameExpr.name );
+				attrsNode = interp.getValue( "__attrs__" );
 			}
 
-			if( attrsNode != DataNodeType.AssocArray )
+			if( attrsNode.type != DataNodeType.AssocArray )
 				interpretError( `Expected assoc array as attributes dictionary` );
 
-			TDataNode[string] attrDict = attrsNode;
+			TDataNode[string] attrDict = attrsNode.assocArray;
 			attrDict[kwAttrExpr.name] = interp.opnd;
 
 			attrRange.popFront();
 		}
+
 	}
 
 }
 
+import std.stdio;
 /// Defines directive using ivy language
 class DefInterpreter: IDirectiveInterpreter
 {
@@ -483,11 +497,14 @@ class DefInterpreter: IDirectiveInterpreter
 
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
-		bool withNewScope = false;
 		IAttributesInterpreter[] attrInterps;
+		ICompoundStatement bodyStatement;
+		bool withNewScope = false;
+		writeln("Start interpreting def directive...");
 
 		while( !stmtRange.empty )
 		{
+			writeln("Interpreting attributes definitions blocks");
 			ICodeBlockStatement attrDefBlockStmt = cast(ICodeBlockStatement) stmtRange.front;
 			if( !attrDefBlockStmt )
 			{
@@ -498,6 +515,7 @@ class DefInterpreter: IDirectiveInterpreter
 
 			while( !attrDefStmtRange.empty )
 			{
+				writeln("Interpreting 1");
 				IDirectiveStatement attrDefStmt = attrDefStmtRange.front;
 				IAttributeRange attrDefStmtAttrRange = attrDefStmt[];
 
@@ -511,20 +529,34 @@ class DefInterpreter: IDirectiveInterpreter
 						}
 						break;
 					}
+					/*
 					case "def.expr": {
 
 						break;
 					}
-					case "def.name" {
+					case "def.name": {
 
 						break;
 					}
-					case "def.kwd" {
+					case "def.kwd": {
 
 						break;
 					}
-					case "def.newScope" {
+					*/
+					case "def.newScope": {
 						withNewScope = true; // Option to create new scope to store data for this directive
+						break;
+					}
+					case "def.body": {
+						if( bodyStatement )
+							interpretError( "Multiple body statements are not allowed!!!" );
+
+						if( attrDefStmtAttrRange.empty )
+							interpretError( "Expected compound statement as directive body statement, but got end of attributes list!" );
+
+						bodyStatement = cast(ICompoundStatement) attrDefStmtAttrRange.front; // Getting body AST for statement
+						if( !bodyStatement )
+							interpretError( "Expected compound statement as directive body statement" );
 						break;
 					}
 					default: {
@@ -532,12 +564,12 @@ class DefInterpreter: IDirectiveInterpreter
 						break;
 					}
 				}
-
+				attrDefStmtRange.popFront(); // Going to the next directive statement in code block
 			}
-
+			stmtRange.popFront(); // Go to next attr definition directive
 		}
 
-		IDirectiveInterpreter inlDirInterp = new InlineDirectiveInterpreter( defNameExpr.name, attrInterps, withNewScope );
+		IDirectiveInterpreter inlDirInterp = new InlineDirectiveInterpreter( defNameExpr.name, attrInterps, bodyStatement, withNewScope );
 		interp._inlineDirController.addInterpreter( defNameExpr.name, inlDirInterp );
 		interp._dirController._reindex();
 	}
@@ -545,12 +577,17 @@ class DefInterpreter: IDirectiveInterpreter
 	// Method parses attributes of "def.kwAttr" directive
 	IAttributesInterpreter interpretNamedAttrsBlock(IAttributeRange attrRange)
 	{
+		writeln("Interpreting named attributes block");
 		string[string] attrDefs;
 		while( !attrRange.empty )
 		{
+			writeln("Interpreting named attributes block item");
 			IKeyValueAttribute namedAttrDefExpr = cast(IKeyValueAttribute) attrRange.front;
 			if( !namedAttrDefExpr )
+			{
+				writeln("namedAttrDefExpr expected, but got null, so break");
 				break;
+			}
 
 			INameExpression attrTypeExpr = cast(INameExpression) namedAttrDefExpr.value;
 			if( !attrTypeExpr )
@@ -566,7 +603,6 @@ class DefInterpreter: IDirectiveInterpreter
 		}
 		return null;
 	}
-
 }
 
 
@@ -583,12 +619,12 @@ class DefGetAttrInterpreter: IDirectiveInterpreter
 		INameExpression attrNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name of directive attribute");
 
 		TDataNode attrsNode;
-		if( interp.canFindValue( attrNameExpr.name ) )
+		if( interp.canFindValue("__attrs__") )
 		{
 			attrsNode = interp.getValue( attrNameExpr.name );
 		}
 
-		if( interp._dirAttrsStack.back.type != DataNodeType.AssocArray )
+		if( attrsNode.type != DataNodeType.AssocArray )
 			interpretError( "Cannot get attrubute value, attributes node is not assoc array!" );
 
 		TDataNode[string] attrDict = attrsNode.assocArray;

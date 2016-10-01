@@ -1,19 +1,18 @@
 text {*
-	{# def test
-		{# def.kwAttr
-			name: str
-			items: array
-			config: object
-			variadic: any #}
-		{# def.expr
-			name: str
-			items: any #}
-		{# def.kwd in #}
-		{# def.ident  #}
-		{# def.block #}
-		{# def.block_ast #}
-		{# def.expr_ast #}
-		{# text "Дурак ты, " ~ name ~ "!" #}
+	{# def test {#
+			def.kwAttr
+				name: str
+				items: array
+				config: object
+				variadic: any;
+			def.body {#
+				text "Дурак ты, Вася!"
+			#}
+		#};
+		def test2 {#
+			def.body {*Дурак ты, Петя!*}
+		#}
+
 	#}
 	<!doctype html>
 	<html>
@@ -48,7 +47,10 @@ text {*
 							*}
 						#}
 					#}
-					{# text {# test.durak name: "Вася" #} #}
+					{# text {# test name: "Вася" #} #}
+					{# test2 #}
+					{# test2 #}
+					{# test2 #}
 				
 				</ul>
 				

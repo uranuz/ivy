@@ -79,8 +79,8 @@ public:
 				import std.array: array;
 				import std.conv: to;
 	
-				//string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
-				//writeln( shortFuncName, "[", line, "]: ", data, ", frontValue is: "/*, parser.lexer.frontValue.array.to!string*/ );
+				string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+				writeln( shortFuncName, "[", line, "]: ", data, ", frontValue is: ", parser.lexer.frontValue.array.to!string );
 			}
 		}
 	}
@@ -130,6 +130,7 @@ public:
 		}
 		
 		import std.array: join;
+		loger.write( "Parsed qualified identifier: " ~ nameParts.join(".") );
 		
 		return nameParts.join(".");
 	}
@@ -273,7 +274,7 @@ public:
 		
 		ICompoundStatement statement;
 		
-		IStatement[] statements;
+		IDirectiveStatement[] statements;
 					
 		CustLocation blockLocation = this.currentLocation;
 		
@@ -287,7 +288,7 @@ public:
 		lexer_loop:
 		while( !lexer.empty && !lexer.front.test(LexemeType.CodeBlockEnd) )
 		{
-			IStatement stmt;
+			IDirectiveStatement stmt;
 
 			if( !lexer.front.test( LexemeType.Name ) )
 				error( "Expected directive statement Name" );

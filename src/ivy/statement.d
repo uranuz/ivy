@@ -199,11 +199,12 @@ public:
 	}
 }
 
-mixin template BaseBlockStatementImpl(LocationConfig c)
+mixin template BaseBlockStatementImpl(LocationConfig c, alias IRange = IStatementRange)
 {
 	mixin BaseDeclNodeImpl!(c);
+	alias IStmt = typeof(IRange.front);
 private:
-	IStatement[] _statements;
+	IStmt[] _statements;
 
 public:
 	public @property override {
@@ -235,19 +236,19 @@ public:
 		}
 	}
 	
-	IStatementRange opSlice()
+	IRange opSlice()
 	{
 		return new Range(this);
 	}
 	
-	IStatementRange opSlice(size_t begin, size_t end)
+	IRange opSlice(size_t begin, size_t end)
 	{
 		return new Range(this, begin, end);
 	}
 	
 	alias TStatement = typeof(this);
 	
-	static class Range: IStatementRange
+	static class Range: IRange
 	{
 	private:
 		TStatement _statement;
@@ -270,7 +271,7 @@ public:
 		}
 		
 		public override {
-			@property IStatement front()
+			@property IStmt front()
 			{
 				return _statement._statements[_begin];
 			}
@@ -280,7 +281,7 @@ public:
 				++_begin;
 			}
 			
-			@property IStatement back()
+			@property IStmt back()
 			{ 
 				return _statement._statements[_end];
 			}
@@ -299,12 +300,12 @@ public:
 			}
 			//@property size_t length();
 			
-			@property IStatementRange save()
+			@property IRange save()
 			{
 				return new Range(_statement, _begin, _end);
 			}
 			
-			IStatement opIndex(size_t index)
+			IStmt opIndex(size_t index)
 			{
 				return _statement._statements[index];
 			}
@@ -315,13 +316,13 @@ public:
 
 class CodeBlockStatement(LocationConfig c): ICodeBlockStatement
 {
-	mixin BaseBlockStatementImpl!c;
+	mixin BaseBlockStatementImpl!(c, IDirectiveStatementRange);
 	
 private:
 
 
 public:
-	this(CustLocation loc, IStatement[] stmts)
+	this(CustLocation loc, IDirectiveStatement[] stmts)
 	{
 		_location = loc;
 		_statements = stmts;
