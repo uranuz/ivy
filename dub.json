@@ -21,6 +21,8 @@
 		{
 			"name": "parser_test", 
 			"targetType": "executable",
+			"targetPath": "./",
+			"targetName": "parser_test",
 			"platforms": [],
 			"versions": [],
 			"libs": [],
@@ -41,6 +43,8 @@
 		{
 			"name": "lexer_tools_test", 
 			"targetType": "executable",
+			"targetPath": "./",
+			"targetName": "lexer_tools_test",
 			"platforms": [],
 			"versions": [],
 			"libs": [],

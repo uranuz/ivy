@@ -193,31 +193,119 @@ private:
 public:
 	TDataNode getValue( string varName )
 	{
-		auto varValuePtr = varName in _vars;
-		assert( varValuePtr, "VariableTable: Cannot find variable with name: " ~ varName );
+		auto varValuePtr = findValue(varName);
+		if( varValuePtr is null )
+			interpretError( "VariableTable: Cannot find variable with name: " ~ varName );
 		return *varValuePtr;
 	}
 	
 	bool canFindValue( string varName )
 	{
-		return cast(bool)( varName in _vars );
+		return cast(bool)( findValue(varName) );
 	}
 	
 	DataNodeType getDataNodeType( string varName )
 	{
-		auto varValuePtr = varName in _vars;
-		assert( varValuePtr, "VariableTable: Cannot find variable with name: " ~ varName );
+		auto varValuePtr = findValue(varName);
+		if( varValuePtr is null )
+			interpretError( "VariableTable: Cannot find variable with name: " ~ varName );
 		return varValuePtr.type;
 	}
-	
+
+	TDataNode* findValue( string varName )
+	{
+		import std.range: empty;
+		import std.algorithm: splitter;
+		if( varName.empty )
+			interpretError( "VariableTable: Variable name cannot be empty" );
+		auto nameSplitter = varName.splitter('.');
+		TDataNode* nodePtr = nameSplitter.front in _vars;
+		if( nodePtr is null )
+			return null;
+		nameSplitter.popFront();
+
+		while( !nameSplitter.empty  )
+		{
+			if( nodePtr.type != DataNodeType.AssocArray )
+				return null;
+
+			nodePtr = nameSplitter.front in nodePtr.assocArray;
+			nameSplitter.popFront();
+			if( nodePtr is null )
+				return null;
+		}
+
+		return nodePtr;
+	}
+
 	void setValue( string varName, TDataNode value )
 	{
-		_vars[varName] = value;
+		import std.range: empty;
+		import std.algorithm: splitter;
+		import std.string: join;
+		if( varName.empty )
+			interpretError("Variable name cannot be empty!");
+
+		TDataNode* valuePtr = findValue(varName);
+		if( valuePtr )
+		{
+			*valuePtr = value;
+		}
+		else
+		{
+			auto splName = splitter(varName, '.');
+			string shortName = splName.back;
+			splName.popBack(); // Trim actual name
+			writeln( "setValue: ", splName );
+
+			if( splName.empty )
+			{
+				_vars[shortName] = value;
+			}
+			else
+			{
+				// Try to find parent
+				TDataNode* parentPtr = findValue(splName.join('.'));
+				if( parentPtr is null )
+					interpretError( `Cannot create new variable "` ~ varName ~ `", because parent not exists!` );
+
+				if( parentPtr.type != DataNodeType.AssocArray )
+					interpretError( `Cannot create new value "` ~ varName ~ `", because parent is not of assoc array type!` );
+
+				(*parentPtr)[shortName] = value;
+			}
+
+		}
 	}
 	
 	void removeValue( string varName )
 	{
-		_vars.remove( varName );
+		import std.range: empty;
+		import std.algorithm: splitter;
+		import std.string: join;
+		if( varName.empty )
+			interpretError("Variable name cannot be empty!");
+
+		auto splName = splitter(varName, '.');
+		string shortName = splName.back;
+		splName.popBack(); // Trim actual name
+		if( splName.empty )
+		{
+			_vars.remove( shortName );
+		}
+		else
+		{
+			// Try to find parent
+			TDataNode* parentPtr = findValue(splName.join('.'));
+
+			if( parentPtr is null )
+				interpretError( `Cannot create new variable "` ~ varName ~ `", because parent not exists!` );
+
+			if( parentPtr.type != DataNodeType.AssocArray )
+				interpretError( `Cannot create new value "` ~ varName ~ `", because parent is not of assoc array type!` );
+
+			(*parentPtr)[shortName].assocArray.remove(shortName);
+		}
 	}
 
 }
@@ -269,7 +357,26 @@ public:
 		
 		return false;
 	}
-	
+
+	TDataNode* findValue( string varName )
+	{
+		import std.range: empty, back, popBack;
+		if( scopeStack.empty )
+			interpretError("Cannot find var value, because scope stack is empty!");
+
+		auto scopeStackSlice = scopeStack[];
+		TDataNode* valuePtr;
+
+		for( ; !scopeStackSlice.empty; scopeStackSlice.popBack() )
+		{
+			valuePtr = scopeStack.back.findValue(varName);
+			if( valuePtr !is null )
+				break;
+		}
+
+		return valuePtr;
+	}
+
 	TDataNode getValue( string varName )
 	{
 		import std.range: empty, popBack, back;
@@ -277,26 +384,36 @@ public:
 		if( scopeStack.empty )
 			interpretError("Cannot get var value, because scope stack is empty!");
 			
-		auto scopeStackSlice = scopeStack[];
+		TDataNode* valuePtr = findValue(varName);
+
+		if( valuePtr is null )
+			interpretError( "Undefined variable with name '" ~ varName ~ "'" );
 		
-		for( ; !scopeStackSlice.empty; scopeStackSlice.popBack() )
-		{
-			if( scopeStack.back.canFindValue(varName) )
-				return scopeStack.back.getValue(varName);
-		}
-		
-		interpretError("Undefined variable with name '" ~ varName ~ "'");
-		assert(0);
+		return *valuePtr;
 	}
 	
 	void setValue( string varName, TDataNode value )
 	{
-		import std.range: empty, popBack, back;
-		
+		import std.range: empty;
 		if( scopeStack.empty )
 			interpretError("Cannot set var value, because scope stack is empty!");
-		
-		scopeStack.back.setValue( varName, value );
+
+		TDataNode* valuePtr = findValue(varName);
+		if( valuePtr is null )
+			interpretError( `Cannot set variable "` ~ varName ~ `", because cannot find it. Use setLocalValue to decare new variable!` );
+
+		*valuePtr = value;
+	}
+
+	void setLocalValue( string varName, TDataNode value )
+	{
+		import std.range: empty, popBack, back;
+		import std.algorithm: splitter;
+
+		if( scopeStack.empty )
+			interpretError("Cannot set local var value, because scope stack is empty!");
+
+		scopeStack.back.setValue(varName, value);
 	}
 	
 	bool hasLocalValue( string varName )

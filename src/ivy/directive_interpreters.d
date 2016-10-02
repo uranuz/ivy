@@ -74,15 +74,12 @@ public:
 		if( varName.length == 0 )
 			interpretError("Loop variable name cannot be empty");
 		
-		IKeyValueAttribute inAttribute = stmtRange.takeFrontAs!IKeyValueAttribute("Expected 'in' attribute");
+		INameExpression inAttribute = stmtRange.takeFrontAs!INameExpression("Expected 'in' attribute");
 		
 		if( inAttribute.name != "in" )
 			interpretError( "Expected 'in' keyword" );
 		
-		IExpression aggregateExpr = cast(IExpression) inAttribute.value;
-
-		if( !aggregateExpr )
-			interpretError("Expected loop aggregate expression");
+		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected 'for' aggregate expression");
 		
 		aggregateExpr.accept(interp);
 		auto aggr = interp.opnd;
@@ -102,7 +99,7 @@ public:
 		
 		foreach( aggrItem; aggr.array )
 		{
-			interp.setValue(varName, aggrItem);
+			interp.setLocalValue(varName, aggrItem);
 			bodyStmt.accept(interp);
 			results ~= interp.opnd;
 		}
@@ -278,7 +275,7 @@ public:
 			interpretError( "Expected value for 'var' directive" );
 		
 		kwPair.value.accept(interp); //Evaluating expression
-		interp.setValue(kwPair.name, interp.opnd);
+		interp.setLocalValue(kwPair.name, interp.opnd);
 		
 		interp.opnd = TDataNode.init; //Doesn't return value
 	}
@@ -408,11 +405,12 @@ public:
 		{
 			if( attrRange.empty )
 			{
-				interpretError( `Unexpected end of directive attibutes list for directive "` ~ _directiveName ~ `"` );
+				// Maybe it's OK that there is no more:)
+				break;
+				//interpretError( `Unexpected end of directive attibutes list for directive "` ~ _directiveName ~ `"` );
 			}
 
 			_attrInterpreters.front.processAttributes( attrRange, interp );
-			_attrInterpreters.popFront();
 		}
 
 		if( !attrRange.empty )
@@ -450,7 +448,7 @@ public:
 		if( !interp.canFindValue( "__attrs__" ) )
 		{
 			TDataNode[string] attrDict;
-			interp.setValue( "__attrs__", TDataNode(attrDict) );
+			interp.setLocalValue( "__attrs__", TDataNode(attrDict) );
 		}
 
 		while( !attrRange.empty )
@@ -476,8 +474,9 @@ public:
 			if( attrsNode.type != DataNodeType.AssocArray )
 				interpretError( `Expected assoc array as attributes dictionary` );
 
-			TDataNode[string] attrDict = attrsNode.assocArray;
-			attrDict[kwAttrExpr.name] = interp.opnd;
+			writeln( "processAttributes OPND: ",  interp.opnd);
+			attrsNode[kwAttrExpr.name] = interp.opnd;
+			interp.setValue( "__attrs__", attrsNode );
 
 			attrRange.popFront();
 		}
@@ -621,7 +620,7 @@ class DefGetAttrInterpreter: IDirectiveInterpreter
 		TDataNode attrsNode;
 		if( interp.canFindValue("__attrs__") )
 		{
-			attrsNode = interp.getValue( attrNameExpr.name );
+			attrsNode = interp.getValue( "__attrs__" );
 		}
 
 		if( attrsNode.type != DataNodeType.AssocArray )

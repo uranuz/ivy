@@ -38,11 +38,11 @@ void main()
 
 	auto visitor = new Interpreter(rootController, inlineDirController);
  	alias TDataNode = DataNode!string;
- 	visitor.setValue("content", TDataNode("<div>Основное содержимое формы</div>"));
- 	visitor.setValue("content2", TDataNode("Еще какое-то содержимое страницы"));
- 	visitor.setValue("content3", TDataNode("Здравствуй, Вася"));
- 	visitor.setValue("x", TDataNode(20));
- 	visitor.setValue("y", TDataNode("no"));
+ 	visitor.setLocalValue("content", TDataNode("<div>Основное содержимое формы</div>"));
+ 	visitor.setLocalValue("content2", TDataNode("Еще какое-то содержимое страницы"));
+ 	visitor.setLocalValue("content3", TDataNode("Здравствуй, Вася"));
+ 	visitor.setLocalValue("x", TDataNode(20));
+ 	visitor.setLocalValue("y", TDataNode("no"));
  	
  	bool hasContent = visitor.canFindValue("content2");
  	auto content = visitor.getValue("content2");

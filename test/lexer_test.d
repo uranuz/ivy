@@ -17,7 +17,7 @@ void main()
 	{
 		foreach( lex; lexer.lexemes )
 		{
-			writeln( "lex.index: ", lex.index, " ", "lex.length: ", lex.length, ", lex.type: ", cast(LexemeType) lex.info.typeIndex, ", content: ", lex.getSlice(lexer.sourceRange).toString() );
+			writeln( "lex.index: ", lex.loc.index, " ", "lex.length: ", lex.loc.length, ", lex.type: ", cast(LexemeType) lex.info.typeIndex, ", ctx.state: ", lexer._ctx.state, ", content: ", lex.getSlice(lexer.sourceRange).toString() );
 		}
 		
 		writeln( "lexer._ctx.statesStack at the end: " );
@@ -28,13 +28,20 @@ void main()
 	}
 		
  	try {
-		lexer.parse();
+		while( !lexer.empty )
+		{
+			auto lex = lexer.front;
+			writeln( "lex.index: ", lex.loc.index, " ", "lex.length: ", lex.loc.length, ", lex.type: ", cast(LexemeType) lex.info.typeIndex, ", ctx.state: ", lexer._ctx.state, ", content: ", lex.getSlice(lexer.sourceRange).toString() );
+			lexer.popFront();
+		}
+		//lexer.parse();
 	} catch (Throwable e) {
+		writeln("//---------------------------------------------");
 		printResults();
 		
 		throw e;
 	}
 
-	printResults();
+	//printResults();
 
 }

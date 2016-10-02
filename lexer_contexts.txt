@@ -1,0 +1,17 @@
+This table descibes how lexemes influence on lexer state
+
+               CodeContext   MixedContext   RawData
+CodeBegin        new_code       new_code      none
+CodeEnd          del_code       none          none
+MixedBegin       new_mixed      new_mixed     none
+MixedEnd         error          del_mixed     none
+RawBegin         new_raw        new_raw       none
+RawEnd           error          none          del_raw
+LParen           none           none          none
+RParen           none           none          none
+LBrace           none           none          none
+RBrace           del_code       none          none
+LBracket         none           none          none
+RBracket         none           none          none
+
+RawData is parsed as an atom so there is no complicated rules for it

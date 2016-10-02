@@ -247,11 +247,6 @@ public:
 				result = parseMixedBlock();
 				break;
 			}
-			case RawDataBlockBegin:
-			{
-				error( "Parsing raw data block is unimplemented for now!");
-				break;
-			}
 			case RawDataBlock:
 			{
 				error( "Parsing raw data block is unimplemented for now!");
