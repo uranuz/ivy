@@ -42,7 +42,7 @@ public:
 		this.fileName = fileName;
 	}
 	
-	IDeclNode parse()
+	IvyNode parse()
 	{
 		// Start parsing with master directive, that describes type of file
 		// It's also done, because CodeBlock has CodeBlockEnd check at the end
@@ -157,7 +157,7 @@ public:
 
 		lexer.popFront(); //Skip key-value delimeter
 
-		IDeclNode val = parseBlockOrExpression();
+		IvyNode val = parseBlockOrExpression();
 		if( !val )
 		{
 			lexer = lexerCopy.save;
@@ -185,11 +185,11 @@ public:
 		if( statementName.empty )
 			error( "Directive statement name cannot be empty!" );
 
-		IDeclNode[] attrs;
+		IvyNode[] attrs;
 		while( !lexer.empty && !lexer.front.test( [LexemeType.Semicolon, LexemeType.CodeBlockEnd] ) )
 		{
 			//Try parse named attribute
-			IDeclNode attr = parseNamedAttribute();
+			IvyNode attr = parseNamedAttribute();
 			
 			loger.write( "Attempt to parse named attribute finished" );
 			loger.write( " attr is", ( attr is null ? null : " not" ) ~ " null" );
@@ -225,19 +225,19 @@ public:
 
 	}
 	
-	IDeclNode parseBlockOrExpression( bool isDirectiveContext = false )
+	IvyNode parseBlockOrExpression( bool isDirectiveContext = false )
 	{
 		loger.write( "Start parsing block or expression" );
 		import std.array: array;
 		import std.conv: to;
 		
-		IDeclNode result;
+		IvyNode result;
 		
 		//CustLocation loc = this.currentLocation;
 		
 		switch( lexer.front.typeIndex ) with(LexemeType)
 		{
-			case CodeBlockBegin:
+			case CodeBlockBegin, CodeListBegin:
 			{
 				result = parseCodeBlock();
 				break;
@@ -273,15 +273,16 @@ public:
 					
 		CustLocation blockLocation = this.currentLocation;
 		
-		if( !lexer.front.test( LexemeType.CodeBlockBegin ) )
-				error( "Expected CodeBlockBegin" );
-		lexer.popFront(); // Skip CodeBlockBegin
+		if( !lexer.front.test( [LexemeType.CodeBlockBegin, LexemeType.CodeListBegin] ) )
+				error( "Expected CodeBlockBegin or CodeListBegin" );
+		LexemeType endLexemeType = cast(LexemeType) lexer.front.info.pairTypeIndex;
 
-		if( lexer.empty || lexer.front.test(LexemeType.CodeBlockEnd) )
+		lexer.popFront(); // Skip CodeBlockBegin, CodeListBegin
+
+		if( lexer.empty || lexer.front.test(endLexemeType) )
 			error( "Unexpected end of code block" );
-		
-		lexer_loop:
-		while( !lexer.empty && !lexer.front.test(LexemeType.CodeBlockEnd) )
+
+		while( !lexer.empty && !lexer.front.test(endLexemeType) )
 		{
 			IDirectiveStatement stmt;
 
@@ -297,7 +298,7 @@ public:
 			{
 				lexer.popFront(); // Skip statements delimeter
 			}
-			else if( !lexer.front.test( LexemeType.CodeBlockEnd ) )
+			else if( !lexer.front.test(endLexemeType) )
 			{
 				error( "Expected semicolon as directive statements delimiter" );
 			}
@@ -305,11 +306,11 @@ public:
 			statements ~= stmt;
 		}
 		
-		if( !lexer.front.test( LexemeType.CodeBlockEnd ) )
-			error( "Expected code block end" );
+		if( !lexer.front.test(endLexemeType) )
+			error( "Expected " ~ endLexemeType.to!string );
 		lexer.popFront(); //Skip CodeBlockEnd
 
-		statement = new CodeBlockStatement!(config)(blockLocation, statements);
+		statement = new CodeBlockStatement!(config)(blockLocation, statements, endLexemeType == LexemeType.CodeListBegin );
 		
 		return statement;
 	}
@@ -334,7 +335,7 @@ public:
 		{
 			CustLocation itemLoc = this.currentLocation;
 
-			if( lexer.front.test( LexemeType.CodeBlockBegin ))
+			if( lexer.front.test( [LexemeType.CodeBlockBegin, LexemeType.CodeListBegin] ))
 			{
 				statements ~= parseCodeBlock();
 			}
@@ -608,12 +609,12 @@ public:
 				// Parse call expression
 				lexer.popFront();
 
-				IDeclNode[] argList;
+				IvyNode[] argList;
 
 				//parsing arguments
 				while( !lexer.empty && !lexer.front.test( LexemeType.RParen ) )
 				{
-					IDeclNode arg = parseNamedAttribute();
+					IvyNode arg = parseNamedAttribute();
 
 					if( !arg )
 						arg = parseBlockOrExpression();

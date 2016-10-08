@@ -3,11 +3,11 @@ module ivy.node;
 import ivy.common;
 import ivy.node_visitor;
 
-interface IDeclNode
+interface IvyNode
 {
 	@property {
-		IDeclNode parent();
-		IDeclNode[] children();
+		IvyNode parent();
+		IvyNode[] children();
 		
 		Location location() const;             // Location info for internal usage
 		PlainLocation plainLocation() const;   // Location for user info
@@ -18,7 +18,7 @@ interface IDeclNode
 	}
 	
 	@property {
-		void parent(IDeclNode node);
+		void parent(IvyNode node);
 	}
 	
 	void accept(AbstractNodeVisitor visitor);
@@ -28,7 +28,7 @@ interface IDeclNode
 
 enum LiteralType { NotLiteral, Null, Boolean, Integer, Floating, String, Array, AssocArray };
 
-interface IExpression: IDeclNode
+interface IExpression: IvyNode
 {
 	// bool checkValue();
 	// bool checkScalar();
@@ -52,7 +52,12 @@ interface IExpression: IDeclNode
 	string toStr();
 }
 
-interface ILiteralExpression: IExpression
+interface IPlainExpression: IExpression {
+
+
+}
+
+interface ILiteralExpression: IPlainExpression
 {
 
 
@@ -91,7 +96,7 @@ enum Operator {
 	GTEqual
 }
 
-interface IOperatorExpression: IExpression
+interface IOperatorExpression: IPlainExpression
 {
 	@property const {
 		int operatorIndex();
@@ -146,21 +151,21 @@ public:
 
 }
 
-interface INameExpression: IExpression
+interface INameExpression: IPlainExpression
 {
 	@property string name();
 }
 
-interface IKeyValueAttribute: IDeclNode
+interface IKeyValueAttribute: IvyNode
 {
 	@property {
 		string name();
-		IDeclNode value();
+		IvyNode value();
 	}
 
 }
 
-interface IAssocArrayPair: IExpression
+interface IAssocArrayPair: IvyNode
 {
 	@property {
 		string key();
@@ -168,7 +173,7 @@ interface IAssocArrayPair: IExpression
 	}
 }
 
-interface IStatement: IDeclNode
+interface IStatement: IvyNode
 {
 	@property {
 		bool isCompoundStatement();
@@ -194,6 +199,8 @@ interface ICompoundStatement: IStatement
 	
 	IStatementRange opSlice();
 	IStatementRange opSlice(size_t begin, size_t end);
+
+	bool isList() @property;
 	
 	//IStatement opIndex(size_t index);
 }
@@ -231,10 +238,10 @@ interface ICodeBlockStatement: ICompoundStatement
 
 interface IAttributeRange
 {
-	@property IDeclNode front();
+	@property IvyNode front();
 	void popFront();
 	
-	@property IDeclNode back();
+	@property IvyNode back();
 	void popBack();
 	
 	@property bool empty();
@@ -242,7 +249,7 @@ interface IAttributeRange
 	
 	@property IAttributeRange save();
 	
-	IDeclNode opIndex(size_t index);
+	IvyNode opIndex(size_t index);
 }
 
 interface IDirectiveStatement: IStatement

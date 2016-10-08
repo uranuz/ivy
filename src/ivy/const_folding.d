@@ -12,7 +12,7 @@ public:
 	alias visit = AbstractNodeVisitor.visit;
 	
 	public override {
-		void visit(IDeclNode node) { writeln( typeof(node).stringof ~ " visited" ); }
+		void visit(IvyNode node) { writeln( typeof(node).stringof ~ " visited" ); }
 		void visit(IExpression node) { writeln( typeof(node).stringof ~ " visited" ); }
 		void visit(ILiteralExpression node) { writeln( typeof(node).stringof ~ " visited" ); }
 		void visit(IOperatorExpression node) { writeln( typeof(node).stringof ~ " visited" ); }
@@ -28,14 +28,14 @@ public:
 class ConstFoldVisitor: AbstractNodeVisitor
 {
 public:
-	IDeclNode result;
+	IvyNode result;
 
 	LiteralType lastLiteralType;
 	
 	alias visit = AbstractNodeVisitor.visit;
 	
 	public override {
-		void visit(IDeclNode node) { writeln( typeof(node).stringof ~ " visited" ); }
+		void visit(IvyNode node) { writeln( typeof(node).stringof ~ " visited" ); }
 		void visit(IExpression node) { writeln( typeof(node).stringof ~ " visited" ); }
 		void visit(ILiteralExpression node)
 		{ 

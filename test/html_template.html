@@ -1,35 +1,36 @@
 text {*
 	{# def test {#
-			def.kwAttr
-				name: str
-				items: array
-				config: object
-				variadic: any;
+			def.named
+				attr as str
+				name as int
+				items: "Petya"
+				config: "Vova"
+				variadic: 10;
 			def.body {#
-				text "Дурак ты, Вася!"
+				text "Дурак ты, Вася!";
 			#}
 		#};
 		def test2 {#
-			def.kwAttr name: string;
+			def.named name as str;
 			def.body {*
 				Дурак ты, {# def.getAttr name #}
 			*};
 		#};
 		def list_render {#
-			def.kwAttr
-				title: string
-				list: array;
+			def.named
+				title as string
+				list as array;
 			def.body {*
-				{# var local_list: {# def.getAttr list #}  #}
-				<h2>Title is: {# def.getAttr title #}</h2>
-				<div>
-					{# for list_item in local_list {*
-							<div>
-								<span>Item name:</span>
-								<span>{# text list_item #}</span>
-							</div>
-						*}
-					#}
+				<h2>Title is: (# def.getAttr title #)</h2>
+				<div> {#
+					var local_list: (# def.getAttr list #);
+					for list_item in local_list {*
+						<div>
+							<span>Item name:</span>
+							<span>{# text list_item #}</span>
+						</div>
+					*}
+				#}
 				</div>
 			*}
 		#}
@@ -44,12 +45,14 @@ text {*
 			
 			<section>
 				{# text
-					{# if x > 10
-						{# text content #}
+					{#
+						if x > 10 (#
+							text content;
+						#)
 						elif x > 5
-						{# text content2 #}
+						(# text content2 #)
 						else
-						{# text content3 #};
+						(# text content3 #);
 						
 						if y == "yes" {*
 							Вход выполнен
@@ -71,7 +74,7 @@ text {*
 					{# test2 name: "Федя" #}
 					{# test2 name: "Толя" #}
 					{# test2 name: "Саша" #}
-				
+
 				</ul>
 				
 			</section>

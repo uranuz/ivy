@@ -223,7 +223,7 @@ struct CustomizedLocation(LocationConfig c)
 	
 }
 
-import ivy.node : IDeclNode;
+import ivy.node : IvyNode;
 import ivy.node_visitor : AbstractNodeVisitor;
 
 mixin template BaseDeclNodeImpl(LocationConfig c)
@@ -231,12 +231,12 @@ mixin template BaseDeclNodeImpl(LocationConfig c)
 	enum locConfig = c;
 	alias CustLocation = CustomizedLocation!locConfig;
 	
-	private IDeclNode _parentNode;
+	private IvyNode _parentNode;
 	private CustLocation _location;
 	
 	public @property override
 	{ 
-		IDeclNode parent()
+		IvyNode parent()
 		{
 			return _parentNode;
 		}
@@ -264,7 +264,7 @@ mixin template BaseDeclNodeImpl(LocationConfig c)
 	
 	public @property override
 	{
-		void parent(IDeclNode node)
+		void parent(IvyNode node)
 		{
 			_parentNode = node;
 		}

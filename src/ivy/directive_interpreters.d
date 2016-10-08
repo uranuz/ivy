@@ -83,7 +83,7 @@ public:
 		
 		aggregateExpr.accept(interp);
 		auto aggr = interp.opnd;
-		
+
 		if( aggr.type != DataNodeType.Array ) 
 			interpretError( "Aggregate type must be array" );
 
@@ -109,8 +109,7 @@ public:
 		//Location bodyStmtLoc = bodyStmt.location;
 		//size_t bodyFirstIndent = bodyStmtLoc.firstIndent;
 		//IndentStyle bodyFirstIndentStyle = bodyStmtLoc.firstIndentStyle;
-		
-		
+
 		interp.opnd = results;
 	}
 
@@ -225,6 +224,21 @@ public:
 
 }
 
+/++
+	`Set` directive is used to set values of existing variables in context.
+	It is defined as list of named attributes where key is variable name
+	and attr value is new value for variable in context. Example:
+	{# set a: "Example" #}
+
+	Multiple variables could be set using one `set` directive
+	{# set
+			a: "Example"
+			b: 10
+			c: { s: 10, k: "Example2" }
+	#}
+
+
++/
 class SetInterpreter : IDirectiveInterpreter
 {
 public:
@@ -234,26 +248,46 @@ public:
 			interpretError( "Expected 'set' directive" );
 		
 		auto stmtRange = statement[];
-		
-		IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
-		
+
+		while( !stmtRange.empty )
+		{
+			IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
+
+			if( !kwPair.value )
+				interpretError( "Expected value for 'set' directive" );
+
+			kwPair.value.accept(interp); //Evaluating expression
+			interp.setValue(kwPair.name, interp.opnd);
+		}
+
 		if( !stmtRange.empty )
 			interpretError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
 		
-		if( !interp.canFindValue( kwPair.name ) )
-			interpretError( "Undefined identifier '" ~ kwPair.name ~ "'" );
-		
-		if( !kwPair.value )
-			interpretError( "Expected value for 'set' directive" );
-		
-		kwPair.value.accept(interp); //Evaluating expression
-		interp.setValue(kwPair.name, interp.opnd);
-		
-		interp.opnd = TDataNode.init; //Doesn't return value
+		interp.opnd = TDataNode.init; //Doesn't return any value
 	}
 
 }
 
+
+/++
+	`Var` directive is defined as list of elements each of them could be of following forms:
+	- Just name of new variable without any value or type (default value will be set, type is `any`)
+		{# var a #}
+	- Name with initializer value (type is `any`)
+		{# var a: "Example" #}
+	- Name with type but without any value (`as` context keyword is used to describe type)
+		{# var a as str #}
+	- Name with initializer and type
+		{# var a: "Example" as str #}
+
+	Multiple variables could be defined using one `var` directive
+	{# var
+			a
+			b: "Example"
+			c as str
+			d: "Example2" as str
+	#}
++/
 class VarInterpreter : IDirectiveInterpreter
 {
 public:
@@ -263,21 +297,59 @@ public:
 			interpretError( "Expected 'var' directive" );
 
 		auto stmtRange = statement[];
-		
-		IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
-		
+
+		while( !stmtRange.empty )
+		{
+			string varName;
+			TDataNode value; // There is default value if no
+
+			if( auto kwPair = cast(IKeyValueAttribute) stmtRange.front )
+			{
+				varName = kwPair.name;
+				if( !kwPair.value )
+					interpretError( "Expected value for 'var' directive" );
+
+				kwPair.value.accept(interp); //Evaluating expression
+				value = interp.opnd;
+				stmtRange.popFront();
+			}
+			else if( auto nameExpr = cast(INameExpression) stmtRange.front )
+			{
+				varName = nameExpr.name;
+				stmtRange.popFront();
+			}
+			else
+			{
+				interpretError( `Expected named attribute or name as variable declarator!` );
+			}
+
+			if( !stmtRange.empty )
+			{
+				if( auto asKwdExpr = cast(INameExpression) stmtRange.front )
+				{
+					if( asKwdExpr.name == "as" )
+					{
+						// TODO: Try to find out type of variable after `as` keyword
+						// Assuming that there will be no variable with name `as` in programme
+						stmtRange.popFront(); // Skip `as` keyword
+
+						if( stmtRange.empty )
+							interpretError( `Expected variable type declaration` );
+
+						// For now just skip type expression
+						stmtRange.popFront();
+					}
+				}
+			}
+
+			// Exactly setting value in nearest context
+			interp.setLocalValue(varName, value);
+		}
+
 		if( !stmtRange.empty )
 			interpretError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
 		
-		if( kwPair.name.length > 0 )
-		
-		if( !kwPair.value )
-			interpretError( "Expected value for 'var' directive" );
-		
-		kwPair.value.accept(interp); //Evaluating expression
-		interp.setLocalValue(kwPair.name, interp.opnd);
-		
-		interp.opnd = TDataNode.init; //Doesn't return value
+		interp.opnd = TDataNode.init; //Doesn't return any value from var directive
 	}
 
 }
@@ -333,6 +405,7 @@ class InlineDirectivesController: ICompositeInterpretersController
 }
 
 alias TDataNode = DataNode!(string);
+/+
 TDataNode[string] interpretNamedAttributes( IAttributeRange attrsRange, Interpreter interp )
 {
 	import std.range: empty;
@@ -352,7 +425,6 @@ TDataNode[string] interpretNamedAttributes( IAttributeRange attrsRange, Interpre
 
 		attrsRange.popFront();
 
-
 		attr.value.accept( interp );
 
 		attrValues[ attr.name ] = interp.opnd;
@@ -360,6 +432,7 @@ TDataNode[string] interpretNamedAttributes( IAttributeRange attrsRange, Interpre
 
 	return attrValues;
 }
++/
 
 class InlineDirectiveInterpreter: IDirectiveInterpreter
 {
@@ -401,7 +474,8 @@ public:
 		}
 
 		IAttributeRange attrRange = statement[];
-		while( !_attrInterpreters.empty )
+		auto attrInterpRange = _attrInterpreters[];
+		while( !attrInterpRange.empty )
 		{
 			if( attrRange.empty )
 			{
@@ -410,7 +484,8 @@ public:
 				//interpretError( `Unexpected end of directive attibutes list for directive "` ~ _directiveName ~ `"` );
 			}
 
-			_attrInterpreters.front.processAttributes( attrRange, interp );
+			attrInterpRange.front.processAttributes( attrRange, interp );
+			attrInterpRange.popFront();
 		}
 
 		if( !attrRange.empty )
@@ -430,15 +505,20 @@ interface IAttributesInterpreter
 	void processAttributes( IAttributeRange attrRange, Interpreter interp );
 }
 
+struct NamedAttrDefinition
+{
+	string name;
+	string typeString;
+	IExpression defaultValueExpr;
+}
+
 class NamedAttributesInterpreter: IAttributesInterpreter
 {
 private:
-	import std.typecons: Tuple;
-
-	string[string] _attrDefs; // Mapping attribute name -> type string
+	NamedAttrDefinition[string] _attrDefs;
 
 public:
-	this( string[string] attrDefs )
+	this( NamedAttrDefinition[string] attrDefs )
 	{
 		_attrDefs = attrDefs;
 	}
@@ -449,6 +529,19 @@ public:
 		{
 			TDataNode[string] attrDict;
 			interp.setLocalValue( "__attrs__", TDataNode(attrDict) );
+		}
+
+		TDataNode attrsNode = interp.getValue( "__attrs__" );
+		if( attrsNode.type != DataNodeType.AssocArray )
+			interpretError( `Expected assoc array as attributes dictionary` );
+
+		foreach( name, attrDef; _attrDefs )
+		{
+			if( !attrDef.defaultValueExpr )
+				continue;
+
+			attrDef.defaultValueExpr.accept(interp);
+			attrsNode[name] = interp.opnd;
 		}
 
 		while( !attrRange.empty )
@@ -464,23 +557,12 @@ public:
 				interpretError( `Expression for named attribute "` ~ kwAttrExpr.name ~ `" must not be null!` );
 
 			kwAttrExpr.value.accept(interp);
-
-			TDataNode attrsNode;
-			if( interp.canFindValue( "__attrs__" ) )
-			{
-				attrsNode = interp.getValue( "__attrs__" );
-			}
-
-			if( attrsNode.type != DataNodeType.AssocArray )
-				interpretError( `Expected assoc array as attributes dictionary` );
-
-			writeln( "processAttributes OPND: ",  interp.opnd);
 			attrsNode[kwAttrExpr.name] = interp.opnd;
-			interp.setValue( "__attrs__", attrsNode );
 
 			attrRange.popFront();
 		}
 
+		interp.setValue( "__attrs__", attrsNode );
 	}
 
 }
@@ -499,11 +581,9 @@ class DefInterpreter: IDirectiveInterpreter
 		IAttributesInterpreter[] attrInterps;
 		ICompoundStatement bodyStatement;
 		bool withNewScope = false;
-		writeln("Start interpreting def directive...");
 
 		while( !stmtRange.empty )
 		{
-			writeln("Interpreting attributes definitions blocks");
 			ICodeBlockStatement attrDefBlockStmt = cast(ICodeBlockStatement) stmtRange.front;
 			if( !attrDefBlockStmt )
 			{
@@ -514,13 +594,12 @@ class DefInterpreter: IDirectiveInterpreter
 
 			while( !attrDefStmtRange.empty )
 			{
-				writeln("Interpreting 1");
 				IDirectiveStatement attrDefStmt = attrDefStmtRange.front;
 				IAttributeRange attrDefStmtAttrRange = attrDefStmt[];
 
 				switch( attrDefStmt.name )
 				{
-					case "def.kwAttr": {
+					case "def.named": {
 						IAttributesInterpreter namedAttrsInterp = interpretNamedAttrsBlock(attrDefStmtAttrRange);
 						if( namedAttrsInterp )
 						{
@@ -533,13 +612,16 @@ class DefInterpreter: IDirectiveInterpreter
 
 						break;
 					}
-					case "def.name": {
+					case "def.ident": {
 
 						break;
 					}
 					case "def.kwd": {
 
 						break;
+					}
+					case "def.result": {
+
 					}
 					*/
 					case "def.newScope": {
@@ -573,27 +655,65 @@ class DefInterpreter: IDirectiveInterpreter
 		interp._dirController._reindex();
 	}
 
-	// Method parses attributes of "def.kwAttr" directive
+	// Method parses attributes of "def.named" directive
 	IAttributesInterpreter interpretNamedAttrsBlock(IAttributeRange attrRange)
 	{
 		writeln("Interpreting named attributes block");
-		string[string] attrDefs;
+		NamedAttrDefinition[string] attrDefs;
 		while( !attrRange.empty )
 		{
 			writeln("Interpreting named attributes block item");
-			IKeyValueAttribute namedAttrDefExpr = cast(IKeyValueAttribute) attrRange.front;
-			if( !namedAttrDefExpr )
+			string attrName;
+			string attrType;
+			IExpression defaultValueExpr;
+
+			if( auto kwPair = cast(IKeyValueAttribute) attrRange.front )
 			{
+				attrName = kwPair.name;
+				defaultValueExpr = cast(IExpression) kwPair.value;
+				if( !defaultValueExpr )
+					interpretError( `Expected attribute default value expression!` );
+
+				attrRange.popFront(); // Skip named attribute
+			}
+			else if( auto nameExpr = cast(INameExpression) attrRange.front )
+			{
+				attrName = nameExpr.name;
+				attrRange.popFront(); // Skip variable name
+			}
+			else
+			{
+				// Just get out of there
 				writeln("namedAttrDefExpr expected, but got null, so break");
 				break;
 			}
 
-			INameExpression attrTypeExpr = cast(INameExpression) namedAttrDefExpr.value;
-			if( !attrTypeExpr )
-				interpretError( `Expected attribute type expression!` );
+			if( !attrRange.empty )
+			{
+				// Try to parse optional type definition
+				if( auto asKwdExpr = cast(INameExpression) attrRange.front )
+				{
+					if( asKwdExpr.name == "as" )
+					{
+						// TODO: Try to find out type of attribute after `as` keyword
+						// Assuming that there will be no named attribute with name `as` in programme
+						attrRange.popFront(); // Skip `as` keyword
 
-			attrDefs[ namedAttrDefExpr.name ] = attrTypeExpr.name;
-			attrRange.popFront();
+						if( attrRange.empty )
+							interpretError( `Expected attr type definition, but got end of attrs range!` );
+
+						auto attrTypeExpr = cast(INameExpression) attrRange.front;
+						if( !attrTypeExpr )
+							interpretError( `Expected attr type definition!` );
+
+						attrType = attrTypeExpr.name; // Getting type of attribute as string (for now)
+
+						attrRange.popFront(); // Skip type expression
+					}
+				}
+			}
+
+			attrDefs[ attrName ] = NamedAttrDefinition( attrName, attrType, defaultValueExpr );
 		}
 
 		if( attrDefs.length > 0 )

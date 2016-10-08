@@ -15,7 +15,7 @@ void main()
 	
 	auto parser = new Parser!(TextRange)(source, sourceFileName);
 	
-	IDeclNode ast;
+	IvyNode ast;
 	
 	try {
 		parser.lexer.popFront();

@@ -23,8 +23,10 @@ static immutable whitespaceChars = " \n\t\r";
 static immutable delimChars = "()[]{}%*-+/#,:|.<>=!";
 static immutable intChars = "0123456789";
 
-static immutable codeBlockBegin = "{#";
-static immutable codeBlockEnd = "#}";
+static immutable codeBlockBegin = "(#";
+static immutable codeBlockEnd = "#)";
+static immutable codeListBegin = "{#";
+static immutable codeListEnd = "#}";
 static immutable mixedBlockBegin = "{*" ;
 static immutable mixedBlockEnd = "*}";
 static immutable commentBlockBegin = "/*";
@@ -69,6 +71,8 @@ enum LexemeType {
 	ExprBlockEnd,
 	CodeBlockBegin,
 	CodeBlockEnd,
+	CodeListBegin,
+	CodeListEnd,
 	MixedBlockBegin,
 	MixedBlockEnd,
 	Comment,
@@ -479,6 +483,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	
 	__gshared LexRule[] mixedContextRules = [
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
+		staticRule( codeListBegin, LexemeType.CodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
 		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
@@ -490,11 +495,12 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
 		staticRule( codeBlockEnd, LexemeType.CodeBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.CodeBlockBegin ),
+		staticRule( codeListBegin, LexemeType.CodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
+		staticRule( codeListEnd, LexemeType.CodeListEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.CodeListBegin ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
 		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
 		staticRule( exprBlockEnd, LexemeType.ExprBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.ExprBlockBegin ),
-		//staticRule( "}", LexemeType.CodeBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.CodeBlockBegin ), // Also using } instead of #} for closing code block
 		
 		staticRule( "+", LexemeType.Add, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "==", LexemeType.Equal, LexemeFlag.Operator, LexemeFlag.Compare ),
@@ -520,6 +526,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		staticRule( ";", LexemeType.Semicolon, LexemeFlag.Separator),
 		staticRule( "-", LexemeType.Sub, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "~", LexemeType.Tilde, LexemeFlag.Operator ),
+		//staticRule( "}", LexemeType.CodeBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.CodeBlockBegin ), // Also using } instead of #} for closing code block
 
 		dynamicRule( &parseFloat, LexemeType.Float, LexemeFlag.Literal ),
 		dynamicRule( &parseInteger, LexemeType.Integer, LexemeFlag.Literal ),
@@ -648,8 +655,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 				}
 				else
 				{
-					lexerError( `Expected pair lexeme "` ~ (cast(LexemeType) _front.info.pairTypeIndex).to!string
-						~ `" for lexeme "` ~ (cast(LexemeType) _front.info.typeIndex).to!string ~ `"` );
+					lexerError( `Expected pair lexeme "` ~ (cast(LexemeType) _front.info.typeIndex).to!string
+						~ `" for lexeme "` ~ (cast(LexemeType) _front.info.pairTypeIndex).to!string ~ `"` );
 				}
 			}
 		}
@@ -670,6 +677,23 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 				break;
 			}
 			case CodeBlockEnd:
+			{
+				if( _ctx.state == ContextState.CodeContext )
+				{
+					if( !_ctx.statesStack.empty )
+						_ctx.statesStack.popBack();
+				}
+				break;
+			}
+			case CodeListBegin:
+			{
+				if( _ctx.state == ContextState.CodeContext || _ctx.state == ContextState.MixedContext )
+				{
+					_ctx.statesStack ~= ContextState.CodeContext;
+				}
+				break;
+			}
+			case CodeListEnd:
 			{
 				if( _ctx.state == ContextState.CodeContext )
 				{
@@ -939,6 +963,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	
 	static immutable notTextLexemes = [
 		codeBlockBegin,
+		codeListBegin,
 		mixedBlockBegin,
 		mixedBlockEnd,
 		exprBlockBegin

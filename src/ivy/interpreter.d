@@ -130,7 +130,7 @@ public:
 
 }
 
-T expectNode(T)( IDeclNode node, string msg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+T expectNode(T)( IvyNode node, string msg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
 {
 	import std.algorithm: splitter;
 	import std.range: retro, take, join;
@@ -256,10 +256,12 @@ public:
 			auto splName = splitter(varName, '.');
 			string shortName = splName.back;
 			splName.popBack(); // Trim actual name
+			writeln( "setValue shortName: ", shortName );
 			writeln( "setValue: ", splName );
 
 			if( splName.empty )
 			{
+				writeln( "setValue writing root var: ", shortName );
 				_vars[shortName] = value;
 			}
 			else
@@ -273,6 +275,7 @@ public:
 					interpretError( `Cannot create new value "` ~ varName ~ `", because parent is not of assoc array type!` );
 
 				(*parentPtr)[shortName] = value;
+				writeln( "Checking setValue: ", *parentPtr );
 			}
 
 		}
@@ -466,7 +469,7 @@ public:
 	}
 	
 	public override {
-		void visit(IDeclNode node)
+		void visit(IvyNode node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
 			if( node )
@@ -978,24 +981,38 @@ public:
 			
 			opnd = node.data;
 		}
+
 		
 		void visit(ICompoundStatement node)
 		{
 			writeln( typeof(node).stringof ~ " visited" );
 
-			TDataNode[] nodes;
-			
-			foreach( stmt; node )
+			if( node.isList )
 			{
-				if( stmt )
+				TDataNode[] nodes;
+
+				foreach( stmt; node )
 				{
-					stmt.accept(this);
-					string str = opnd.toString();
-					nodes ~= opnd;
+					if( stmt )
+					{
+						stmt.accept(this);
+						nodes ~= opnd;
+					}
 				}
+
+				opnd = nodes;
 			}
-			
-			opnd = nodes;
+			else
+			{
+				foreach( stmt; node )
+				{
+					if( stmt )
+					{
+						stmt.accept(this);
+					}
+				}
+				// Opnd automagicaly gets last value, we hope
+			}
 		}
 		
 	}

@@ -4,7 +4,7 @@ import std.stdio, std.file;
 
 import ivy.node, ivy.common, ivy.parser, ivy.lexer, ivy.lexer_tools, ivy.ast_writer;
 
-// void printNodesRecursive(IDeclNode node, int indent = 0)
+// void printNodesRecursive(IvyNode node, int indent = 0)
 // {
 // 	import std.range: repeat;
 // 	import std.conv: to;
@@ -48,7 +48,7 @@ void main()
 	
 	}
 	
-	IDeclNode ast;
+	IvyNode ast;
 	
 	try {
 		parser.lexer.popFront();

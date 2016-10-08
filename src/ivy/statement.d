@@ -35,11 +35,11 @@ class DirectiveStatement(LocationConfig c): IDirectiveStatement
 
 private:
 	string _name;
-	IDeclNode[] _attrs;
+	IvyNode[] _attrs;
 	
 public:
 
-	this( CustLocation loc, string name, IDeclNode[] attributes )
+	this( CustLocation loc, string name, IvyNode[] attributes )
 	{
 		_location = loc;
 		_name = name;
@@ -47,7 +47,7 @@ public:
 	}
 
 	public @property override {
-		IDeclNode[] children()
+		IvyNode[] children()
 		{
 			return _attrs;
 		}
@@ -115,7 +115,7 @@ public:
 		}
 		
 		public override {
-			@property IDeclNode front()
+			@property IvyNode front()
 			{
 				return _statement._attrs[_begin];
 			}
@@ -125,7 +125,7 @@ public:
 				++_begin;
 			}
 			
-			@property IDeclNode back()
+			@property IvyNode back()
 			{ 
 				return _statement._attrs[_end];
 			}
@@ -149,7 +149,7 @@ public:
 				return new Range(_statement, _begin, _end);
 			}
 			
-			IDeclNode opIndex(size_t index)
+			IvyNode opIndex(size_t index)
 			{
 				return _statement._attrs[index];
 			}
@@ -163,11 +163,11 @@ class KeyValueAttribute(LocationConfig c): IKeyValueAttribute
 
 private:
 	string _name;
-	IDeclNode _value;
+	IvyNode _value;
 	
 public:
 	
-	this(CustLocation loc, string attrName, IDeclNode val )
+	this(CustLocation loc, string attrName, IvyNode val )
 	{
 		_location = loc;
 		_name = attrName;
@@ -180,9 +180,9 @@ public:
 			return "key-value attribute";
 		}
 	
-		IDeclNode[] children()
+		IvyNode[] children()
 		{
-			return  [ cast(IDeclNode) _value ];
+			return  [ cast(IvyNode) _value ];
 		}
 	}
 	
@@ -192,7 +192,7 @@ public:
 			return _name;
 		}
 		
-		IDeclNode value()
+		IvyNode value()
 		{
 			return _value;
 		}
@@ -230,9 +230,9 @@ public:
 	}
 	
 	public @property override {
-		IDeclNode[] children()
+		IvyNode[] children()
 		{
-			return cast(IDeclNode[]) _statements.dup;
+			return cast(IvyNode[]) _statements.dup;
 		}
 	}
 	
@@ -319,19 +319,26 @@ class CodeBlockStatement(LocationConfig c): ICodeBlockStatement
 	mixin BaseBlockStatementImpl!(c, IDirectiveStatementRange);
 	
 private:
+	bool _isCodeList;
 
 
 public:
-	this(CustLocation loc, IDirectiveStatement[] stmts)
+	this(CustLocation loc, IDirectiveStatement[] stmts, bool isList)
 	{
 		_location = loc;
 		_statements = stmts;
+		_isCodeList = isList;
 	}
 	
 	public @property override {
 		string kind()
 		{
 			return "code block statement";
+		}
+
+		bool isList()
+		{
+			return _isCodeList;
 		}
 	}
 }
@@ -353,6 +360,11 @@ public:
 		{
 			return "mixed block statement";
 		}
+
+		bool isList()
+		{
+			return true;
+		}
 	}
 
 }
@@ -371,7 +383,7 @@ public:
 	}
 	
 	public @property override {
-		IDeclNode[] children()
+		IvyNode[] children()
 		{
 			return null;
 		}
@@ -403,7 +415,7 @@ public:
 	}
 	
 	public @property override {
-		IDeclNode[] children()
+		IvyNode[] children()
 		{
 			return null;
 		}

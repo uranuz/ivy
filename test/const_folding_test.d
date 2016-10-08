@@ -12,7 +12,7 @@ void main()
 	auto parser = new Parser!(TextRange)(
 	` statement attr= 3 + 5 * 4 `, "source.tpl");
 	
-	IDeclNode ast;
+	IvyNode ast;
 	
 	try {
 		parser.lexer.popFront();

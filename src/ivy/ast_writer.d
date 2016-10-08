@@ -2,7 +2,7 @@ module ivy.ast_writer;
 
 import ivy.node;
 
-void writeAST(SourceRange, OutRange)(ref const(SourceRange) source, IDeclNode node, ref OutRange output, int indent = 0)
+void writeAST(SourceRange, OutRange)(ref const(SourceRange) source, IvyNode node, ref OutRange output, int indent = 0)
 {
 	import std.range: repeat;
 	import std.array: array;
@@ -23,7 +23,7 @@ void writeAST(SourceRange, OutRange)(ref const(SourceRange) source, IDeclNode no
 
 import std.json;
 
-void writeASTasJSON(SourceRange)(ref const(SourceRange) source, IDeclNode node, ref JSONValue json)
+void writeASTasJSON(SourceRange)(ref const(SourceRange) source, IvyNode node, ref JSONValue json)
 {
 	import std.range: repeat;
 	import std.array: array;

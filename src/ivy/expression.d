@@ -99,7 +99,7 @@ public:
 		return "null";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return null;
 	}
@@ -137,7 +137,7 @@ public:
 		return "boolean";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return null;
 	}
@@ -181,7 +181,7 @@ public:
 		return "integer";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return null;
 	}
@@ -227,7 +227,7 @@ public:
 		return "floating";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return null;
 	}
@@ -272,7 +272,7 @@ public:
 		return "string";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return null;
 	}
@@ -307,9 +307,9 @@ public:
 		return "array literal";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
-		return cast(IDeclNode[])  _elements.dup;
+		return cast(IvyNode[])  _elements.dup;
 	}
 	
 	override @property LiteralType literalType()
@@ -352,9 +352,9 @@ public:
 		return "array index expression";
 	}
 
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
-		return cast(IDeclNode[]) [_arrayExp, _indexExp];
+		return cast(IvyNode[]) [_arrayExp, _indexExp];
 	}
 
 
@@ -362,7 +362,7 @@ public:
 
 class AssocArrayPair(LocationConfig c): IAssocArrayPair
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseDeclNodeImpl!c;
 
 private:
 	string _key;
@@ -393,9 +393,9 @@ public:
 		return "assoc array pair";
 	}
 
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
-		return cast(IDeclNode[])  [_valueExpr];
+		return cast(IvyNode[])  [_valueExpr];
 	}
 
 }
@@ -419,9 +419,9 @@ public:
 		return "assoc array literal";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
-		return cast(IDeclNode[]) _pairs;
+		return cast(IvyNode[]) _pairs;
 	}
 	
 	override @property LiteralType literalType()
@@ -480,7 +480,7 @@ public:
 		return "unary arithmetic expr";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return [_expr];
 	}
@@ -517,7 +517,7 @@ public:
 		return "binary arithmetic expr";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return [_leftExpr, _rightExpr];
 	}
@@ -557,7 +557,7 @@ public:
 		return "logical not expr";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return [_expr];
 	}
@@ -582,7 +582,7 @@ public:
 		return "binary logical expr";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return [_leftExpr, _rightExpr];
 	}
@@ -608,7 +608,7 @@ public:
 		return "compare expr";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return [_leftExpr, _rightExpr];
 	}
@@ -642,7 +642,7 @@ public:
 		return "identifier expr";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
 		return null;
 	}
@@ -660,10 +660,10 @@ class CallExp(LocationConfig c): IExpression
 	mixin BaseExpressionImpl!c;
 private:
 	IExpression _callable;
-	IDeclNode[] _argList;
+	IvyNode[] _argList;
 
 public:
-	this( CustLocation loc, IExpression callable, IDeclNode[] argList )
+	this( CustLocation loc, IExpression callable, IvyNode[] argList )
 	{
 		_location = loc;
 		_callable = callable;
@@ -675,9 +675,9 @@ public:
 		return "call expr";
 	}
 	
-	override @property IDeclNode[] children()
+	override @property IvyNode[] children()
 	{
-		return (cast(IDeclNode) _callable) ~ _argList;
+		return (cast(IvyNode) _callable) ~ _argList;
 	}
 
 }
