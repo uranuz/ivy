@@ -185,12 +185,107 @@ void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
 	throw new InterpretException(msg, file, line);
 }
 
-class InterpreterScope
+struct ExecStackFrame
+{
+	string directive;
+	string label;
+	InterpreterScope interpScope;
+
+}
+
+class ExecutionStack
+{
+	/++ Execution stask is special stack that collect information about directives that programme
+		entered during execution. Labels for jumping out of directives and pointers to linked contexts
+	+/
+
+
+}
+
+
+class IvyModule
 {
 private:
-	TDataNode[string] _vars;
+	string _moduleName;
+	string _fileName;
+	IvyNode _rootNode;
+
+public:
+	this( string moduleName, string fileName, IvyNode rootNode )
+	{
+		_moduleName = moduleName;
+		_fileName = fileName;
+		_rootNode = rootNode;
+	}
+
+	void doImport( Interpreter interp )
+	{
+		if( !interp )
+			interpretError( `Cannot use null interpreter to import module` );
+
+		_rootNode.accept(interp);
+	}
+
+}
+
+
+class IvyRepository
+{
+	import ivy.lexer_tools: TextForwardRange;
+
+	alias TextRange = TextForwardRange!(string, LocationConfig());
+
+private:
+	IvyModule[string] _modules;
+
+public:
+	void loadModuleFromFile(string fileName)
+	{
+		import std.file: read;
+
+		string fileContent = cast(string) std.file.read(fileName);
+
+		import ivy.parser;
+		auto parser = new Parser!(TextRange)(fileContent, fileName);
+
+		IvyNode moduleRootNode = parser.parse();
+		IvyModule ivyModule = new IvyModule( fileName, fileName, moduleRootNode );
+		_modules[ fileName ] = ivyModule;
+	}
+
+	IvyModule getModule(string name)
+	{
+		if( name !in _modules )
+		{
+			loadModuleFromFile( name );
+		}
+
+		if( name in _modules )
+		{
+			return _modules[name];
+		}
+		else
+		{
+			return null;
+		}
+	}
+
+
+
+}
+
+class ExecutionFrame
+{
+private:
+	TDataNode _dataDict;
 	
 public:
+	this()
+	{
+		TDataNode[string] emptyDict;
+		_dataDict = emptyDict;
+	}
+
 	TDataNode getValue( string varName )
 	{
 		auto varValuePtr = findValue(varName);
@@ -219,7 +314,7 @@ public:
 		if( varName.empty )
 			interpretError( "VariableTable: Variable name cannot be empty" );
 		auto nameSplitter = varName.splitter('.');
-		TDataNode* nodePtr = nameSplitter.front in _vars;
+		TDataNode* nodePtr = nameSplitter.front in _dataDict.assocArray;
 		if( nodePtr is null )
 			return null;
 		nameSplitter.popFront();
@@ -256,13 +351,11 @@ public:
 			auto splName = splitter(varName, '.');
 			string shortName = splName.back;
 			splName.popBack(); // Trim actual name
-			writeln( "setValue shortName: ", shortName );
-			writeln( "setValue: ", splName );
 
 			if( splName.empty )
 			{
 				writeln( "setValue writing root var: ", shortName );
-				_vars[shortName] = value;
+				_dataDict[shortName] = value;
 			}
 			else
 			{
@@ -294,7 +387,7 @@ public:
 		splName.popBack(); // Trim actual name
 		if( splName.empty )
 		{
-			_vars.remove( shortName );
+			_dataDict.assocArray.remove( shortName );
 		}
 		else
 		{
@@ -302,10 +395,10 @@ public:
 			TDataNode* parentPtr = findValue(splName.join('.'));
 
 			if( parentPtr is null )
-				interpretError( `Cannot create new variable "` ~ varName ~ `", because parent not exists!` );
+				interpretError( `Cannot delete variable "` ~ varName ~ `", because parent not exists!` );
 
 			if( parentPtr.type != DataNodeType.AssocArray )
-				interpretError( `Cannot create new value "` ~ varName ~ `", because parent is not of assoc array type!` );
+				interpretError( `Cannot delete value "` ~ varName ~ `", because parent is not of assoc array type!` );
 
 			(*parentPtr)[shortName].assocArray.remove(shortName);
 		}
@@ -323,12 +416,15 @@ public:
 	TDataNode opnd; //Current operand value
 	IInterpretersController _dirController; // Root directives controller
 	ICompositeInterpretersController _inlineDirController; // Inline directives controller
+	IvyRepository _ivyRepository; // Storage for parsed modules
 
 	this(IInterpretersController dirController, ICompositeInterpretersController inlineDirController)
 	{
 		scopeStack ~= new InterpreterScope;
 		_dirController = dirController;
 		_inlineDirController = inlineDirController;
+		_ivyRepository = new IvyRepository;
+
 		enterScope(); // Create global scope
 	}
 	
@@ -1015,5 +1111,210 @@ public:
 			}
 		}
 		
+	}
+}
+
+class IvyMachine
+{
+private:
+	ProgrammeObject _prog;
+	TDataNode[] _stack;
+	ExecutionFrame[] _frameStack;
+
+
+public:
+	this( ProgrammeObject progObj )
+	{
+		_prog = progObj;
+
+	}
+
+	void execLoop()
+	{
+		import std.range: empty, back, popBack;
+
+		auto codeRange = _prog.code[];
+		size_t pk = 0;
+
+		for( ; pk < codeRange.length; ++pk )
+		{
+			Instruction instr = codeRange[pk];
+			switch( instr.code )
+			{
+				// Base arithmetic operations execution
+				case OpCode.Add, OpCode.Sub, OpCode.Mul, OpCode.Div, OpCode.Mod:
+				{
+					// Right value was evaluated last so it goes first in the stack
+					TDataNode rightVal = _stack.back;
+					_stack.popBack();
+					TDataNode leftVal = _stack.back;
+					assert( ( leftVal.type == DataNodeType.Integer || leftVal == DataNodeType.Floating ) && leftVal.type == rightVal.type,
+						`Left and right values of arithmetic operation must have the same integer or floating type!`
+					);
+
+					import std.meta: AliasSeq;
+
+					switch( instr.code )
+					{
+						foreach( arithmOp; AliasSeq!([OpCode.Add, "+"], [OpCode.Sub, "-"], [OpCode.Mul, "*"], [OpCode.Div, "/"], [OpCode.Mod, "%"]) )
+						{
+							case arithmOp[0]:
+							{
+								if( leftVal.type == DataNodeType.Integer )
+								{
+									mixin( ` _stack.back = leftVal.integer ` ~ arithmOp[1] ~ ` rightVal.integer;` );
+								}
+								else
+								{
+									mixin( ` _stack.back = leftVal.floating ` ~ arithmOp[1] ~ ` rightVal.floating;` );
+								}
+								break;
+							}
+						}
+						default:
+							assert(false, `This should never happen!` );
+					}
+					break;
+				}
+
+				// Logical binary operations
+				case OpCode.And, OpCode.Or, OpCode.Xor:
+				{
+					assert( false, `Unimplemented operation!` );
+					break;
+				}
+
+				// Comparision operations
+				case OpCode.LT, OpCode.GT, OpCode.Equal, OpCode.NotEqual, LTEqual, GTEqual:
+				{
+					assert( false, `Unimplemented operation!` );
+					break;
+				}
+
+				// Load constant from programme data table into stack
+				case OpCode.LoadConst:
+				{
+					size_t constIndex = instr.args[0];
+					import std.conv;
+					assert( constIndex < _prog.data.length, `Cannot load const with index: `, constIndx.text );
+					_stack ~= _prog.data[constIndex];
+					break;
+				}
+
+				// Concatenates two arrays or strings and puts result onto stack
+				case OpCode.Concat:
+				{
+					TDataNode rightVal = _stack.back;
+					_stack.popBack();
+					TDataNode leftVal = _stack.back;
+					assert( ( leftVal.type == DataNodeType.String || leftVal == DataNodeType.Array ) && leftVal.type == rightVal.type,
+						`Left and right values for concatenation operation must have the same string or array type!`
+					);
+
+					if( leftVal.type == DataNodeType.String )
+					{
+						_stack.back = leftVal.str ~ rightVal.str;
+					}
+					else
+					{
+						_stack.back = leftVal.array ~ rightVal.array;
+					}
+
+					break;
+				}
+
+				// Useless unary plus operation
+				case OpCode.UnaryPlus:
+				{
+					assert( _stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
+						`Operand for unary plus operation must have integer or floating type!` );
+
+					// Do nothing for now:)
+					break;
+				}
+
+				case OpCode.UnaryMin:
+				{
+					assert( _stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
+						`Operand for unary minus operation must have integer or floating type!` );
+
+					if( leftVal.type == DataNodeType.Integer )
+					{
+						_stack.back = - _stack.back.integer;
+					}
+					else
+					{
+						_stack.back = - _stack.back.floating;
+					}
+
+					break;
+				}
+
+				case OpCode.UnaryNot:
+				{
+					assert( _stack.back.type == DataNodeType.Boolean,
+						`Operand for unary minus operation must have boolean type!` );
+
+					_stack.back = ! _stack.back.boolean;
+					break;
+				}
+
+				case OpCode.Nop:
+				{
+					// Doing nothing here... What did you expect? :)
+					break;
+				}
+
+				// Stores data from stack into local context frame variable
+				case OpCode.StoreLocal:
+				{
+					assert( _stack.back.type == DataNodeType.String,
+						`Variable name operand must have string type!` );
+
+					string varName = _stack.back.str;
+					_stack.back.popBack(); // Remove var name from stack
+
+					_frameStack.back.setValue( varName, _stack.back );
+					_stack.popBack(); // Remove var value from stack
+					break;
+				}
+
+				// Loads data from local context frame variable
+				case OpCode.LoadLocal:
+				{
+					assert( _stack.back.type == DataNodeType.String,
+						`Variable name operand must have string type!` );
+
+					// Replacing variable name with variable value
+					_stack.back = _frameStack.back.getValue( _stack.back.str );
+					break;
+				}
+
+				case OpCode.CallDirective:
+				{
+					assert( false, "Unimplemented yet!" );
+					break;
+				}
+
+				case OpCode.ImportModule:
+				{
+					assert( false, "Unimplemented yet!" );
+					break;
+				}
+
+				case OpCode.ImportFrom:
+				{
+					assert( false, "Unimplemented yet!" );
+					break;
+				}
+
+				default:
+				{
+					assert( false, "Unexpected code of operation" );
+					break;
+				}
+			}
+
+		}
 	}
 }

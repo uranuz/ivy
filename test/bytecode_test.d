@@ -10,25 +10,23 @@ void main()
 {
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
-	string sourceFileName = "test/html_template.html";
+	string sourceFileName = "test/bytecode_template.html";
 	string source = cast(string) std.file.read(sourceFileName);
-	
+
 	auto parser = new Parser!(TextRange)(source, sourceFileName);
-	
+
 	IvyNode ast;
-	
+
 	try {
 		ast = parser.parse();
 	} catch(Throwable e) {
-// 		printLexemes();
-		
 		throw e;
 	}
-	
+
 	JSONValue astJSON;
-	
+
 	writeASTasJSON(parser.lexer.sourceRange, ast, astJSON);
-	
+
 	stdout.writeln(toJSON(&astJSON, true));
 
 	ICompositeInterpretersController rootController = makeRootInterpreter();
@@ -37,17 +35,10 @@ void main()
 
 	auto visitor = new Interpreter(rootController, inlineDirController);
  	alias TDataNode = DataNode!string;
- 	visitor.setLocalValue("content", TDataNode("<div>Основное содержимое формы</div>"));
- 	visitor.setLocalValue("content2", TDataNode("Еще какое-то содержимое страницы"));
- 	visitor.setLocalValue("content3", TDataNode("Здравствуй, Вася"));
- 	visitor.setLocalValue("x", TDataNode(20));
- 	visitor.setLocalValue("y", TDataNode("no"));
- 	
- 	bool hasContent = visitor.canFindValue("content2");
- 	auto content = visitor.getValue("content2");
-	
+
+
 	ast.accept(visitor);
-	
+
 	writeln(visitor.opnd);
-	
+
 }

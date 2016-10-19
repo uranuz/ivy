@@ -577,6 +577,10 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	{
 		sourceRange = srcRange.save;
 		currentRange = sourceRange.save;
+
+		// In order to make lexer initialize at startup - we parse first lexeme
+		if( !this.empty )
+			this.popFront();
 	}
 	
 	void parse()

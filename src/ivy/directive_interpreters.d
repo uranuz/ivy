@@ -29,6 +29,7 @@ public:
 		_dirInterpreters["text"] = new TextBlockInterpreter();
 		_dirInterpreters["def"] = new DefInterpreter();
 		_dirInterpreters["def.getAttr"] = new DefGetAttrInterpreter();
+		_dirInterpreters["import"] = new ImportInterpreter();
 	}
 
 	override {
@@ -761,16 +762,37 @@ class DefGetAttrInterpreter: IDirectiveInterpreter
 	}
 }
 
-
-
-/*
 /// Attaches defined symbols from another ivy template file
 class ImportInterpreter: IDirectiveInterpreter
 {
+private:
+	string _importPath = "test/";
+	string _moduleExt = ".html";
 
+public:
+	override void interpret(IDirectiveStatement statement, Interpreter interp)
+	{
+		if( !statement || statement.name != "import"  )
+			interpretError( "Expected 'import' directive" );
+
+		auto stmtRange = statement[];
+
+		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
+
+		import std.algorithm: splitter;
+		import std.string: join;
+
+		string modulePath = moduleNameExpr.name.splitter('.').join('/');
+
+		IvyModule mod = interp._ivyRepository.getModule( _importPath ~ modulePath ~ _moduleExt );
+		mod.doImport( interp );
+
+		if( !stmtRange.empty )
+			interpretError( `Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere` );
+	}
 
 }
-*/
+
 
 /*
 /// Used to inject another template file directly in current AST

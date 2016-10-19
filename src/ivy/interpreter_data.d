@@ -3,7 +3,7 @@ module ivy.interpreter_data;
 import std.exception: enforceEx;
 import std.traits;
 
-enum DataNodeType { Null, Boolean, Integer, Floating, String, Array, AssocArray, ClassObject };
+enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, ClassObject };
 
 class DataNodeException : Exception
 {
@@ -28,21 +28,14 @@ interface IClassObject
 
 }
 
-class Symbol
+interface IVirtualMachine
 {
-	@property string name()
-	{
-		assert(0);
-	
-	
-	}
-	
-	@property int kind()
-	{
-		assert(0);
-	
-	}
 
+}
+
+interface ICodeObject
+{
+	void exec(IVirtualMachine vm);
 }
 
 struct DataNode(S)
@@ -57,6 +50,7 @@ struct DataNode(S)
 			String str;
 			DataNode[] array;
 			DataNode[String] assocArray;
+			ICodeObject codeObj;
 			IClassObject obj;
 		}
 	}
@@ -66,7 +60,7 @@ struct DataNode(S)
 		assign(value);
 	}
 
-	Storage storage;
+	private Storage storage;
 	private DataNodeType typeTag;
 
 	bool boolean() @property
@@ -134,10 +128,21 @@ struct DataNode(S)
 	{
 		assign(val);
 	}
+
+	ICodeObject codeObj() @property
+	{
+		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not code object");
+		return storage.codeObj;
+	}
+
+	void codeObj(ICodeObject val) @property
+	{
+		assign(val);
+	}
 	
 	IClassObject obj() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not class object");
+		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not code object");
 		return storage.obj;
 	}
 	
@@ -180,6 +185,12 @@ struct DataNode(S)
 		{
 			typeTag = DataNodeType.Floating;
 			storage.floating = arg;
+		}
+		else static if( is( T : ICodeObject ) )
+		{
+			typeTag = DataNodeType.CodeObject;
+			storage.codeObject = arg;
+
 		}
 		else static if( is( T : IClassObject ) )
 		{
