@@ -189,8 +189,7 @@ struct DataNode(S)
 		else static if( is( T : ICodeObject ) )
 		{
 			typeTag = DataNodeType.CodeObject;
-			storage.codeObject = arg;
-
+			storage.codeObj = arg;
 		}
 		else static if( is( T : IClassObject ) )
 		{
@@ -345,22 +344,25 @@ void writeDataNodeLines(TDataNode, OutRange)(
 	
 	final switch( node.type ) with( DataNodeType )
 	{
-		case Null : {
-			outRange.put( "");
+		case Undef:
+			outRange.put( "" );
 			break;
-		} case Boolean : {
+		case Null:
+			outRange.put( "" );
+			break;
+		case Boolean:
 			outRange.put( node.boolean ? "true" : "false"  );
 			break;
-		} case Integer : {
+		case Integer:
 			outRange.put( node.integer.to!string );
 			break;
-		} case Floating : {
+		case Floating:
 			outRange.put( node.floating.to!string );
 			break;
-		} case String : {
+		case String:
 			outRange.put( node.str );
 			break;
-		} case Array : {
+		case Array:
 			foreach( i, ref el; node.array )
 			{
 				if( linesRecursion == 0 )
@@ -376,14 +378,16 @@ void writeDataNodeLines(TDataNode, OutRange)(
 				}
 			}
 			break;
-		} case AssocArray : {
+		case AssocArray:
 			writeDataNodeAsString(node, outRange, maxRecursion - 1);
 			break;
-		} case ClassObject : {
+		case CodeObject:
+			outRange.put( "<code object>" );
+			break;
+		case ClassObject:
 			assert(0);
 			//outRange.put( node.obj.toString() );
 			break;
-		}		
 	}
 }
 
@@ -397,24 +401,27 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 	
 	final switch( node.type ) with( DataNodeType )
 	{
-		case Null : {
-			outRange.put( "");
+		case Undef:
+			outRange.put( "" );
 			break;
-		} case Boolean : {
+		case Null:
+			outRange.put( "" );
+			break;
+		case Boolean:
 			outRange.put( node.boolean ? "true" : "false"  );
 			break;
-		} case Integer : {
+		case Integer:
 			outRange.put( node.integer.to!string );
 			break;
-		} case Floating : {
+		case Floating:
 			outRange.put( node.floating.to!string );
 			break;
-		} case String : {
+		case String:
 			outRange.put( "\"" );
 			outRange.put(  node.str );
 			outRange.put( "\"" );
 			break;
-		} case Array : {
+		case Array:
 			outRange.put( "[" );
 			foreach( i, ref el; node.array )
 			{
@@ -425,7 +432,8 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 			}
 			outRange.put( "]");
 			break;
-		} case AssocArray : {
+		case AssocArray:
+		{
 			outRange.put( "{");
 			size_t i = 0;
 			foreach( ref key, ref val; node.assocArray )
@@ -441,11 +449,14 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 			}
 			outRange.put( "}");
 			break;
-		} case ClassObject : {
+		}
+		case CodeObject:
+			outRange.put( "<code object>" );
+			break;
+		case ClassObject:
 			assert(0);
 			//outRange.put(  node.obj.toString() );
 			break;
-		}		
 	}
 	
 }

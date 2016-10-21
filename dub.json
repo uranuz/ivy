@@ -7,7 +7,7 @@
 	},
 	"configurations": [
 		{
-			"name": "interpreter_test", 
+			"name": "interpreter_test",
 			"targetType": "executable",
 			"targetPath": "./",
 			"targetName": "interpreter_test",
@@ -17,6 +17,18 @@
 			"buildRequirements": ["silenceWarnings"],
 			"buildOptions": ["debugInfo"],
 			"sourceFiles": [ "test/interpreter_test.d" ]
+		},
+		{
+			"name": "compiler_test",
+			"targetType": "executable",
+			"targetPath": "./",
+			"targetName": "compiler_test",
+			"platforms": [],
+			"versions": [],
+			"libs": [],
+			"buildRequirements": ["silenceWarnings"],
+			"buildOptions": ["debugInfo"],
+			"sourceFiles": [ "test/compiler_test.d" ]
 		},
 		{
 			"name": "parser_test", 

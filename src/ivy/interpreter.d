@@ -185,24 +185,6 @@ void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
 	throw new InterpretException(msg, file, line);
 }
 
-struct ExecStackFrame
-{
-	string directive;
-	string label;
-	InterpreterScope interpScope;
-
-}
-
-class ExecutionStack
-{
-	/++ Execution stask is special stack that collect information about directives that programme
-		entered during execution. Labels for jumping out of directives and pointers to linked contexts
-	+/
-
-
-}
-
-
 class IvyModule
 {
 private:
@@ -412,7 +394,7 @@ public:
 	alias String = string;
 	alias TDataNode = DataNode!String;
 	
-	InterpreterScope[] scopeStack;
+	ExecutionFrame[] scopeStack;
 	TDataNode opnd; //Current operand value
 	IInterpretersController _dirController; // Root directives controller
 	ICompositeInterpretersController _inlineDirController; // Inline directives controller
@@ -420,7 +402,7 @@ public:
 
 	this(IInterpretersController dirController, ICompositeInterpretersController inlineDirController)
 	{
-		scopeStack ~= new InterpreterScope;
+		scopeStack ~= new ExecutionFrame;
 		_dirController = dirController;
 		_inlineDirController = inlineDirController;
 		_ivyRepository = new IvyRepository;
@@ -430,7 +412,7 @@ public:
 	
 	void enterScope()
 	{
-		scopeStack ~= new InterpreterScope;
+		scopeStack ~= new ExecutionFrame;
 	}
 	
 	void exitScope()
@@ -1114,6 +1096,7 @@ public:
 	}
 }
 
+/+
 class IvyMachine
 {
 private:
@@ -1196,7 +1179,7 @@ public:
 				{
 					size_t constIndex = instr.args[0];
 					import std.conv;
-					assert( constIndex < _prog.data.length, `Cannot load const with index: `, constIndx.text );
+					assert( constIndex < _prog.data.length, `Cannot load const with index: ` ~ constIndex.text );
 					_stack ~= _prog.data[constIndex];
 					break;
 				}
@@ -1318,3 +1301,4 @@ public:
 		}
 	}
 }
++/

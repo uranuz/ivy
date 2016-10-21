@@ -33,21 +33,27 @@ enum OpCode: ubyte {
 	LT,
 	GT,
 	Equal,
-	NotEqual,
 	LTEqual,
 	GTEqual,
 
 	// Frame data load/ store
-	StoreLocal,
-	LoadLocal,
+	StoreName,
+	LoadName,
 
 	// Preparing and calling directives
 	LoadDirective,
-	CallDirective
+	CallDirective,
 
 	// Import another module
 	ImportModule,
-	ImportFrom
+	ImportFrom,
+
+	// Flow control opcodes
+	JumpIfTrue,
+	JumpIfFalse,
+	Jump,
+	Return
+
 
 
 }
