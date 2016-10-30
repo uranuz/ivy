@@ -36,6 +36,10 @@ enum OpCode: ubyte {
 	LTEqual,
 	GTEqual,
 
+	// Array or assoc array operations
+	LoadSubscr,
+	StoreSubscr,
+
 	// Frame data load/ store
 	StoreName,
 	LoadName,
@@ -52,8 +56,20 @@ enum OpCode: ubyte {
 	JumpIfTrue,
 	JumpIfFalse,
 	Jump,
-	Return
+	Return,
 
+	// Stack operations
+	StackPop,
 
+	// Loop initialization and execution
+	InitLoop,
+	RunIter
 
+}
+
+// Minimal element of bytecode is instruction opcode with optional args
+struct Instruction
+{
+	OpCode opcode; // So... it's instruction opcode
+	uint[1] args; // One arg for now
 }

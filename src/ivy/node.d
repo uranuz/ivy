@@ -26,7 +26,7 @@ interface IvyNode
 	// string toString();
 }
 
-enum LiteralType { NotLiteral, Null, Boolean, Integer, Floating, String, Array, AssocArray };
+enum LiteralType { NotLiteral, Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray };
 
 interface IExpression: IvyNode
 {

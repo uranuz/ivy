@@ -6,6 +6,67 @@ import ivy.node_visitor;
 import ivy.bytecode;
 import ivy.interpreter_data;
 
+class ASTNodeTypeException: Exception
+{
+public:
+	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
+	{
+		super(msg, file, line, next);
+	}
+
+}
+
+T expectNode(T)( IvyNode node, string msg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+{
+	import std.algorithm: splitter;
+	import std.range: retro, take, join;
+	import std.array: array;
+	import std.conv: to;
+
+	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+	enum shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
+
+	T typedNode = cast(T) node;
+	if( !typedNode )
+		throw new ASTNodeTypeException( shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ msg, file, line );
+
+	return typedNode;
+}
+
+T takeFrontAs(T)( IAttributeRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+{
+	import std.algorithm: splitter;
+	import std.range: retro, take, join;
+	import std.array: array;
+	import std.conv: to;
+
+	static immutable shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
+	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+	string longMsg = shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ errorMsg;
+
+	if( range.empty )
+		throw new ASTNodeTypeException( longMsg, file, line );
+
+	T typedAttr = cast(T) range.front;
+	if( !typedAttr )
+		throw new ASTNodeTypeException( longMsg, file, line );
+
+	range.popFront();
+
+	return typedAttr;
+}
+
+T testFrontIs(T)( IAttributeRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
+{
+	if( range.empty )
+		return false;
+
+	T typedNode = cast(T) range.front;
+
+	return typedNode !is null;
+}
+
+
 class CompilerException: Exception
 {
 public:
@@ -23,23 +84,35 @@ void compilerError(string msg, string file = __FILE__, size_t line = __LINE__)
 
 alias TDataNode = DataNode!string;
 
-// Minimal element of bytecode is instruction opcode with optional args
-struct Instruction
-{
-	OpCode opcode; // So... it's instruction opcode
-	uint[1] args; // One arg for now
-}
-
 interface IDirectiveCompiler
 {
-	void compile( IDirectiveStatement node, ByteCodeCompiler cpl );
+	void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler );
 
 }
 
-/// Compiles var directive in corresponding bytecode
+/++
+	`Var` directive is defined as list of elements. Each of them could be of following forms:
+	- Just name of new variable without any value or type (default value will be set, type is `any`)
+		{# var a #}
+	- Name with initializer value (type is `any`)
+		{# var a: "Example" #}
+	- Name with type but without any value (`as` context keyword is used to describe type)
+		{# var a as str #}
+	- Name with initializer and type
+		{# var a: "Example" as str #}
+
+	Multiple variables could be defined using one `var` directive
+	{# var
+			a
+			b: "Example"
+			c as str
+			d: "Example2" as str
+	#}
++/
 class VarCompiler: IDirectiveCompiler
 {
-	void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
+public:
+	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
 	{
 		import std.range: empty, back;
 
@@ -54,6 +127,16 @@ class VarCompiler: IDirectiveCompiler
 		while( !stmtRange.empty )
 		{
 			string varName;
+
+			// Exactly setting value in nearest context
+			compiler._frameStack.back.add( Symbol(varName) );
+
+			uint constIndex = cast(uint) compiler.addConst( TDataNode(varName) );
+
+			Instruction instr;
+			instr.opcode = OpCode.LoadConst;
+			instr.args[0] = constIndex;
+			compiler.addInstr( instr );
 
 			if( auto kwPair = cast(IKeyValueAttribute) stmtRange.front )
 			{
@@ -93,18 +176,54 @@ class VarCompiler: IDirectiveCompiler
 				}
 			}
 
-			// Exactly setting value in nearest context
-			compiler._frameStack.back.add( Symbol(varName) );
+			compiler.addInstr( Instruction(OpCode.StoreName) );
+		}
 
-			uint constIndex = cast(uint) compiler._consts.length;
-			compiler._consts ~= TDataNode( varName );
+		if( !stmtRange.empty )
+			compilerError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
+	}
+}
+
+/++
+	`Set` directive is used to set values of existing variables in context.
+	It is defined as list of named attributes where key is variable name
+	and attr value is new value for variable in context. Example:
+	{# set a: "Example" #}
+
+	Multiple variables could be set using one `set` directive
+	{# set
+			a: "Example"
+			b: 10
+			c: { s: 10, k: "Example2" }
+	#}
++/
+class SetInterpreter : IDirectiveCompiler
+{
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "set"  )
+			compilerError( "Expected 'set' directive" );
+
+		auto stmtRange = statement[];
+
+		while( !stmtRange.empty )
+		{
+			IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
+
+			if( !kwPair.value )
+				compilerError( "Expected value for 'set' directive" );
+
+			uint constIndex = cast(uint) compiler.addConst( TDataNode( kwPair.name ) );
 
 			Instruction instr;
 			instr.opcode = OpCode.LoadConst;
 			instr.args[0] = constIndex;
-			compiler._code ~= instr;
+			compiler.addInstr( instr );
 
-			compiler._code ~= Instruction(OpCode.StoreName);
+			kwPair.value.accept(compiler); //Evaluating expression
+
+			compiler.addInstr( Instruction(OpCode.StoreName) );
 		}
 
 		if( !stmtRange.empty )
@@ -113,9 +232,376 @@ class VarCompiler: IDirectiveCompiler
 
 }
 
-struct CodeChunk
+class IfCompiler: IDirectiveCompiler
 {
-	Instruction[] code;
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "if" )
+			compilerError( `Expected "if" directive statement!` );
+
+		import std.typecons: Tuple;
+		import std.range: back, empty;
+		alias IfSect = Tuple!(IExpression, "cond", IStatement, "stmt");
+
+		IfSect[] ifSects;
+		IStatement elseBody;
+
+		auto stmtRange = statement[];
+
+		IExpression condExpr = stmtRange.takeFrontAs!IExpression( "Conditional expression expected" );
+		IStatement bodyStmt = stmtRange.takeFrontAs!IStatement( "'If' directive body statement expected" );
+
+		ifSects ~= IfSect(condExpr, bodyStmt);
+
+		while( !stmtRange.empty )
+		{
+			INameExpression keywordExpr = stmtRange.takeFrontAs!INameExpression("'elif' or 'else' keyword expected");
+			if( keywordExpr.name == "elif" )
+			{
+				condExpr = stmtRange.takeFrontAs!IExpression( "'elif' conditional expression expected" );
+				bodyStmt = stmtRange.takeFrontAs!IStatement( "'elif' body statement expected" );
+
+				ifSects ~= IfSect(condExpr, bodyStmt);
+			}
+			else if( keywordExpr.name == "else" )
+			{
+				elseBody = stmtRange.takeFrontAs!IStatement( "'else' body statement expected" );
+				if( !stmtRange.empty )
+					compilerError("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
+				break;
+			}
+			else
+			{
+				compilerError("'elif' or 'else' keyword expected");
+			}
+		}
+
+		foreach( i, ifSect; ifSects )
+		{
+			ifSect.cond.accept(compiler);
+
+			// Add conditional jump instruction
+			// Remember address of jump instruction
+			size_t jumpInstrIndex = compiler.addInstr( Instruction( OpCode.JumpIfFalse ) );
+
+			// Drop condition operand from stack
+			compiler.addInstr( Instruction( OpCode.StackPop ) );
+
+			// Add `if body` code
+			ifSect.stmt.accept(compiler);
+
+			// Getting address of instruction following after if body
+			uint jumpElseIndex = cast(uint) compiler.getInstrCount();
+
+			compiler.setInstrArg0( jumpInstrIndex, jumpElseIndex );
+		}
+
+		if( elseBody )
+		{
+			elseBody.accept(compiler);
+		}
+
+		if( !stmtRange.empty )
+			compilerError( `Expected end of "if" directive. Maybe ';' is missing` );
+	}
+
+}
+
+/*
+class ForInterpreter : IDirectiveCompiler
+{
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "for"  )
+			interpretError( "Expected 'for' directive" );
+
+		auto stmtRange = statement[];
+
+		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("For loop variable name expected");
+
+		string varName = varNameExpr.name;
+		if( varName.length == 0 )
+			interpretError("Loop variable name cannot be empty");
+
+		INameExpression inAttribute = stmtRange.takeFrontAs!INameExpression("Expected 'in' attribute");
+
+		if( inAttribute.name != "in" )
+			interpretError( "Expected 'in' keyword" );
+
+		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected 'for' aggregate expression");
+
+		// Compile code to calculate aggregate value
+		aggregateExpr.accept(compiler);
+
+		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement( "Expected loop body statement" );
+
+		if( !stmtRange.empty )
+			interpretError( "Expected end of directive after loop body. Maybe ';' is missing" );
+
+		// TODO: Check somehow if aggregate has supported type
+
+		// Issue command to get array length
+		compiler._code ~= Instruction( OpCode.GetLength );
+
+		// Prepare counter
+		uint zeroConstIndex = cast(uint) compiler._consts.length;
+		compiler._consts ~= TDataNode(0);
+
+		Instruction loadZeroInstr;
+		loadZeroInstr.args[0] = zeroConstIndex;
+
+		uint oneConstIndex = cast(uint) compiler._consts.length;
+		compiler._consts ~= TDataNode(0);
+
+		Instruction loadOneInstr;
+		loadOneInstr.args[0] = oneConstIndex;
+
+		compiler._code ~= loadZeroInstr;
+
+
+
+		bodyStmt.accept(compiler);
+	}
+
+}
+*/
+
+// Produces OpCode.Nop
+class PassInterpreter : IDirectiveCompiler
+{
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		compiler.addInstr( Instruction( OpCode.Nop ) );
+	}
+}
+
+class ExprCompiler: IDirectiveCompiler
+{
+	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
+	{
+		if( !stmt || stmt.name != "expr" )
+			compilerError( `Expected "expr" directive statement!` );
+
+		auto stmtRange = stmt[];
+		if( stmtRange.empty )
+			compilerError( `Expected node as "expr" argument!` );
+
+		stmtRange.front.accept(compiler);
+		stmtRange.popFront();
+
+		if( !stmtRange.empty )
+			compilerError( `Expected end of "expr" directive. Maybe ';' is missing` );
+	}
+
+}
+
+/+
+class TextBlockInterpreter: IDirectiveCompiler
+{
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "text"  )
+			interpretError( "Expected 'var' directive" );
+
+		auto stmtRange = statement[];
+
+		if( stmtRange.empty )
+			throw new ASTNodeTypeException("Expected compound statement or expression, but got end of directive");
+
+		interp.opnd = TDataNode.init;
+
+		if( auto expr = cast(IExpression) stmtRange.front )
+		{
+			expr.accept(interp);
+		}
+		else if( auto block = cast(ICompoundStatement) stmtRange.front )
+		{
+			block.accept(interp);
+		}
+		else
+			new ASTNodeTypeException("Expected compound statement or expression");
+
+		stmtRange.popFront(); //Skip attribute of directive
+
+		if( !stmtRange.empty )
+			interpretError("Expected only one attribute in 'text' directive");
+
+		import std.array: appender;
+
+		auto result = appender!string();
+
+		writeDataNodeLines( interp.opnd, result, 15 );
+
+		string dat = result.data;
+
+		interp.opnd = result.data;
+	}
+
+}
++/
+
+import std.stdio;
+/// Defines directive using ivy language
+class DefCompiler: IDirectiveCompiler
+{
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "def"  )
+			compilerError( "Expected 'def' directive" );
+
+		auto stmtRange = statement[];
+		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
+		AttrubutesDeclaration[] attrDecls;
+
+		CodeObject dirCodeObj = new CodeObject();
+		ICompoundStatement bodyStatement;
+		bool withNewScope = false;
+
+		while( !stmtRange.empty )
+		{
+			ICodeBlockStatement attrDefBlockStmt = cast(ICodeBlockStatement) stmtRange.front;
+			if( !attrDefBlockStmt )
+			{
+				break; // Expected to see some attribute declaration
+			}
+
+			IDirectiveStatementRange attrDefStmtRange = attrDefBlockStmt[];
+
+			while( !attrDefStmtRange.empty )
+			{
+				IDirectiveStatement attrDefStmt = attrDefStmtRange.front;
+				IAttributeRange attrDefStmtAttrRange = attrDefStmt[];
+
+				DefAttrDeclType attrDeclType;
+
+				switch( attrDefStmt.name )
+				{
+					case "def.named": {
+						attrDeclType = DefAttrDeclType.Named;
+						TDataNode data = compileNamedAttrsBlock(attrDefStmtAttrRange);
+						attrDecls ~= AttrubutesDeclaration(attrDeclType, data);
+						break;
+					}
+					case "def.expr": {
+						attrDeclType = DefAttrDeclType.Expr;
+
+
+						break;
+					}
+					case "def.ident": {
+						attrDeclType = DefAttrDeclType.Identifier;
+						break;
+					}
+					case "def.kwd": {
+						attrDeclType = DefAttrDeclType.Keyword;
+						break;
+					}
+					case "def.result": {
+						attrDeclType = DefAttrDeclType.Result;
+
+						break;
+					}
+					case "def.newScope": {
+						withNewScope = true; // Option to create new scope to store data for this directive
+						break;
+					}
+					case "def.body": {
+						attrDeclType = DefAttrDeclType.Body;
+						if( bodyStatement )
+							compilerError( "Multiple body statements are not allowed!!!" );
+
+						if( attrDefStmtAttrRange.empty )
+							compilerError( "Expected compound statement as directive body statement, but got end of attributes list!" );
+
+						bodyStatement = cast(ICompoundStatement) attrDefStmtAttrRange.front; // Getting body AST for statement
+						if( !bodyStatement )
+							compilerError( "Expected compound statement as directive body statement" );
+
+
+
+						break;
+					}
+					default: {
+						compilerError( `Unexpected directive attribute definition statement "` ~ attrDefStmt.name ~ `"` );
+						break;
+					}
+				}
+				attrDefStmtRange.popFront(); // Going to the next directive statement in code block
+			}
+			stmtRange.popFront(); // Go to next attr definition directive
+		}
+
+		// Here should go commands to compile directive body
+
+
+	}
+
+	// Method parses attributes of "def.named" directive
+	TDataNode compileNamedAttrsBlock(IAttributeRange attrRange)
+	{
+		TDataNode attrDefs;
+		while( !attrRange.empty )
+		{
+			string attrName;
+			string attrType;
+			IExpression defaultValueExpr;
+
+			if( auto kwPair = cast(IKeyValueAttribute) attrRange.front )
+			{
+				attrName = kwPair.name;
+				defaultValueExpr = cast(IExpression) kwPair.value;
+				if( !defaultValueExpr )
+					compilerError( `Expected attribute default value expression!` );
+
+				attrRange.popFront(); // Skip named attribute
+			}
+			else if( auto nameExpr = cast(INameExpression) attrRange.front )
+			{
+				attrName = nameExpr.name;
+				attrRange.popFront(); // Skip variable name
+			}
+			else
+			{
+				// Just get out of there
+				break;
+			}
+
+			if( !attrRange.empty )
+			{
+				// Try to parse optional type definition
+				if( auto asKwdExpr = cast(INameExpression) attrRange.front )
+				{
+					if( asKwdExpr.name == "as" )
+					{
+						// TODO: Try to find out type of attribute after `as` keyword
+						// Assuming that there will be no named attribute with name `as` in programme
+						attrRange.popFront(); // Skip `as` keyword
+
+						if( attrRange.empty )
+							compilerError( `Expected attr type definition, but got end of attrs range!` );
+
+						auto attrTypeExpr = cast(INameExpression) attrRange.front;
+						if( !attrTypeExpr )
+							compilerError( `Expected attr type definition!` );
+
+						attrType = attrTypeExpr.name; // Getting type of attribute as string (for now)
+
+						attrRange.popFront(); // Skip type expression
+					}
+				}
+			}
+
+			attrDefs[ attrName ] = TDataNode([
+				"attrName": TDataNode(attrName),
+				"attrType": TDataNode(attrType)
+			]);
+		}
+
+		return attrDefs;
+	}
 }
 
 enum SymbolScopeType: ubyte { Global, Local }
@@ -128,10 +614,17 @@ struct Symbol
 
 class CompilerFrame
 {
-private:
+	CodeObject _codeObj;
+	ModuleObject _moduleObj;
 	Symbol[string] _symbols;
 
 public:
+	this(ModuleObject moduleObj)
+	{
+		_codeObj = new CodeObject();
+		_moduleObj = moduleObj;
+	}
+
 	Symbol* lookup(string name)
 	{
 		return name in _symbols;
@@ -147,26 +640,73 @@ public:
 class ByteCodeCompiler: AbstractNodeVisitor
 {
 private:
-	TDataNode[] _consts; // Current set of constant data
-	Instruction[] _code; // Current set of instructions
-
-	CodeChunk[] _codeChunks;
-
 	IDirectiveCompiler[string] _dirCompilers;
 	CompilerFrame[] _frameStack;
 
-
 public:
-	this()
+	this(ModuleObject moduleObj)
 	{
-		_frameStack ~= new CompilerFrame();
-
 		_dirCompilers["var"] = new VarCompiler();
-		//_dirCompilers["if"] = new IfCompiler();
+		_dirCompilers["expr"] = new ExprCompiler();
+		_dirCompilers["if"] = new IfCompiler();
 		//_dirCompilers["for"] = new ForCompiler();
 		//_dirCompilers["def"] = new DefCompiler();
+
+		newFrame(moduleObj);
 	}
 
+	void newFrame(ModuleObject moduleObj)
+	{
+		_frameStack ~= new CompilerFrame(moduleObj);
+	}
+
+	void exitFrame()
+	{
+		import std.range: empty, popBack;
+		assert( !_frameStack.empty, "Cannot exit frame, because compiler frame stack is empty!" );
+
+		_frameStack.popBack();
+	}
+
+	size_t addInstr( Instruction instr )
+	{
+		import std.range: empty, back;
+		assert( !_frameStack.empty, "Cannot add instruction, because compiler frame stack is empty!" );
+		assert( _frameStack.back, "Cannot add instruction, because current compiler frame is null!" );
+		assert( _frameStack.back._codeObj, "Cannot add instruction, because current code object is null!" );
+
+		return _frameStack.back._codeObj.addInstr(instr);
+	}
+
+	void setInstrArg0( size_t index, uint arg )
+	{
+		import std.range: empty, back;
+		assert( !_frameStack.empty, "Cannot add instruction, because compiler frame stack is empty!" );
+		assert( _frameStack.back, "Cannot add instruction, because current compiler frame is null!" );
+		assert( _frameStack.back._codeObj, "Cannot add instruction, because current code object is null!" );
+
+		return _frameStack.back._codeObj.setInstrArg0( index, arg );
+	}
+
+	size_t getInstrCount()
+	{
+		import std.range: empty, back;
+		assert( !_frameStack.empty, "Cannot add instruction, because compiler frame stack is empty!" );
+		assert( _frameStack.back, "Cannot add instruction, because current compiler frame is null!" );
+		assert( _frameStack.back._codeObj, "Cannot add instruction, because current code object is null!" );
+
+		return _frameStack.back._codeObj.getInstrCount();
+	}
+
+	size_t addConst( TDataNode value )
+	{
+		import std.range: empty, back;
+		assert( !_frameStack.empty, "Cannot add constant, because compiler frame stack is empty!" );
+		assert( _frameStack.back, "Cannot add constant, because current compiler frame is null!" );
+		assert( _frameStack.back._moduleObj, "Cannot add constant, because current module object is null!" );
+
+		return _frameStack.back._moduleObj.addConst(value);
+	}
 
 	override {
 		void visit(IvyNode node) { assert(0); }
@@ -177,24 +717,27 @@ public:
 		void visit(ILiteralExpression node)
 		{
 			LiteralType litType;
-			uint constIndex = cast(uint) _consts.length;
+			uint constIndex = cast(uint) getInstrCount();
 
 			switch( node.literalType )
 			{
+				case LiteralType.Undef:
+					addConst( TDataNode() ); // Undef is default
+					break;
 				case LiteralType.Null:
-					_consts ~= TDataNode(null);
+					addConst( TDataNode(null) );
 					break;
 				case LiteralType.Boolean:
-					_consts ~= TDataNode( node.toBoolean() );
+					addConst( TDataNode( node.toBoolean() ) );
 					break;
 				case LiteralType.Integer:
-					_consts ~= TDataNode( node.toInteger() );
+					addConst( TDataNode( node.toInteger() ) );
 					break;
 				case LiteralType.Floating:
-					_consts ~= TDataNode( node.toFloating() );
+					addConst( TDataNode( node.toFloating() ) );
 					break;
 				case LiteralType.String:
-					_consts ~= TDataNode( node.toStr() );
+					addConst( TDataNode( node.toStr() ) );
 					break;
 				case LiteralType.Array:
 					assert( false, "Array literal code generation is not implemented yet!" );
@@ -210,7 +753,7 @@ public:
 			Instruction instr;
 			instr.opcode = OpCode.LoadConst;
 			instr.args[0] = constIndex;
-			_code ~= instr;
+			addInstr( instr );
 		}
 
 		void visit(INameExpression node)
@@ -224,9 +767,7 @@ public:
 			if( !_frameStack.back )
 				compilerError( "Compiler current stack item is null!" );
 
-			uint constIndex = cast(uint) _consts.length;
-			_consts ~= TDataNode( node.name );
-
+			uint constIndex = cast(uint) addConst( TDataNode( node.name ) );
 			if( _frameStack.back.lookup(node.name) )
 			{
 				// Regular name
@@ -235,10 +776,10 @@ public:
 				Instruction instr;
 				instr.opcode = OpCode.LoadConst;
 				instr.args[0] = constIndex;
-				_code ~= instr;
+				addInstr( instr );
 
 				// Add name load instruction
-				_code ~= Instruction(OpCode.LoadName);
+				addInstr( Instruction(OpCode.LoadName) );
 
 			}
 			else
@@ -270,7 +811,7 @@ public:
 					break;
 			}
 
-			_code ~= Instruction(opcode);
+			addInstr( Instruction(opcode) );
 		}
 		void visit(IBinaryExpression node)
 		{
@@ -324,7 +865,7 @@ public:
 					break;
 			}
 
-			_code ~= Instruction(opcode);
+			addInstr( Instruction(opcode) );
 		}
 
 		void visit(IAssocArrayPair node) { visit( cast(IExpression) node ); }
@@ -342,22 +883,33 @@ public:
 			else
 			{
 				// First of all I'll be trying to load directive with this into machine stack
-
+				assert( false, "Compiling for inline directives is not implemented yet!" );
 			}
 		}
 
 		void visit(IDataFragmentStatement node)
 		{
 			// Nothing special. Just store this piece of data into table
-			uint constIndex = cast(uint) node.data.length;
-			_consts ~= TDataNode(node.data);
+			uint constIndex = cast(uint) addConst( TDataNode(node.data) );
 
 			Instruction instr;
 			instr.opcode = OpCode.LoadConst;
 			instr.args[0] = constIndex;
-			_code ~= instr;
+			addInstr( instr );
 		}
-		void visit(ICompoundStatement node) { visit( cast(IStatement) node ); }
+
+		void visit(ICompoundStatement node)
+		{
+			if( !node )
+				compilerError( "Compound statement node is null!" );
+
+			auto stmtRange = node[];
+			while( !stmtRange.empty )
+			{
+				stmtRange.front.accept( this );
+				stmtRange.popFront();
+			}
+		}
 	}
 
 	// Assembles constants and code chunks into complete module bytecode
@@ -369,17 +921,25 @@ public:
 	string toPrettyStr()
 	{
 		import std.conv;
+		import std.range: empty, back;
 
 		string result;
+
+		if( _frameStack.empty )
+			return `<Frame stack is empty>`;
+
+		if( !_frameStack.back )
+			return `<Current compiler frame is null>`;
+
 		result ~= "CONSTANTS:\r\n";
-		foreach( i, con; _consts )
+		foreach( i, con; _frameStack.back._moduleObj._consts )
 		{
 			result ~= i.text ~ "  " ~ con.toString() ~ "\r\n";
 		}
 		result ~= "\r\n";
 
 		result ~= "CODE:\r\n";
-		foreach( i, instr; _code )
+		foreach( i, instr; _frameStack.back._codeObj._instrs )
 		{
 			result ~= i.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.args.to!string ~ "\r\n";
 		}

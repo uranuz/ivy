@@ -391,7 +391,12 @@ public:
 				
 				auto frontValue = lexer.frontValue;
 				
-				if( frontValue.save.equal("null") )
+				if( frontValue.save.equal("undef") )
+				{
+					expr = new UndefExp!(config)(loc);
+					lexer.popFront();
+				}
+				else if( frontValue.save.equal("null") )
 				{
 					expr = new NullExp!(config)(loc);
 					lexer.popFront();

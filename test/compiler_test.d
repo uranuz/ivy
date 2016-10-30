@@ -29,7 +29,8 @@ void main()
 
 	stdout.writeln(toJSON(&astJSON, true));
 
-	auto compiler = new ByteCodeCompiler();
+	auto moduleObj = new ModuleObject(sourceFileName, sourceFileName);
+	auto compiler = new ByteCodeCompiler( moduleObj );
  	alias TDataNode = DataNode!string;
 
 	ast.accept(compiler);

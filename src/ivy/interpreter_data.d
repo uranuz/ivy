@@ -3,7 +3,7 @@ module ivy.interpreter_data;
 import std.exception: enforceEx;
 import std.traits;
 
-enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, ClassObject };
+enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, Directive, ClassObject };
 
 class DataNodeException : Exception
 {
@@ -28,14 +28,95 @@ interface IClassObject
 
 }
 
-interface IVirtualMachine
+/**
+	Module is inner runtime representation of source file.
+	It consists of list of constants, list of code objects and other data
+*/
+class ModuleObject
 {
+	alias TDataNode = DataNode!string;
 
+	string _name; // Module name that used to reference it in source code
+	string _fileName; // Source file name for this module
+	size_t _entryPointIndex; // Index of directive in _consts that is entry point to module
+
+	TDataNode[] _consts; // List of constant data for this module
+
+public:
+	this( string name, string fileName )
+	{
+		_name = name;
+		_fileName = fileName;
+	}
+
+	// Append const to list and return it's index
+	// This function can return index of already existing object if it's equal to passed data
+	size_t addConst( TDataNode data )
+	{
+		size_t index = _consts.length;
+		_consts ~= data;
+		return index;
+	}
+
+	TDataNode getConst( size_t index )
+	{
+		import std.conv: text;
+		assert( index < _consts.length, `There is no constant with index ` ~ index.text ~ ` in module "` ~ _name ~ `"`);
+		return _consts[index];
+	}
 }
 
-interface ICodeObject
+enum DefAttrDeclType { Expr, Named, Keyword, Identifier, Result, Body }
+
+struct AttrubutesDeclaration
 {
-	void exec(IVirtualMachine vm);
+	alias TDataNode = DataNode!string;
+
+	DefAttrDeclType type;
+	TDataNode data;
+}
+
+/**
+	Code object is inner runtime representation of chunk of source file.
+	Usually it's representation of directive.
+	Code object consists of list of instructions and other metadata
+*/
+class CodeObject
+{
+	import ivy.bytecode: Instruction;
+
+	Instruction[] _instrs; // Plain list of instructions
+	AttrubutesDeclaration[] _attrDecls;
+
+	size_t addInstr( Instruction instr )
+	{
+		size_t index = _instrs.length;
+		_instrs ~= instr;
+		return index;
+	}
+
+	void setInstrArg0( size_t index, uint arg )
+	{
+		assert( index < _instrs.length, "Cannot set argument 0 of instruction, because instruction not exists!" );
+		_instrs[index].args[0] = arg;
+	}
+
+	size_t getInstrCount()
+	{
+		return _instrs.length;
+	}
+}
+
+/**
+	Directive object is representation of directive prepared for execution.
+	Consists of it's code object (that will be executed) and some context (module for example)
+*/
+class DirectiveObject
+{
+	string _name; // Name of directive
+
+	CodeObject _codeObj; // Code object related to this directive
+	ModuleObject _moduleObj; // Module object where directive is defined
 }
 
 struct DataNode(S)
@@ -50,7 +131,8 @@ struct DataNode(S)
 			String str;
 			DataNode[] array;
 			DataNode[String] assocArray;
-			ICodeObject codeObj;
+			CodeObject codeObject;
+			DirectiveObject directive;
 			IClassObject obj;
 		}
 	}
@@ -129,20 +211,31 @@ struct DataNode(S)
 		assign(val);
 	}
 
-	ICodeObject codeObj() @property
+	CodeObject codeObject() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not code object");
-		return storage.codeObj;
+		enforceEx!DataNodeException( type == DataNodeType.CodeObject, "DataNode is not code object");
+		return storage.codeObject;
 	}
 
-	void codeObj(ICodeObject val) @property
+	void codeObject(CodeObject val) @property
+	{
+		assign(val);
+	}
+
+	DirectiveObject directive() @property
+	{
+		enforceEx!DataNodeException( type == DataNodeType.Directive, "DataNode is not a directive");
+		return storage.directive;
+	}
+
+	void directive(DirectiveObject val) @property
 	{
 		assign(val);
 	}
 	
 	IClassObject obj() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not code object");
+		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not class object");
 		return storage.obj;
 	}
 	
@@ -157,7 +250,7 @@ struct DataNode(S)
 	}
 	
 	bool empty() @property {
-		return type == DataNodeType.Null;
+		return type == DataNodeType.Undef || type == DataNodeType.Null;
 	}
 	
 	private void assign(T)(auto ref T arg)
@@ -186,10 +279,15 @@ struct DataNode(S)
 			typeTag = DataNodeType.Floating;
 			storage.floating = arg;
 		}
-		else static if( is( T : ICodeObject ) )
+		else static if( is( T : CodeObject ) )
 		{
 			typeTag = DataNodeType.CodeObject;
-			storage.codeObj = arg;
+			storage.codeObject = arg;
+		}
+		else static if( is( T : DirectiveObject ) )
+		{
+			typeTag = DataNodeType.Directive;
+			storage.directive = arg;
 		}
 		else static if( is( T : IClassObject ) )
 		{
@@ -384,6 +482,9 @@ void writeDataNodeLines(TDataNode, OutRange)(
 		case CodeObject:
 			outRange.put( "<code object>" );
 			break;
+		case CodeObject:
+			outRange.put( "<directive object>" );
+			break;
 		case ClassObject:
 			assert(0);
 			//outRange.put( node.obj.toString() );
@@ -452,6 +553,9 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 		}
 		case CodeObject:
 			outRange.put( "<code object>" );
+			break;
+		case Directive:
+			outRange.put( "<directive object>" );
 			break;
 		case ClassObject:
 			assert(0);

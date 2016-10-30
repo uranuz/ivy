@@ -84,6 +84,39 @@ mixin template BinaryArithmeticExpressionImpl()
 
 }
 
+class UndefExp(LocationConfig c): ILiteralExpression
+{
+	mixin BaseExpressionImpl!c;
+
+public:
+	this(CustLocation loc)
+	{
+		_location = loc;
+	}
+
+	override @property string kind()
+	{
+		return "undef";
+	}
+
+	override @property IvyNode[] children()
+	{
+		return null;
+	}
+
+	override @property LiteralType literalType()
+	{
+		return LiteralType.Undef;
+	}
+
+/+
+	string toString() override
+	{
+		return "undef";
+	}
++/
+}
+
 class NullExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
@@ -106,7 +139,7 @@ public:
 	
 	override @property LiteralType literalType()
 	{
-		return LiteralType.Null;
+		return LiteralType.Undef;
 	}
 
 /+
