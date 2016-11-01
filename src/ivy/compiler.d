@@ -520,7 +520,42 @@ class DefCompiler: IDirectiveCompiler
 						if( !bodyStatement )
 							compilerError( "Expected compound statement as directive body statement" );
 
+						CodeObject bodyCodeObj;
+						{
+							// New code object created on compiler frame creation
+							compiler.newFrame( compiler.getCurrentModule() );
 
+							// Generating code for def.body
+							bodyStatement.accept(compiler);
+
+							// Getting body code object
+							bodyCodeObj = compiler.getCurrentCodeObject();
+
+							scope(exit) compiler.exitFrame();
+						}
+
+						// Add def.body code object to current module constants list
+						uint codeObjIndex = cast(uint) compiler.addConst( TDataNode(bodyCodeObj) );
+
+						// Add instruction to load code object from module constants
+						Instruction loadCodeObjInstr;
+						loadCodeObjInstr.opcode = OpCode.LoadConst;
+						loadCodeObjInstr.args[0] = codeObjIndex;
+						compiler.addInstr( loadCodeObjInstr );
+
+						// Add directive name to module constants
+						uint dirNameConstIndex = cast(uint) compiler.addConst( TDataNode(defNameExpr.name) );
+
+						// Add instruction to load directive name from consts
+						Instruction loadDirNameInstr;
+						loadDirNameInstr.opcode = OpCode.LoadConst;
+						loadDirNameInstr.args[0] = dirNameConstIndex;
+						compiler.addInstr( loadDirNameInstr );
+
+						// Add instruction to create directive object
+						Instruction loadDirInstr;
+						loadDirInstr.opcode = OpCode.LoadDirective;
+						compiler.addInstr( loadDirInstr );
 
 						break;
 					}
@@ -650,7 +685,7 @@ public:
 		_dirCompilers["expr"] = new ExprCompiler();
 		_dirCompilers["if"] = new IfCompiler();
 		//_dirCompilers["for"] = new ForCompiler();
-		//_dirCompilers["def"] = new DefCompiler();
+		_dirCompilers["def"] = new DefCompiler();
 
 		newFrame(moduleObj);
 	}
@@ -708,6 +743,24 @@ public:
 		return _frameStack.back._moduleObj.addConst(value);
 	}
 
+	ModuleObject getCurrentModule()
+	{
+		import std.range: empty, back;
+		assert( !_frameStack.empty, "Cannot add constant, because compiler frame stack is empty!" );
+		assert( _frameStack.back, "Cannot add constant, because current compiler frame is null!" );
+
+		return _frameStack.back._moduleObj;
+	}
+
+	CodeObject getCurrentCodeObject()
+	{
+		import std.range: empty, back;
+		assert( !_frameStack.empty, "Cannot add constant, because compiler frame stack is empty!" );
+		assert( _frameStack.back, "Cannot add constant, because current compiler frame is null!" );
+
+		return _frameStack.back._codeObj;
+	}
+
 	override {
 		void visit(IvyNode node) { assert(0); }
 
@@ -717,27 +770,26 @@ public:
 		void visit(ILiteralExpression node)
 		{
 			LiteralType litType;
-			uint constIndex = cast(uint) getInstrCount();
-
+			uint constIndex;
 			switch( node.literalType )
 			{
 				case LiteralType.Undef:
-					addConst( TDataNode() ); // Undef is default
+					constIndex = cast(uint) addConst( TDataNode() ); // Undef is default
 					break;
 				case LiteralType.Null:
-					addConst( TDataNode(null) );
+					constIndex = cast(uint) addConst( TDataNode(null) );
 					break;
 				case LiteralType.Boolean:
-					addConst( TDataNode( node.toBoolean() ) );
+					constIndex = cast(uint) addConst( TDataNode( node.toBoolean() ) );
 					break;
 				case LiteralType.Integer:
-					addConst( TDataNode( node.toInteger() ) );
+					constIndex = cast(uint) addConst( TDataNode( node.toInteger() ) );
 					break;
 				case LiteralType.Floating:
-					addConst( TDataNode( node.toFloating() ) );
+					constIndex = cast(uint) addConst( TDataNode( node.toFloating() ) );
 					break;
 				case LiteralType.String:
-					addConst( TDataNode( node.toStr() ) );
+					constIndex = cast(uint) addConst( TDataNode( node.toStr() ) );
 					break;
 				case LiteralType.Array:
 					assert( false, "Array literal code generation is not implemented yet!" );
@@ -883,7 +935,7 @@ public:
 			else
 			{
 				// First of all I'll be trying to load directive with this into machine stack
-				assert( false, "Compiling for inline directives is not implemented yet!" );
+				assert( false, `Compiling for inline directive "` ~ node.name ~ `" is not implemented yet!` );
 			}
 		}
 

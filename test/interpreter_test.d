@@ -2,15 +2,16 @@ module ivy.interpreter_test;
 
 import std.stdio, std.json, std.file;
 
-import ivy.interpreter, ivy.directive_interpreters, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer;
+import ivy.interpreter, ivy.directive_interpreters, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer, ivy.compiler;
 
 
 
 void main()
 {
 	alias TextRange = TextForwardRange!(string, LocationConfig());
+	alias TDataNode = DataNode!string;
 
-	string sourceFileName = "test/html_template.html";
+	string sourceFileName = "test/compiler_test_template.html";
 	string source = cast(string) std.file.read(sourceFileName);
 	
 	auto parser = new Parser!(TextRange)(source, sourceFileName);
@@ -20,8 +21,6 @@ void main()
 	try {
 		ast = parser.parse();
 	} catch(Throwable e) {
-// 		printLexemes();
-		
 		throw e;
 	}
 	
@@ -31,23 +30,23 @@ void main()
 	
 	stdout.writeln(toJSON(&astJSON, true));
 
-	ICompositeInterpretersController rootController = makeRootInterpreter();
-	ICompositeInterpretersController inlineDirController = new InlineDirectivesController();
-	rootController.addController(inlineDirController);
+	ModuleObject moduleObj = new ModuleObject(sourceFileName, sourceFileName);
+	ByteCodeCompiler compiler = new ByteCodeCompiler( moduleObj );
+	ast.accept(compiler);
 
-	auto visitor = new Interpreter(rootController, inlineDirController);
- 	alias TDataNode = DataNode!string;
- 	visitor.setLocalValue("content", TDataNode("<div>Основное содержимое формы</div>"));
- 	visitor.setLocalValue("content2", TDataNode("Еще какое-то содержимое страницы"));
- 	visitor.setLocalValue("content3", TDataNode("Здравствуй, Вася"));
- 	visitor.setLocalValue("x", TDataNode(20));
- 	visitor.setLocalValue("y", TDataNode("no"));
- 	
- 	bool hasContent = visitor.canFindValue("content2");
- 	auto content = visitor.getValue("content2");
-	
-	ast.accept(visitor);
-	
-	writeln(visitor.opnd);
+	DirectiveObject rootDirObj = new DirectiveObject;
+	rootDirObj._codeObj = moduleObj.getMainCodeObject();
+
+	Interpreter interp = new Interpreter(rootDirObj);
+ 	interp.setLocalValue("content", TDataNode("<div>Основное содержимое формы</div>"));
+ 	interp.setLocalValue("content2", TDataNode("Еще какое-то содержимое страницы"));
+ 	interp.setLocalValue("content3", TDataNode("Здравствуй, Вася"));
+ 	interp.setLocalValue("x", TDataNode(20));
+ 	interp.setLocalValue("y", TDataNode("no"));
+
+	interp.execLoop();
+
+	import std.range: back;
+	writeln(interp._stack.back);
 	
 }

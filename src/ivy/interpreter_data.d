@@ -64,6 +64,15 @@ public:
 		assert( index < _consts.length, `There is no constant with index ` ~ index.text ~ ` in module "` ~ _name ~ `"`);
 		return _consts[index];
 	}
+
+	CodeObject getMainCodeObject()
+	{
+		import std.conv: text;
+		assert( _entryPointIndex < _consts.length, `Cannot get main code object, because there is no constant with index ` ~ _entryPointIndex.text );
+		assert( _consts[_entryPointIndex].type == DataNodeType.CodeObject, `Cannot get main code object, because const with index ` ~ _entryPointIndex.text ~ ` is not code object`  );
+
+		return _consts[_entryPointIndex].codeObject;
+	}
 }
 
 enum DefAttrDeclType { Expr, Named, Keyword, Identifier, Result, Body }
@@ -117,6 +126,10 @@ class DirectiveObject
 
 	CodeObject _codeObj; // Code object related to this directive
 	ModuleObject _moduleObj; // Module object where directive is defined
+
+	this()
+	{
+	}
 }
 
 struct DataNode(S)
