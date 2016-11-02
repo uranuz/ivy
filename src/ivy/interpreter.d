@@ -585,12 +585,6 @@ public:
 					break;
 				}
 
-				case OpCode.CallDirective:
-				{
-					assert( false, "Unimplemented yet!" );
-					break;
-				}
-
 				case OpCode.ImportModule:
 				{
 					assert( false, "Unimplemented yet!" );
@@ -605,12 +599,53 @@ public:
 
 				case OpCode.InitLoop:
 				{
-
+					assert( false, "Unimplemented yet!" );
 					break;
 				}
 
 				case OpCode.RunIter:
 				{
+					assert( false, "Unimplemented yet!" );
+					break;
+				}
+
+				case OpCode.LoadDirective:
+				{
+					assert( _stack.back.type == DataNodeType.String,
+						`Name operand for directive loading instruction should have string type` );
+					string varName = _stack.back.str;
+
+					_stack.popBack();
+
+					assert( _stack.back.type == DataNodeType.CodeObject,
+						`Code object operand for directive loading instruction should have CodeObject type` );
+
+					CodeObject codeObj = _stack.back.codeObject;
+					_stack.popBack(); // Remove code object from stack
+
+					assert( codeObj, `Code object operand for directive loading instruction is null` );
+
+					setLocalValue( varName, TDataNode(codeObj) ); // Put this directive in context
+
+					break;
+				}
+
+				case OpCode.CallDirective:
+				{
+					assert( _stack.back.type == DataNodeType.Integer,
+						`Expected integer as arguments count in directive call` );
+
+					auto argCount = _stack.back.integer;
+					_stack.popBack();
+
+					// TODO: Then let's try to get directive arguments and parse 'em
+
+
+					assert( _stack.back.type == DataNodeType.Directive,
+						`Expected directive object operand in directive call operation` );
+
+					DirectiveObject dirObj = _stack.back.directive;
+
 
 					break;
 				}

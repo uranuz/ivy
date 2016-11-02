@@ -520,43 +520,6 @@ class DefCompiler: IDirectiveCompiler
 						if( !bodyStatement )
 							compilerError( "Expected compound statement as directive body statement" );
 
-						CodeObject bodyCodeObj;
-						{
-							// New code object created on compiler frame creation
-							compiler.newFrame( compiler.getCurrentModule() );
-
-							// Generating code for def.body
-							bodyStatement.accept(compiler);
-
-							// Getting body code object
-							bodyCodeObj = compiler.getCurrentCodeObject();
-
-							scope(exit) compiler.exitFrame();
-						}
-
-						// Add def.body code object to current module constants list
-						uint codeObjIndex = cast(uint) compiler.addConst( TDataNode(bodyCodeObj) );
-
-						// Add instruction to load code object from module constants
-						Instruction loadCodeObjInstr;
-						loadCodeObjInstr.opcode = OpCode.LoadConst;
-						loadCodeObjInstr.args[0] = codeObjIndex;
-						compiler.addInstr( loadCodeObjInstr );
-
-						// Add directive name to module constants
-						uint dirNameConstIndex = cast(uint) compiler.addConst( TDataNode(defNameExpr.name) );
-
-						// Add instruction to load directive name from consts
-						Instruction loadDirNameInstr;
-						loadDirNameInstr.opcode = OpCode.LoadConst;
-						loadDirNameInstr.args[0] = dirNameConstIndex;
-						compiler.addInstr( loadDirNameInstr );
-
-						// Add instruction to create directive object
-						Instruction loadDirInstr;
-						loadDirInstr.opcode = OpCode.LoadDirective;
-						compiler.addInstr( loadDirInstr );
-
 						break;
 					}
 					default: {
@@ -570,6 +533,45 @@ class DefCompiler: IDirectiveCompiler
 		}
 
 		// Here should go commands to compile directive body
+
+		CodeObject bodyCodeObj;
+		{
+			// New code object created on compiler frame creation
+			compiler.newFrame( compiler.getCurrentModule() );
+
+			// Generating code for def.body
+			bodyStatement.accept(compiler);
+
+			// Getting body code object
+			bodyCodeObj = compiler.getCurrentCodeObject();
+			bodyCodeObj._attrDecls = attrDecls;
+
+			scope(exit) compiler.exitFrame();
+		}
+
+		// Add def.body code object to current module constants list
+		uint codeObjIndex = cast(uint) compiler.addConst( TDataNode(bodyCodeObj) );
+
+		// Add instruction to load code object from module constants
+		Instruction loadCodeObjInstr;
+		loadCodeObjInstr.opcode = OpCode.LoadConst;
+		loadCodeObjInstr.args[0] = codeObjIndex;
+		compiler.addInstr( loadCodeObjInstr );
+
+		// Add directive name to module constants
+		uint dirNameConstIndex = cast(uint) compiler.addConst( TDataNode(defNameExpr.name) );
+
+		// Add instruction to load directive name from consts
+		Instruction loadDirNameInstr;
+		loadDirNameInstr.opcode = OpCode.LoadConst;
+		loadDirNameInstr.args[0] = dirNameConstIndex;
+		compiler.addInstr( loadDirNameInstr );
+
+		// Add instruction to create directive object
+		Instruction loadDirInstr;
+		loadDirInstr.opcode = OpCode.LoadDirective;
+		compiler.addInstr( loadDirInstr );
+
 
 
 	}

@@ -27,7 +27,7 @@ void main()
 
 	writeASTasJSON(parser.lexer.sourceRange, ast, astJSON);
 
-	stdout.writeln(toJSON(&astJSON, true));
+	stdout.writeln(toJSON(astJSON, true));
 
 	auto moduleObj = new ModuleObject(sourceFileName, sourceFileName);
 	auto compiler = new ByteCodeCompiler( moduleObj );
