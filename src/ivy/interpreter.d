@@ -24,51 +24,6 @@ void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
 	throw new InterpretException(msg, file, line);
 }
 
-
-class ModuleRepository
-{
-	import ivy.lexer_tools: TextForwardRange;
-
-	alias TextRange = TextForwardRange!(string, LocationConfig());
-
-private:
-	ModuleObject[string] _modules;
-
-public:
-	void loadModuleFromFile(string fileName)
-	{
-		import std.file: read;
-
-		string fileContent = cast(string) std.file.read(fileName);
-
-		import ivy.parser;
-		auto parser = new Parser!(TextRange)(fileContent, fileName);
-
-		IvyNode moduleRootNode = parser.parse();
-		ModuleObject ivyModule = new ModuleObject( fileName, fileName );
-		_modules[ fileName ] = ivyModule;
-	}
-
-	ModuleObject getModule(string name)
-	{
-		if( name !in _modules )
-		{
-			loadModuleFromFile( name );
-		}
-
-		if( name in _modules )
-		{
-			return _modules[name];
-		}
-		else
-		{
-			return null;
-		}
-	}
-
-}
-
-
 class ExecutionFrame
 {
 private:
@@ -490,9 +445,10 @@ public:
 					size_t constIndex = instr.args[0];
 					assert( _frameStack.back, `_frameStack.back is null` );
 					assert( _frameStack.back._dirObj, `_frameStack.back._dirObj is null` );
-					assert( _frameStack.back._dirObj._moduleObj, `_frameStack.back._dirObj._moduleObj is null` );
+					assert( _frameStack.back._dirObj._codeObj, `_frameStack.back._dirObj._codeObj is null` );
+					assert( _frameStack.back._dirObj._codeObj._moduleObj, `_frameStack.back._dirObj._codeObj._moduleObj is null` );
 
-					_stack ~= _frameStack.back._dirObj._moduleObj.getConst(constIndex);
+					_stack ~= _frameStack.back._dirObj._codeObj._moduleObj.getConst(constIndex);
 					break;
 				}
 

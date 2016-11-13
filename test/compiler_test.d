@@ -29,8 +29,15 @@ void main()
 
 	stdout.writeln(toJSON(astJSON, true));
 
-	auto moduleObj = new ModuleObject(sourceFileName, sourceFileName);
-	auto compiler = new ByteCodeCompiler( moduleObj );
+	auto compilerModuleRepo = new CompilerModuleRepository("test");
+
+	auto symbCollector = new CompilerSymbolsCollector(compilerModuleRepo, "test");
+	ast.accept(symbCollector);
+
+	SymbolTableFrame[string] symbTable = symbCollector.getModuleSymbols();
+
+	//auto moduleObj = new ModuleObject(sourceFileName, sourceFileName);
+	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbTable, "test" );
  	alias TDataNode = DataNode!string;
 
 	ast.accept(compiler);

@@ -75,16 +75,6 @@ public:
 	}
 }
 
-enum DefAttrDeclType { Expr, Named, Keyword, Identifier, Result, Body }
-
-struct AttrubutesDeclaration
-{
-	alias TDataNode = DataNode!string;
-
-	DefAttrDeclType type;
-	TDataNode data;
-}
-
 /**
 	Code object is inner runtime representation of chunk of source file.
 	Usually it's representation of directive.
@@ -95,7 +85,13 @@ class CodeObject
 	import ivy.bytecode: Instruction;
 
 	Instruction[] _instrs; // Plain list of instructions
-	AttrubutesDeclaration[] _attrDecls;
+	ModuleObject _moduleObj; // Module object which contains this code object
+
+public:
+	this( ModuleObject moduleObj )
+	{
+		_moduleObj = moduleObj;
+	}
 
 	size_t addInstr( Instruction instr )
 	{
@@ -123,9 +119,7 @@ class CodeObject
 class DirectiveObject
 {
 	string _name; // Name of directive
-
 	CodeObject _codeObj; // Code object related to this directive
-	ModuleObject _moduleObj; // Module object where directive is defined
 
 	this()
 	{
