@@ -35,6 +35,14 @@ void main()
 	ast.accept(symbCollector);
 
 	SymbolTableFrame[string] symbTable = symbCollector.getModuleSymbols();
+	string modulesSymbolTablesDump;
+	foreach( modName, frame; symbTable )
+	{
+		modulesSymbolTablesDump ~= "\r\nMODULE " ~ modName ~ " CONTENTS:\r\n";
+		modulesSymbolTablesDump ~= frame.toPrettyStr() ~ "\r\n";
+	}
+
+	writeln(modulesSymbolTablesDump);
 
 	//auto moduleObj = new ModuleObject(sourceFileName, sourceFileName);
 	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbTable, "test" );

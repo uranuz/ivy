@@ -1,14 +1,12 @@
 expr {#
 	def test_def (#
+		def.named aa as int, bb as str, cc: 2 + 2 as int;
 		def.body (#
 			expr 2 + 2
 		#)
 	#);
-	var x: 2 + 3;
-	var y: "aa" ~ "bb";
-	if a < 5 {*
-		"aaa"
-	*} else {*
-		"bbb"
-	*};
+	test_def
+		aa: 10
+		bb: "Vasya"
+		cc: 7;
 #};

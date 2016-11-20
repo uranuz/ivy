@@ -487,9 +487,17 @@ void writeDataNodeLines(TDataNode, OutRange)(
 			writeDataNodeAsString(node, outRange, maxRecursion - 1);
 			break;
 		case CodeObject:
-			outRange.put( "<code object>" );
+			import std.conv: text;
+			if( node.codeObject )
+			{
+				outRange.put( "<code object, size: " ~ node.codeObject._instrs.length.text ~ ">" );
+			}
+			else
+			{
+				outRange.put( "<code object (null)>" );
+			}
 			break;
-		case CodeObject:
+		case Directive:
 			outRange.put( "<directive object>" );
 			break;
 		case ClassObject:
@@ -559,7 +567,15 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 			break;
 		}
 		case CodeObject:
-			outRange.put( "<code object>" );
+			import std.conv: text;
+			if( node.codeObject )
+			{
+				outRange.put( "<code object, size: " ~ node.codeObject._instrs.length.text ~ ">" );
+			}
+			else
+			{
+				outRange.put( "<code object (null)>" );
+			}
 			break;
 		case Directive:
 			outRange.put( "<directive object>" );

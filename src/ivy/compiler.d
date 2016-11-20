@@ -145,7 +145,99 @@ public:
 			return null;
 		}
 	}
+}
 
+
+class AttributeDeclaration
+{
+	string attrName;
+	string attrType;
+	IExpression defaultValueExpr;
+
+	this( string name, string type, IExpression defValue )
+	{
+		attrName = name;
+		attrType = type;
+		defaultValueExpr = defValue;
+	}
+}
+
+enum DirDefAttrType { NamedAttr, ExprAttr, IdentAttr, KwdAttr, NoscopeAttr, BodyAttr }
+
+class DirectiveDefinitionBlock
+{
+	DirDefAttrType type;
+
+	this( DirDefAttrType type )
+	{
+		this.type = type;
+	}
+}
+
+class NamedAttrsDefBlock: DirectiveDefinitionBlock
+{
+	AttributeDeclaration[string] namedDecls;
+
+	this() { super( DirDefAttrType.NamedAttr ); }
+
+	this( AttributeDeclaration[string] namedDecls )
+	{
+		super( DirDefAttrType.NamedAttr );
+		this.namedDecls = namedDecls;
+	}
+
+}
+
+class ExprAttrsDefBlock: DirectiveDefinitionBlock
+{
+	AttributeDeclaration[] exprDecls;
+
+	this() { super( DirDefAttrType.ExprAttr ); }
+
+	this( AttributeDeclaration[] exprDecls )
+	{
+		super( DirDefAttrType.ExprAttr );
+		this.exprDecls = exprDecls;
+	}
+}
+
+class IdentAttrsDefBlock: DirectiveDefinitionBlock
+{
+	string[] names;
+
+	this() { super( DirDefAttrType.IdentAttr ); }
+
+	this( string[] names )
+	{
+		super( DirDefAttrType.IdentAttr );
+		this.names = names;
+	}
+}
+
+class KwdAttrDef: DirectiveDefinitionBlock
+{
+	string keyword;
+
+	this() { super( DirDefAttrType.KwdAttr ); }
+
+	this( string keyword )
+	{
+		super( DirDefAttrType.KwdAttr );
+		this.keyword = keyword;
+	}
+}
+
+class BodyAttrDef: DirectiveDefinitionBlock
+{
+	ICompoundStatement bodyAST;
+
+	this() { super( DirDefAttrType.BodyAttr ); }
+
+	this( ICompoundStatement bodyAST )
+	{
+		super( DirDefAttrType.BodyAttr );
+		this.bodyAST = bodyAST;
+	}
 }
 
 enum SymbolKind { DirectiveDefinition };
@@ -154,6 +246,7 @@ struct Symbol
 {
 	string name;
 	SymbolKind kind;
+	DirectiveDefinitionBlock[] dirDefBlocks;
 	IvyNode astNode;
 }
 
@@ -163,16 +256,26 @@ class SymbolTableFrame
 	SymbolTableFrame _moduleFrame;
 	SymbolTableFrame[size_t] _childFrames; // size_t - is index of scope start in source code?
 
-
 public:
 	this(SymbolTableFrame moduleFrame)
 	{
 		_moduleFrame = moduleFrame;
 	}
 
-	Symbol* lookup(string name)
+	Symbol* localLookup(string name)
 	{
 		return name in _symbols;
+	}
+
+	Symbol* lookup(string name)
+	{
+		if( Symbol* symb = name in _symbols )
+			return symb;
+
+		if( !_moduleFrame )
+			return null;
+
+		return _moduleFrame.lookup(name);
 	}
 
 	void add( Symbol symb )
@@ -182,6 +285,10 @@ public:
 
 	SymbolTableFrame getChildFrame(size_t sourceIndex)
 	{
+		import std.stdio;
+		writeln( "_childFrames.length: ", _childFrames.length );
+		writeln( "_childFrames: ", _childFrames );
+
 		return _childFrames.get(sourceIndex, null);
 	}
 
@@ -191,7 +298,37 @@ public:
 			compilerError( `Child frame already exists!` );
 
 		SymbolTableFrame child = new SymbolTableFrame(_moduleFrame);
+		_childFrames[sourceIndex] = child;
 		return child;
+	}
+
+	string toPrettyStr()
+	{
+		import std.conv;
+		string result;
+
+		result ~= "\r\nSYMBOLS:\r\n";
+		foreach( symbName, symb; _symbols )
+		{
+			result ~= symbName ~ ": " ~ symb.kind.to!string ~ "\r\n";
+		}
+
+		result ~= "\r\nFRAMES:\r\n";
+
+		foreach( index, frame; _childFrames )
+		{
+			if( frame )
+			{
+				result ~= "\r\nFRAME with index " ~ index.to!string ~ "\r\n";
+				result ~= frame.toPrettyStr();
+			}
+			else
+			{
+				result ~= "\r\nFRAME with index " ~ index.to!string ~ " is null\r\n";
+			}
+		}
+
+		return result;
 	}
 }
 
@@ -231,6 +368,7 @@ public:
 		void visit(IDirectiveStatement node)
 		{
 			import std.range: popBack, empty;
+			import std.algorithm: canFind;
 
 			if( node.name == "def" )
 			{
@@ -239,19 +377,75 @@ public:
 
 				IAttributeRange defAttrsRange = node[];
 
+				INameExpression dirNameExpr = defAttrsRange.takeFrontAs!INameExpression("Expected directive name");
 				ICodeBlockStatement attrsDefBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
 
 				IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
 				bool isNoscope = false;
 				ICompoundStatement bodyStmt;
 
+				DirectiveDefinitionBlock[] dirDefBlocks;
+
+				attr_def_stmts_loop:
 				while( !attrsDefStmtRange.empty )
 				{
-					IDirectiveStatement attrsDefStmt = attrsDefStmtRange.front;
-					IAttributeRange attrsDefStmtAttrRange = attrsDefStmt[];
+					IDirectiveStatement attrsDefStmt = attrsDefStmtRange.front; // Current attributes definition statement
+					IAttributeRange attrsDefStmtAttrRange = attrsDefStmt[]; // Range on attributes of attributes definition statement
 
 					switch( attrsDefStmt.name )
 					{
+						case "def.named": {
+							NamedAttrsDefBlock attrDefBlock = new NamedAttrsDefBlock();
+							while( !attrsDefStmtAttrRange.empty )
+							{
+								AttributeDeclaration attrDecl = analyzeValueAttr(attrsDefStmtAttrRange);
+								if( !attrDecl )
+								{
+									attrsDefStmtRange.popFront();
+									continue attr_def_stmts_loop;
+								}
+
+								if( attrDecl.attrName in attrDefBlock.namedDecls )
+									compilerError( `Named attribute "` ~ attrDecl.attrName ~ `" already defined in directive definition` );
+
+								attrDefBlock.namedDecls[attrDecl.attrName] = attrDecl;
+							}
+
+							dirDefBlocks ~= attrDefBlock;
+							break;
+						}
+						case "def.expr":
+						{
+							ExprAttrsDefBlock attrDefBlock = new ExprAttrsDefBlock();
+							while( !attrsDefStmtAttrRange.empty )
+							{
+								AttributeDeclaration attrDecl = analyzeValueAttr(attrsDefStmtAttrRange);
+								if( !attrDecl )
+								{
+									attrsDefStmtRange.popFront();
+									continue attr_def_stmts_loop;
+								}
+
+
+								if( attrDefBlock.exprDecls.canFind!( (it, needle) => it.attrName == needle )(attrDecl.attrName) )
+									compilerError( `Named attribute "` ~ attrDecl.attrName ~ `" already defined in directive definition` );
+
+								attrDefBlock.exprDecls ~= attrDecl;
+							}
+
+							dirDefBlocks ~= attrDefBlock;
+							break;
+						}
+						case "def.ident":
+							break;
+						case "def.kwd":
+							break;
+						case "def.result":
+
+							break;
+						case "def.noscope":
+							isNoscope = true;
+							break;
 						case "def.body":
 							if( bodyStmt )
 								compilerError( `Multiple body statements are not allowed!` );
@@ -264,9 +458,6 @@ public:
 								compilerError( "Expected compound statement as directive body statement" );
 
 							break;
-						case "def.noscope":
-							isNoscope = true;
-							break;
 						default:
 							break;
 					}
@@ -275,7 +466,7 @@ public:
 				}
 
 				// Add directive definition into existing frame
-				_currentFrame.add( Symbol(node.name, SymbolKind.DirectiveDefinition, node) );
+				_currentFrame.add( Symbol(dirNameExpr.name, SymbolKind.DirectiveDefinition, dirDefBlocks, node) );
 
 				if( bodyStmt && !isNoscope )
 				{
@@ -319,12 +510,80 @@ public:
 				// Go to find directive definitions in this imported module
 				moduleTree.accept(this);
 			}
+			else
+			{
+				foreach( childNode; node )
+				{
+					childNode.accept(this);
+				}
+			}
 
 			// TODO: Check if needed to analyse other directive attributes scopes
 		}
 		void visit(IDataFragmentStatement node) {  }
-		void visit(ICompoundStatement node) {  }
+		void visit(ICompoundStatement node)
+		{
+			foreach( childNode; node )
+			{
+				childNode.accept(this);
+			}
 
+		}
+
+	}
+
+	AttributeDeclaration analyzeValueAttr(IAttributeRange attrRange)
+	{
+		string attrName;
+		string attrType;
+		IExpression defaultValueExpr;
+
+		if( auto kwPair = cast(IKeyValueAttribute) attrRange.front )
+		{
+			attrName = kwPair.name;
+			defaultValueExpr = cast(IExpression) kwPair.value;
+			if( !defaultValueExpr )
+				compilerError( `Expected attribute default value expression!` );
+
+			attrRange.popFront(); // Skip named attribute
+		}
+		else if( auto nameExpr = cast(INameExpression) attrRange.front )
+		{
+			attrName = nameExpr.name;
+			attrRange.popFront(); // Skip variable name
+		}
+		else
+		{
+			// Just get out of there if nothing matched
+			return null;
+		}
+
+		if( !attrRange.empty )
+		{
+			// Try to parse optional type definition
+			if( auto asKwdExpr = cast(INameExpression) attrRange.front )
+			{
+				if( asKwdExpr.name == "as" )
+				{
+					// TODO: Try to find out type of attribute after `as` keyword
+					// Assuming that there will be no named attribute with name `as` in programme
+					attrRange.popFront(); // Skip `as` keyword
+
+					if( attrRange.empty )
+						compilerError( `Expected attr type definition, but got end of attrs range!` );
+
+					auto attrTypeExpr = cast(INameExpression) attrRange.front;
+					if( !attrTypeExpr )
+						compilerError( `Expected attr type definition!` );
+
+					attrType = attrTypeExpr.name; // Getting type of attribute as string (for now)
+
+					attrRange.popFront(); // Skip type expression
+				}
+			}
+		}
+
+		return new AttributeDeclaration(attrName, attrType, defaultValueExpr);
 	}
 
 	string currentModuleName() @property
@@ -384,9 +643,6 @@ public:
 		while( !stmtRange.empty )
 		{
 			string varName;
-
-			// Exactly setting value in nearest context
-			//compiler._frameStack.back.add( Symbol(varName) );
 
 			uint constIndex = cast(uint) compiler.addConst( TDataNode(varName) );
 
@@ -700,69 +956,6 @@ public:
 }
 +/
 
-/+
-// Method compiles attributes of "def.named" directive
-AttributeDeclaration[] compileNamedAttrsBlock(IAttributeRange attrRange)
-{
-	AttributeDeclaration[] attrDecls;
-	while( !attrRange.empty )
-	{
-		string attrName;
-		string attrType;
-		IExpression defaultValueExpr;
-
-		if( auto kwPair = cast(IKeyValueAttribute) attrRange.front )
-		{
-			attrName = kwPair.name;
-			defaultValueExpr = cast(IExpression) kwPair.value;
-			if( !defaultValueExpr )
-				compilerError( `Expected attribute default value expression!` );
-
-			attrRange.popFront(); // Skip named attribute
-		}
-		else if( auto nameExpr = cast(INameExpression) attrRange.front )
-		{
-			attrName = nameExpr.name;
-			attrRange.popFront(); // Skip variable name
-		}
-		else
-		{
-			// Just get out of there
-			break;
-		}
-
-		if( !attrRange.empty )
-		{
-			// Try to parse optional type definition
-			if( auto asKwdExpr = cast(INameExpression) attrRange.front )
-			{
-				if( asKwdExpr.name == "as" )
-				{
-					// TODO: Try to find out type of attribute after `as` keyword
-					// Assuming that there will be no named attribute with name `as` in programme
-					attrRange.popFront(); // Skip `as` keyword
-
-					if( attrRange.empty )
-						compilerError( `Expected attr type definition, but got end of attrs range!` );
-
-					auto attrTypeExpr = cast(INameExpression) attrRange.front;
-					if( !attrTypeExpr )
-						compilerError( `Expected attr type definition!` );
-
-					attrType = attrTypeExpr.name; // Getting type of attribute as string (for now)
-
-					attrRange.popFront(); // Skip type expression
-				}
-			}
-		}
-
-		//attrDecls ~= AttributeDeclaration( attrName, attrType,  )
-	}
-
-	return attrDecls;
-}
-+/
-
 import std.stdio;
 /// Defines directive using ivy language
 class DefCompiler: IDirectiveCompiler
@@ -803,8 +996,6 @@ class DefCompiler: IDirectiveCompiler
 						break;
 					}
 					case "def.expr": {
-
-
 						break;
 					}
 					case "def.ident": {
@@ -863,7 +1054,13 @@ class DefCompiler: IDirectiveCompiler
 			//bodyCodeObj = compiler.getCurrentCodeObject();
 			//bodyCodeObj._attrDecls = attrDecls;
 
-			scope(exit) compiler.exitFrame();
+			scope(exit) {
+				compiler.exitCodeObj();
+				if( !isNoscope )
+				{
+					compiler.exitFrame();
+				}
+			}
 		}
 
 		// Add def.body code object to current module constants list
@@ -905,14 +1102,15 @@ private:
 	// Compiler's storage for parsed module ASTs
 	CompilerModuleRepository _moduleRepo;
 
+	// Dictionary with module objects that compiler produces
+	ModuleObject[string] _moduleObjects;
+
 	// Current stack of symbol table frames
 	SymbolTableFrame[] _symbolTableStack;
 
 	// Current stack of code objects that compiler produces
 	CodeObject[] _codeObjStack;
 
-	// Dictionary with module objects that compiler produces
-	ModuleObject[string] _moduleObjects;
 
 
 public:
@@ -935,6 +1133,7 @@ public:
 	{
 		if( auto table = moduleName in _modulesSymbolTables )
 		{
+			assert( *table, `Cannot enter module sybol table frame, because it is null` );
 			_symbolTableStack ~= *table;
 		}
 		else
@@ -948,7 +1147,10 @@ public:
 		import std.range: empty, back;
 		assert( !_symbolTableStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty` );
 
-		_symbolTableStack ~= _symbolTableStack.back.getChildFrame(sourceIndex);
+		SymbolTableFrame childFrame = _symbolTableStack.back.getChildFrame(sourceIndex);
+		assert( childFrame, `Cannot enter child symbol table frame, because it's null` );
+
+		_symbolTableStack ~= childFrame;
 	}
 
 	void exitFrame()
@@ -973,6 +1175,7 @@ public:
 	{
 		import std.range: back;
 		_codeObjStack ~= new CodeObject(moduleObj);
+		this.addConst( TDataNode(_codeObjStack.back) );
 		return _codeObjStack.back;
 	}
 
@@ -980,6 +1183,7 @@ public:
 	{
 		import std.range: back;
 		_codeObjStack ~= new CodeObject( this.getCurrentModule() );
+		this.addConst( TDataNode(_codeObjStack.back) );
 		return _codeObjStack.back;
 	}
 
@@ -1044,6 +1248,20 @@ public:
 
 		return _codeObjStack.back;
 	}
+
+	Symbol* symbolLookup(string name)
+	{
+		import std.range: empty, back;
+		assert( !_symbolTableStack.empty, `Cannot look for symbol, because symbol table stack is empty` );
+		assert( _symbolTableStack.back, `Cannot look for symbol, current symbol table frame is null` );
+
+		Symbol* symb = _symbolTableStack.back.lookup(name);
+		if( !symb )
+			compilerError( `Cannot find symbol "` ~ name ~ `"` );
+
+		return symb;
+	}
+
 
 	override {
 		void visit(IvyNode node) { assert(0); }
@@ -1211,22 +1429,107 @@ public:
 
 		void visit(IDirectiveStatement node)
 		{
+			import std.range: empty, front, popFront;
+
 			if( auto comp = node.name in _dirCompilers )
 			{
 				comp.compile( node, this );
 			}
 			else
 			{
-				auto stmtRange = node[];
-				while( !stmtRange.empty )
+				auto attrRange = node[];
+
+				Symbol* dirSymbol = this.symbolLookup( node.name );
+				DirectiveDefinitionBlock[] dirDefBlocks = dirSymbol.dirDefBlocks[]; // Getting slice of list
+				bool isNoscope = false;
+
+
+				while( !attrRange.empty )
 				{
+					while( !dirDefBlocks.empty )
+					{
+						assert( dirDefBlocks.front, `dirDefBlocks.front is null` );
 
+						switch( dirDefBlocks.front.type )
+						{
+							case DirDefAttrType.NamedAttr:
+							{
+								size_t loadArgCountInstrIndex = addInstr( Instruction(OpCode.LoadConst) ); // Instruction to load number of arguments in block
+								size_t argCount = 0;
 
+								NamedAttrsDefBlock namedAttrsDef = cast(NamedAttrsDefBlock) dirDefBlocks.front;
+								assert( namedAttrsDef, `namedAttrsDef is null` );
+								while( !attrRange.empty )
+								{
+									IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
+									if( !keyValueAttr )
+									{
+										break; // We finished with key-value attributes
+									}
+
+									if( keyValueAttr.name !in namedAttrsDef.namedDecls )
+										compilerError( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
+
+									// Compile value expression (it should put result value on the stack)
+									keyValueAttr.value.accept(this);
+
+									++argCount;
+									attrRange.popFront();
+								}
+
+								// Backpatch number of arguments instruction
+								setInstrArg0( loadArgCountInstrIndex, cast(uint) argCount );
+								break;
+							}
+							case DirDefAttrType.ExprAttr:
+							{
+								size_t loadArgCountInstrIndex = addInstr( Instruction(OpCode.LoadConst) ); // Instruction to load number of arguments in block
+								size_t argCount = 0;
+
+								ExprAttrsDefBlock exprAttrsDef = cast(ExprAttrsDefBlock) dirDefBlocks.front;
+								assert( exprAttrsDef, `exprAttrsDef is null` );
+								while( !attrRange.empty )
+								{
+									IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
+									if( !keyValueAttr )
+									{
+										break; // We finished with key-value attributes
+									}
+
+									attrRange.popFront();
+								}
+
+								// Backpatch number of arguments instruction
+								setInstrArg0( loadArgCountInstrIndex, cast(uint) argCount );
+								break;
+							}
+							case DirDefAttrType.IdentAttr:
+							{
+								while( !attrRange.empty )
+								{
+
+									attrRange.popFront();
+								}
+								break;
+							}
+							case DirDefAttrType.KwdAttr:
+							{
+								KwdAttrDef kwdDef = cast(KwdAttrDef) dirDefBlocks.front;
+								assert( kwdDef, `kwdDef is null` );
+								INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression( `Expected keyword attribute` );
+								if( kwdDef.keyword != kwdAttr.name )
+									compilerError( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
+								break;
+							}
+							default:
+								assert( false, `Unexpected type of directive definition attr block!` );
+						}
+						dirDefBlocks.popFront();
+					}
 				}
 
-
 				// First of all I'll be trying to load directive with this into machine stack
-				assert( false, `Compiling for inline directive "` ~ node.name ~ `" is not implemented yet!` );
+				//assert( false, `Compiling for inline directive "` ~ node.name ~ `" is not implemented yet!` );
 			}
 		}
 
@@ -1255,6 +1558,7 @@ public:
 		}
 	}
 
+
 	// Assembles constants and code chunks into complete module bytecode
 	void assemble()
 	{
@@ -1268,26 +1572,38 @@ public:
 
 		string result;
 
-		/+
-		if( _frameStack.empty )
-			return `<Frame stack is empty>`;
-
-		if( !_frameStack.back )
-			return `<Current compiler frame is null>`;
-
-		result ~= "CONSTANTS:\r\n";
-		foreach( i, con; _frameStack.back._moduleObj._consts )
+		foreach( modName, modObj; _moduleObjects )
 		{
-			result ~= i.text ~ "  " ~ con.toString() ~ "\r\n";
-		}
-		result ~= "\r\n";
+			result ~= "\r\nMODULE " ~ modName ~ "\r\n";
+			result ~= "\r\nCONSTANTS\r\n";
+			foreach( i, con; modObj._consts )
+			{
+				result ~= i.text ~ "  " ~ con.toString() ~ "\r\n";
+			}
 
-		result ~= "CODE:\r\n";
-		foreach( i, instr; _frameStack.back._codeObj._instrs )
-		{
-			result ~= i.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.args.to!string ~ "\r\n";
+			result ~= "\r\nCODE\r\n";
+			foreach( i, con; modObj._consts )
+			{
+				if( con.type == DataNodeType.CodeObject )
+				{
+					if( !con.codeObject )
+					{
+						result ~= "\r\nCode object " ~ i.text ~ " is null\r\n";
+					}
+					else
+					{
+						result ~= "\r\nCode object " ~ i.text ~ "\r\n";
+						foreach( k, instr; con.codeObject._instrs )
+						{
+							result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.args.to!string ~ "\r\n";
+						}
+					}
+				}
+			}
+			result ~= "\r\nEND OF MODULE " ~ modName ~ "\r\n";
+
 		}
-		+/
+
 
 		return result;
 	}
