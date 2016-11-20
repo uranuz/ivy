@@ -30,19 +30,19 @@ void main()
 	
 	stdout.writeln(toJSON(astJSON, true));
 
-	ModuleObject moduleObj = new ModuleObject(sourceFileName, sourceFileName);
-	ByteCodeCompiler compiler = new ByteCodeCompiler( moduleObj );
+	auto compilerModuleRepo = new CompilerModuleRepository("test");
+	auto symbCollector = new CompilerSymbolsCollector(compilerModuleRepo, "test");
+	ast.accept(symbCollector);
+
+	SymbolTableFrame[string] symbTable = symbCollector.getModuleSymbols();
+	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbTable, "test" );
 	ast.accept(compiler);
 
 	DirectiveObject rootDirObj = new DirectiveObject;
-	rootDirObj._codeObj = moduleObj.getMainCodeObject();
+	rootDirObj._codeObj = compiler.getMainModule().getMainCodeObject();
 
 	Interpreter interp = new Interpreter(rootDirObj);
- 	interp.setLocalValue("content", TDataNode("<div>Основное содержимое формы</div>"));
- 	interp.setLocalValue("content2", TDataNode("Еще какое-то содержимое страницы"));
- 	interp.setLocalValue("content3", TDataNode("Здравствуй, Вася"));
- 	interp.setLocalValue("x", TDataNode(20));
- 	interp.setLocalValue("y", TDataNode("no"));
+
 
 	interp.execLoop();
 

@@ -121,9 +121,7 @@ class DirectiveObject
 	string _name; // Name of directive
 	CodeObject _codeObj; // Code object related to this directive
 
-	this()
-	{
-	}
+	this() {}
 }
 
 struct DataNode(S)

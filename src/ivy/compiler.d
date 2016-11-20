@@ -285,10 +285,6 @@ public:
 
 	SymbolTableFrame getChildFrame(size_t sourceIndex)
 	{
-		import std.stdio;
-		writeln( "_childFrames.length: ", _childFrames.length );
-		writeln( "_childFrames: ", _childFrames );
-
 		return _childFrames.get(sourceIndex, null);
 	}
 
@@ -341,12 +337,12 @@ private:
 	SymbolTableFrame _currentFrame;
 
 public:
-	this( CompilerModuleRepository moduleRepo, string rootModuleName )
+	this( CompilerModuleRepository moduleRepo, string mainModuleName )
 	{
 		_moduleRepo = moduleRepo;
-		_moduleStack ~= rootModuleName;
+		_moduleStack ~= mainModuleName;
 		_currentFrame = new SymbolTableFrame(null);
-		_moduleSymbols[rootModuleName] = _currentFrame;
+		_moduleSymbols[mainModuleName] = _currentFrame;
 	}
 
 	public override {
@@ -1045,7 +1041,7 @@ class DefCompiler: IDirectiveCompiler
 				compiler.enterFrame( bodyStatement.location.index );
 			}
 
-			compiler.newCodeObject(); // Creating code object
+			bodyCodeObj = compiler.newCodeObject(); // Creating code object
 
 			// Generating code for def.body
 			bodyStatement.accept(compiler);
@@ -1111,10 +1107,12 @@ private:
 	// Current stack of code objects that compiler produces
 	CodeObject[] _codeObjStack;
 
+	string _mainModuleName;
+
 
 
 public:
-	this( CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string rootModuleName )
+	this( CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName )
 	{
 		_moduleRepo = moduleRepo;
 		_modulesSymbolTables = symbolTables;
@@ -1125,8 +1123,9 @@ public:
 		//_dirCompilers["for"] = new ForCompiler();
 		_dirCompilers["def"] = new DefCompiler();
 
-		enterModuleFrame(rootModuleName);
-		newCodeObject( newModuleObject(rootModuleName) );
+		_mainModuleName = mainModuleName;
+		enterModuleFrame(mainModuleName);
+		newCodeObject( newModuleObject(mainModuleName) );
 	}
 
 	void enterModuleFrame( string moduleName )
@@ -1260,6 +1259,11 @@ public:
 			compilerError( `Cannot find symbol "` ~ name ~ `"` );
 
 		return symb;
+	}
+
+	ModuleObject getMainModule()
+	{
+		return _moduleObjects[_mainModuleName];
 	}
 
 

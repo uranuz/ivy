@@ -24,13 +24,11 @@ void main()
 	}
 
 	JSONValue astJSON;
-
 	writeASTasJSON(parser.lexer.sourceRange, ast, astJSON);
 
 	stdout.writeln(toJSON(astJSON, true));
 
 	auto compilerModuleRepo = new CompilerModuleRepository("test");
-
 	auto symbCollector = new CompilerSymbolsCollector(compilerModuleRepo, "test");
 	ast.accept(symbCollector);
 
@@ -44,10 +42,7 @@ void main()
 
 	writeln(modulesSymbolTablesDump);
 
-	//auto moduleObj = new ModuleObject(sourceFileName, sourceFileName);
 	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbTable, "test" );
- 	alias TDataNode = DataNode!string;
-
 	ast.accept(compiler);
 
 	writeln( compiler.toPrettyStr() );
