@@ -170,6 +170,7 @@ public:
 	TDataNode[] _stack;
 	ExecutionFrame[] _frameStack;
 	ExecutionFrame _globalFrame;
+	ExecutionFrame[string] _moduleFrames;
 
 	//IvyRepository _ivyRepository; // Storage for parsed modules
 
@@ -190,6 +191,16 @@ public:
 	{
 		import std.range: popBack;
 		_frameStack.popBack();
+	}
+
+	ExecutionFrame getModuleFrame(string modName)
+	{
+		if( modName !in _moduleFrames )
+		{
+			_moduleFrames[modName] = new ExecutionFrame(null, _globalFrame);
+		}
+
+		return _moduleFrames[modName];
 	}
 
 	bool canFindValue( string varName )
@@ -281,6 +292,18 @@ public:
 		return _frameStack.back.removeValue( varName );
 	}
 
+	TDataNode getModuleConst( size_t index )
+	{
+		import std.range: back;
+		import std.conv: text;
+		assert( _frameStack.back, `_frameStack.back is null` );
+		assert( _frameStack.back._dirObj, `_frameStack.back._dirObj is null` );
+		assert( _frameStack.back._dirObj._codeObj, `_frameStack.back._dirObj._codeObj is null` );
+		assert( _frameStack.back._dirObj._codeObj._moduleObj, `_frameStack.back._dirObj._codeObj._moduleObj is null` );
+
+		return _frameStack.back._dirObj._codeObj._moduleObj.getConst(index);
+	}
+
 	void execLoop()
 	{
 		import std.range: empty, back, popBack;
@@ -310,6 +333,7 @@ public:
 					assert( ( leftVal.type == DataNodeType.Integer || leftVal.type == DataNodeType.Floating ) && leftVal.type == rightVal.type,
 						`Left and right values of arithmetic operation must have the same integer or floating type!` );
 
+					arithm_op_switch:
 					switch( instr.opcode )
 					{
 						foreach( arithmOp; AliasSeq!(
@@ -319,7 +343,7 @@ public:
 							tuple(OpCode.Div, "/"),
 							tuple(OpCode.Mod, "%")) )
 						{
-							case arithmOp[0]:
+							case arithmOp[0]: {
 								if( leftVal.type == DataNodeType.Integer )
 								{
 									mixin( `_stack.back = leftVal.integer ` ~ arithmOp[1] ~ ` rightVal.integer;` );
@@ -328,7 +352,8 @@ public:
 								{
 									mixin( `_stack.back = leftVal.floating ` ~ arithmOp[1] ~ ` rightVal.floating;` );
 								}
-								break;
+								break arithm_op_switch;
+							}
 						}
 						default:
 							assert(false, `This should never happen!` );
@@ -345,6 +370,7 @@ public:
 					assert( leftVal.type == DataNodeType.Boolean && leftVal.type == rightVal.type,
 						`Left and right values of arithmetic operation must have boolean type!` );
 
+					logical_op_switch:
 					switch( instr.opcode )
 					{
 						foreach( logicalOp; AliasSeq!(
@@ -352,9 +378,10 @@ public:
 							tuple(OpCode.Or, "||"),
 							tuple(OpCode.Xor, "^^")) )
 						{
-							case logicalOp[0]:
+							case logicalOp[0]: {
 								mixin( `_stack.back = leftVal.boolean ` ~ logicalOp[1] ~ ` rightVal.boolean;` );
-								break;
+								break logical_op_switch;
+							}
 						}
 						default:
 							assert(false, `This should never happen!` );
@@ -371,15 +398,16 @@ public:
 					TDataNode leftVal = _stack.back;
 					assert( leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type` );
 
+					compare_op_switch:
 					switch( instr.opcode )
 					{
 						foreach( compareOp; AliasSeq!(
 							tuple(OpCode.LT, "<"),
-							tuple(OpCode.Sub, ">"),
-							tuple(OpCode.Mul, "<="),
-							tuple(OpCode.Div, ">=")) )
+							tuple(OpCode.GT, ">"),
+							tuple(OpCode.LTEqual, "<="),
+							tuple(OpCode.GTEqual, ">=")) )
 						{
-							case compareOp[0]:
+							case compareOp[0]: {
 								switch( leftVal.type )
 								{
 									case DataNodeType.Undef, DataNodeType.Null:
@@ -398,7 +426,8 @@ public:
 									default:
 										assert( false, `Less or greater comparision doesn't support type "` ~ leftVal.type.to!string ~ `" yet!` );
 								}
-								break;
+								break compare_op_switch;
+							}
 						}
 						default:
 							assert(false, `This should never happen!` );
@@ -415,6 +444,7 @@ public:
 					TDataNode leftVal = _stack.back;
 					assert( leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type` );
 
+					cmp_type_switch:
 					switch( leftVal.type )
 					{
 						case DataNodeType.Undef, DataNodeType.Null:
@@ -430,25 +460,18 @@ public:
 						{
 							case typeAndField[0]:
 								mixin( `_stack.back = leftVal.` ~ typeAndField[1] ~ ` == rightVal.` ~ typeAndField[1] ~ `;` );
-								break;
+								break cmp_type_switch;
 						}
 						default:
 							break;
 					}
-
 					break;
 				}
 
 				// Load constant from programme data table into stack
 				case OpCode.LoadConst:
 				{
-					size_t constIndex = instr.args[0];
-					assert( _frameStack.back, `_frameStack.back is null` );
-					assert( _frameStack.back._dirObj, `_frameStack.back._dirObj is null` );
-					assert( _frameStack.back._dirObj._codeObj, `_frameStack.back._dirObj._codeObj is null` );
-					assert( _frameStack.back._dirObj._codeObj._moduleObj, `_frameStack.back._dirObj._codeObj._moduleObj is null` );
-
-					_stack ~= _frameStack.back._dirObj._codeObj._moduleObj.getConst(constIndex);
+					_stack ~= getModuleConst( instr.args[0] );
 					break;
 				}
 
@@ -530,14 +553,13 @@ public:
 					break;
 				}
 
-				// Loads data from local context frame variable
+				// Loads data from local context frame variable by index of var name in module constants
 				case OpCode.LoadName:
 				{
-					assert( _stack.back.type == DataNodeType.String,
-						`Variable name operand must have string type!` );
+					TDataNode nameNode = getModuleConst( instr.args[0] );
+					assert( nameNode.type == DataNodeType.String, `Variable name operand must have string type!` );
 
-					// Replacing variable name with variable value
-					_stack.back = getValue( _stack.back.str );
+					_stack ~= getValue( nameNode.str );
 					break;
 				}
 
@@ -580,28 +602,84 @@ public:
 					_stack.popBack(); // Remove code object from stack
 
 					assert( codeObj, `Code object operand for directive loading instruction is null` );
+					DirectiveObject dirObj = new DirectiveObject;
+					dirObj._name = varName;
+					dirObj._codeObj = codeObj;
 
-					setLocalValue( varName, TDataNode(codeObj) ); // Put this directive in context
+					setLocalValue( varName, TDataNode(dirObj) ); // Put this directive in context
 
 					break;
 				}
 
 				case OpCode.CallDirective:
 				{
+					import std.range: empty, popBack, back;
+
 					assert( _stack.back.type == DataNodeType.Integer,
 						`Expected integer as arguments count in directive call` );
 
-					auto argCount = _stack.back.integer;
-					_stack.popBack();
+					size_t stackArgCount = instr.args[0];
+					writeln( "CallDirective stackArgCount: ", stackArgCount );
+					assert( stackArgCount <= _stack.length, "Not enough arguments in execution stack" );
+					writeln( "CallDirective _stack: ", _stack );
+					assert( _stack[ _stack.length - stackArgCount ].type == DataNodeType.Directive, `Expected directive object operand in directive call operation` );
+
+					DirectiveObject dirObj = _stack[ _stack.length - stackArgCount ].directive;
+					assert( dirObj, `Directive object is null!` );
+
+					newFrame( dirObj, getModuleFrame(dirObj._codeObj._moduleObj._name) );
+
+					while( !_stack.empty )
+					{
+						if( _stack.back.type == DataNodeType.Integer )
+						{
+							size_t blockArgCount = _stack.back.integer >> 3;
+							writeln( "blockArgCount: ", blockArgCount );
+							int blockType = _stack.back.integer & 7;
+							writeln( "blockType: ", blockType );
+							_stack.popBack();
+
+							if( blockType == 1 )
+							{
+								for( size_t i = 0; i < blockArgCount; ++i )
+								{
+									assert( !_stack.empty, "Execution stack is empty!" );
+									TDataNode attrValue = _stack.back;
+									_stack.popBack();
+									assert( !_stack.empty, "Execution stack is empty!" );
+									assert( _stack.back.type == DataNodeType.String, "Named attribute name must be string!" );
+									string attrName = _stack.back.str;
+									_stack.popBack();
+									setLocalValue( attrName, attrValue );
+								}
+								writeln( "_stack after parsing named arguments: ", _stack );
+
+
+							}
+							else if( blockType == 2 )
+							{
+
+							}
+							else
+							{
+								assert( false, "Unexpected arguments block type" );
+							}
+						}
+						else
+						{
+							break;
+						}
+					}
 
 					// TODO: Then let's try to get directive arguments and parse 'em
 
+					assert( !_stack.empty, "Expected directive object to call, but found end of execution stack!" );
+					assert( _stack.back.type == DataNodeType.Directive, `Expected directive object operand in directive call operation` );
+					_stack.popBack();
 
-					assert( _stack.back.type == DataNodeType.Directive,
-						`Expected directive object operand in directive call operation` );
-
-					DirectiveObject dirObj = _stack.back.directive;
-
+					_stack ~= TDataNode(pk);
+					codeRange = _frameStack.back._dirObj._codeObj._instrs[];
+					pk = 0;
 
 					break;
 				}
@@ -610,6 +688,26 @@ public:
 				{
 					assert( false, "Unexpected code of operation" );
 					break;
+				}
+
+				if( pk == codeRange.length - 1 )
+				{
+					if( _frameStack.empty )
+						break;
+
+					assert( !_stack.empty, "Expected directive result, but execution stack is empty!" );
+					TDataNode result = _stack.back;
+					_stack.popBack();
+
+					if( _stack.empty )
+						break;
+
+					assert( _stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer" );
+					_frameStack.popBack();
+					pk = cast(size_t) _stack.back.integer;
+					_stack.popBack();
+
+					_stack ~= result;
 				}
 			}
 

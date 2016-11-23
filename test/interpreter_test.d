@@ -35,18 +35,28 @@ void main()
 	ast.accept(symbCollector);
 
 	SymbolTableFrame[string] symbTable = symbCollector.getModuleSymbols();
+	/+
+	string modulesSymbolTablesDump;
+	foreach( modName, frame; symbTable )
+	{
+		modulesSymbolTablesDump ~= "\r\nMODULE " ~ modName ~ " CONTENTS:\r\n";
+		modulesSymbolTablesDump ~= frame.toPrettyStr() ~ "\r\n";
+	}
+
+	writeln(modulesSymbolTablesDump);
+	+/
+
 	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbTable, "test" );
 	ast.accept(compiler);
+
+	writeln( compiler.toPrettyStr() );
 
 	DirectiveObject rootDirObj = new DirectiveObject;
 	rootDirObj._codeObj = compiler.getMainModule().getMainCodeObject();
 
 	Interpreter interp = new Interpreter(rootDirObj);
-
-
 	interp.execLoop();
 
 	import std.range: back;
-	writeln(interp._stack.back);
-	
+	writeln("Programme returned: ", interp._stack.back);
 }

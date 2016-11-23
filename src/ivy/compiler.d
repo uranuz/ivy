@@ -964,7 +964,6 @@ class DefCompiler: IDirectiveCompiler
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
 
-		CodeObject dirCodeObj = new CodeObject( compiler.getCurrentModule() );
 		ICompoundStatement bodyStatement;
 		bool isNoscope = false;
 
@@ -1063,24 +1062,16 @@ class DefCompiler: IDirectiveCompiler
 		uint codeObjIndex = cast(uint) compiler.addConst( TDataNode(bodyCodeObj) );
 
 		// Add instruction to load code object from module constants
-		Instruction loadCodeObjInstr;
-		loadCodeObjInstr.opcode = OpCode.LoadConst;
-		loadCodeObjInstr.args[0] = codeObjIndex;
-		compiler.addInstr( loadCodeObjInstr );
+		compiler.addInstr( OpCode.LoadConst, codeObjIndex );
 
 		// Add directive name to module constants
 		uint dirNameConstIndex = cast(uint) compiler.addConst( TDataNode(defNameExpr.name) );
 
 		// Add instruction to load directive name from consts
-		Instruction loadDirNameInstr;
-		loadDirNameInstr.opcode = OpCode.LoadConst;
-		loadDirNameInstr.args[0] = dirNameConstIndex;
-		compiler.addInstr( loadDirNameInstr );
+		compiler.addInstr( OpCode.LoadConst, dirNameConstIndex );
 
 		// Add instruction to create directive object
-		Instruction loadDirInstr;
-		loadDirInstr.opcode = OpCode.LoadDirective;
-		compiler.addInstr( loadDirInstr );
+		compiler.addInstr( OpCode.LoadDirective );
 
 	}
 
@@ -1201,6 +1192,24 @@ public:
 		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
 
 		return _codeObjStack.back.addInstr(instr);
+	}
+
+	size_t addInstr( OpCode opcode )
+	{
+		import std.range: empty, back;
+		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
+		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
+
+		return _codeObjStack.back.addInstr( Instruction(opcode) );
+	}
+
+	size_t addInstr( OpCode opcode, uint arg0 )
+	{
+		import std.range: empty, back;
+		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
+		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
+
+		return _codeObjStack.back.addInstr( Instruction(opcode, arg0) );
 	}
 
 	void setInstrArg0( size_t index, uint arg )
@@ -1447,6 +1456,11 @@ public:
 				DirectiveDefinitionBlock[] dirDefBlocks = dirSymbol.dirDefBlocks[]; // Getting slice of list
 				bool isNoscope = false;
 
+				uint dirNameConstIndex = cast(uint) addConst( TDataNode(node.name) );
+				addInstr( OpCode.LoadName, dirNameConstIndex );
+
+				// Keeps count of stack arguments actualy used by this call. First is directive object
+				size_t stackItemsCount = 1;
 
 				while( !attrRange.empty )
 				{
@@ -1458,8 +1472,8 @@ public:
 						{
 							case DirDefAttrType.NamedAttr:
 							{
-								size_t loadArgCountInstrIndex = addInstr( Instruction(OpCode.LoadConst) ); // Instruction to load number of arguments in block
 								size_t argCount = 0;
+								bool[string] argsSet;
 
 								NamedAttrsDefBlock namedAttrsDef = cast(NamedAttrsDefBlock) dirDefBlocks.front;
 								assert( namedAttrsDef, `namedAttrsDef is null` );
@@ -1474,37 +1488,70 @@ public:
 									if( keyValueAttr.name !in namedAttrsDef.namedDecls )
 										compilerError( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
 
+									// Add name of named argument into stack
+									uint nameConstIndex = cast(uint) addConst( TDataNode(keyValueAttr.name) );
+									addInstr( OpCode.LoadConst, nameConstIndex );
+									++stackItemsCount;
+
 									// Compile value expression (it should put result value on the stack)
 									keyValueAttr.value.accept(this);
+									++stackItemsCount;
 
 									++argCount;
+									argsSet[keyValueAttr.name] = true;
 									attrRange.popFront();
 								}
 
-								// Backpatch number of arguments instruction
-								setInstrArg0( loadArgCountInstrIndex, cast(uint) argCount );
+								foreach( name, attrDecl; namedAttrsDef.namedDecls )
+								{
+									if( name !in argsSet )
+									{
+										IExpression defVal = namedAttrsDef.namedDecls[name].defaultValueExpr;
+
+										if( defVal )
+										{
+											// Add name of named argument into stack
+											uint nameConstIndex = cast(uint) addConst( TDataNode(name) );
+											addInstr( OpCode.LoadConst, nameConstIndex );
+											++stackItemsCount;
+
+											// Generate code to set default values
+											defVal.accept(this);
+											++stackItemsCount;
+											++argCount;
+										}
+									}
+								}
+
+								// Add instruction to load value that consists of number of pairs in block and type of block
+								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 1;
+								uint blockHeaderConstIndex = cast(uint) addConst( TDataNode( blockHeader ) );
+								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
 								break;
 							}
 							case DirDefAttrType.ExprAttr:
 							{
-								size_t loadArgCountInstrIndex = addInstr( Instruction(OpCode.LoadConst) ); // Instruction to load number of arguments in block
 								size_t argCount = 0;
 
 								ExprAttrsDefBlock exprAttrsDef = cast(ExprAttrsDefBlock) dirDefBlocks.front;
 								assert( exprAttrsDef, `exprAttrsDef is null` );
 								while( !attrRange.empty )
 								{
-									IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
-									if( !keyValueAttr )
+									IExpression exprAttr = cast(IExpression) attrRange.front;
+									if( !exprAttr )
 									{
 										break; // We finished with key-value attributes
 									}
+									exprAttr.accept(this);
+									++stackItemsCount;
 
 									attrRange.popFront();
 								}
 
-								// Backpatch number of arguments instruction
-								setInstrArg0( loadArgCountInstrIndex, cast(uint) argCount );
+								// Add instruction to load value that consists of number of positional arguments in block and type of block
+								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 1;
+								uint blockHeaderConstIndex = cast(uint) addConst( TDataNode( blockHeader ) );
+								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
 								break;
 							}
 							case DirDefAttrType.IdentAttr:
@@ -1532,8 +1579,8 @@ public:
 					}
 				}
 
-				// First of all I'll be trying to load directive with this into machine stack
-				//assert( false, `Compiling for inline directive "` ~ node.name ~ `" is not implemented yet!` );
+				// After all preparations add instruction to call directive
+				addInstr( OpCode.CallDirective, cast(uint) (stackItemsCount+1) ); // items count item should be counted
 			}
 		}
 
