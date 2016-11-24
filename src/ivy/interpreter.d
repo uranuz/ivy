@@ -294,8 +294,9 @@ public:
 
 	TDataNode getModuleConst( size_t index )
 	{
-		import std.range: back;
+		import std.range: back, empty;
 		import std.conv: text;
+		assert( !_frameStack.empty, `_frameStack is empty` );
 		assert( _frameStack.back, `_frameStack.back is null` );
 		assert( _frameStack.back._dirObj, `_frameStack.back._dirObj is null` );
 		assert( _frameStack.back._dirObj._codeObj, `_frameStack.back._dirObj._codeObj is null` );
@@ -311,6 +312,7 @@ public:
 		import std.meta: AliasSeq;
 		import std.typecons: tuple;
 
+		assert( !_frameStack.empty, `_frameStack is empty` );
 		assert( _frameStack.back, `_frameStack.back is null` );
 		assert( _frameStack.back._dirObj, `_frameStack.back._dirObj is null` );
 		assert( _frameStack.back._dirObj._codeObj, `_frameStack.back._dirObj._codeObj is null` );
@@ -318,7 +320,8 @@ public:
 		auto codeRange = _frameStack.back._dirObj._codeObj._instrs[];
 		size_t pk = 0;
 
-		for( ; pk < codeRange.length; ++pk )
+		execution_loop:
+		for( ; pk < codeRange.length; )
 		{
 			Instruction instr = codeRange[pk];
 			switch( instr.opcode )
@@ -681,7 +684,7 @@ public:
 					codeRange = _frameStack.back._dirObj._codeObj._instrs[];
 					pk = 0;
 
-					break;
+					continue execution_loop;
 				}
 
 				default:
@@ -689,26 +692,31 @@ public:
 					assert( false, "Unexpected code of operation" );
 					break;
 				}
+			}
+			++pk;
 
-				if( pk == codeRange.length - 1 )
-				{
-					if( _frameStack.empty )
-						break;
+			if( pk == codeRange.length ) // Ended with this code object
+			{
+				writeln( "_stack on code object end: ", _stack );
+				assert( !_frameStack.empty, "Frame stack shouldn't be empty yet'" );
+				// TODO: Consider case with noscope directive
+				_frameStack.popBack(); // Exit out of this frame
 
-					assert( !_stack.empty, "Expected directive result, but execution stack is empty!" );
-					TDataNode result = _stack.back;
-					_stack.popBack();
+				// If frame stack happens to be empty - it mean we nave done with programme
+				if( _frameStack.empty )
+					break;
 
-					if( _stack.empty )
-						break;
+				// Else we expect to have result of directive on the stack
+				assert( !_stack.empty, "Expected directive result, but execution stack is empty!" );
+				TDataNode result = _stack.back;
+				_stack.popBack(); // We saved result - so drop it!
 
-					assert( _stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer" );
-					_frameStack.popBack();
-					pk = cast(size_t) _stack.back.integer;
-					_stack.popBack();
+				assert( !_stack.empty, "Expected integer as instruction pointer, but got end of execution stack" );
+				assert( _stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer" );
+				pk = cast(size_t) _stack.back.integer;
+				_stack.popBack(); // Drop return address
 
-					_stack ~= result;
-				}
+				_stack ~= result; // Get result back
 			}
 
 		}
