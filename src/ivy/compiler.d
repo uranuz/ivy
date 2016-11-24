@@ -642,10 +642,7 @@ public:
 
 			uint constIndex = cast(uint) compiler.addConst( TDataNode(varName) );
 
-			Instruction instr;
-			instr.opcode = OpCode.LoadConst;
-			instr.args[0] = constIndex;
-			compiler.addInstr( instr );
+			compiler.addInstr( OpCode.LoadConst, constIndex );
 
 			if( auto kwPair = cast(IKeyValueAttribute) stmtRange.front )
 			{
@@ -725,10 +722,7 @@ public:
 
 			uint constIndex = cast(uint) compiler.addConst( TDataNode( kwPair.name ) );
 
-			Instruction instr;
-			instr.opcode = OpCode.LoadConst;
-			instr.args[0] = constIndex;
-			compiler.addInstr( instr );
+			compiler.addInstr( OpCode.LoadConst, constIndex );
 
 			kwPair.value.accept(compiler); //Evaluating expression
 
@@ -1032,7 +1026,7 @@ class DefCompiler: IDirectiveCompiler
 
 		// Here should go commands to compile directive body
 
-		CodeObject bodyCodeObj;
+		uint codeObjIndex;
 		{
 			if( !isNoscope )
 			{
@@ -1040,14 +1034,10 @@ class DefCompiler: IDirectiveCompiler
 				compiler.enterFrame( bodyStatement.location.index );
 			}
 
-			bodyCodeObj = compiler.newCodeObject(); // Creating code object
+			codeObjIndex = cast(uint) compiler.newCodeObject(); // Creating code object
 
 			// Generating code for def.body
 			bodyStatement.accept(compiler);
-
-			// Getting body code object
-			//bodyCodeObj = compiler.getCurrentCodeObject();
-			//bodyCodeObj._attrDecls = attrDecls;
 
 			scope(exit) {
 				compiler.exitCodeObj();
@@ -1057,9 +1047,6 @@ class DefCompiler: IDirectiveCompiler
 				}
 			}
 		}
-
-		// Add def.body code object to current module constants list
-		uint codeObjIndex = cast(uint) compiler.addConst( TDataNode(bodyCodeObj) );
 
 		// Add instruction to load code object from module constants
 		compiler.addInstr( OpCode.LoadConst, codeObjIndex );
@@ -1161,20 +1148,18 @@ public:
 		return newModObj;
 	}
 
-	CodeObject newCodeObject( ModuleObject moduleObj )
+	size_t newCodeObject( ModuleObject moduleObj )
 	{
 		import std.range: back;
 		_codeObjStack ~= new CodeObject(moduleObj);
-		this.addConst( TDataNode(_codeObjStack.back) );
-		return _codeObjStack.back;
+		return this.addConst( TDataNode(_codeObjStack.back) );
 	}
 
-	CodeObject newCodeObject()
+	size_t newCodeObject()
 	{
 		import std.range: back;
 		_codeObjStack ~= new CodeObject( this.getCurrentModule() );
-		this.addConst( TDataNode(_codeObjStack.back) );
-		return _codeObjStack.back;
+		return this.addConst( TDataNode(_codeObjStack.back) );
 	}
 
 	void exitCodeObj()
@@ -1317,10 +1302,7 @@ public:
 					break;
 			}
 
-			Instruction instr;
-			instr.opcode = OpCode.LoadConst;
-			instr.args[0] = constIndex;
-			addInstr( instr );
+			addInstr( OpCode.LoadConst, constIndex );
 		}
 
 		void visit(INameExpression node)
@@ -1339,14 +1321,12 @@ public:
 			{
 				// Regular name
 
+				// TODO: Maybe set index of constant with name to load instead of LoadConst
 				// Load name constant instruction
-				Instruction instr;
-				instr.opcode = OpCode.LoadConst;
-				instr.args[0] = constIndex;
-				addInstr( instr );
+				addInstr( OpCode.LoadConst, constIndex );
 
 				// Add name load instruction
-				addInstr( Instruction(OpCode.LoadName) );
+				addInstr( OpCode.LoadName );
 			}
 			else
 			{
@@ -1431,7 +1411,7 @@ public:
 					break;
 			}
 
-			addInstr( Instruction(opcode) );
+			addInstr( opcode );
 		}
 
 		void visit(IAssocArrayPair node) { visit( cast(IExpression) node ); }
@@ -1589,10 +1569,7 @@ public:
 			// Nothing special. Just store this piece of data into table
 			uint constIndex = cast(uint) addConst( TDataNode(node.data) );
 
-			Instruction instr;
-			instr.opcode = OpCode.LoadConst;
-			instr.args[0] = constIndex;
-			addInstr( instr );
+			addInstr( OpCode.LoadConst, constIndex );
 		}
 
 		void visit(ICompoundStatement node)
