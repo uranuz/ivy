@@ -530,7 +530,7 @@ public:
 				case OpCode.UnaryNot:
 				{
 					assert( _stack.back.type == DataNodeType.Boolean,
-						`Operand for unary minus operation must have boolean type!` );
+						`Operand for unary not operation must have boolean type!` );
 
 					_stack.back = ! _stack.back.boolean;
 					break;
@@ -590,6 +590,13 @@ public:
 					break;
 				}
 
+				case OpCode.PopTop:
+				{
+					assert( !_stack.empty, "Cannot pop value from stack, because stack is empty" );
+					_stack.popBack();
+					break;
+				}
+
 				case OpCode.LoadDirective:
 				{
 					assert( _stack.back.type == DataNodeType.String,
@@ -610,6 +617,7 @@ public:
 					dirObj._codeObj = codeObj;
 
 					setLocalValue( varName, TDataNode(dirObj) ); // Put this directive in context
+					_stack ~= TDataNode(); // We should return something
 
 					break;
 				}

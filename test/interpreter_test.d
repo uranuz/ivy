@@ -59,4 +59,5 @@ void main()
 
 	import std.range: back;
 	writeln("Programme returned: ", interp._stack.back);
+	writeln("Programme stack after exit: ", interp._stack);
 }

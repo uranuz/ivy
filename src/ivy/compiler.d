@@ -334,15 +334,16 @@ private:
 	CompilerModuleRepository _moduleRepo;
 	SymbolTableFrame[string] _moduleSymbols;
 	string[] _moduleStack;
-	SymbolTableFrame _currentFrame;
+	SymbolTableFrame[] _frameStack;
 
 public:
 	this( CompilerModuleRepository moduleRepo, string mainModuleName )
 	{
+		import std.range: back;
 		_moduleRepo = moduleRepo;
 		_moduleStack ~= mainModuleName;
-		_currentFrame = new SymbolTableFrame(null);
-		_moduleSymbols[mainModuleName] = _currentFrame;
+		_frameStack ~= new SymbolTableFrame(null);
+		_moduleSymbols[mainModuleName] = _frameStack.back;
 	}
 
 	public override {
@@ -363,13 +364,13 @@ public:
 		void visit(IKeyValueAttribute node) {  }
 		void visit(IDirectiveStatement node)
 		{
-			import std.range: popBack, empty;
+			import std.range: popBack, empty, back;
 			import std.algorithm: canFind;
 
 			if( node.name == "def" )
 			{
-				if( !_currentFrame )
-					compilerError( "Current symbol table frame is null" );
+				//if( !_currentFrame )
+				//	compilerError( "Current symbol table frame is null" );
 
 				IAttributeRange defAttrsRange = node[];
 
@@ -461,13 +462,22 @@ public:
 					attrsDefStmtRange.popFront();
 				}
 
+				if( _frameStack.empty )
+					compilerError( `Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty` );
+				if( !_frameStack.back )
+					compilerError( `Cannot store symbol, because symbol table frame is null` );
 				// Add directive definition into existing frame
-				_currentFrame.add( Symbol(dirNameExpr.name, SymbolKind.DirectiveDefinition, dirDefBlocks, node) );
+				_frameStack.back.add( Symbol(dirNameExpr.name, SymbolKind.DirectiveDefinition, dirDefBlocks, node) );
 
 				if( bodyStmt && !isNoscope )
 				{
 					// Create new frame for body if not forbidden
-					_currentFrame = _currentFrame.newChildFrame(bodyStmt.location.index);
+					_frameStack ~= _frameStack.back.newChildFrame(bodyStmt.location.index);
+				}
+
+				scope(exit)
+				{
+					_frameStack.popBack();
 				}
 
 				if( bodyStmt )
@@ -788,7 +798,7 @@ class IfCompiler: IDirectiveCompiler
 			size_t jumpInstrIndex = compiler.addInstr( Instruction( OpCode.JumpIfFalse ) );
 
 			// Drop condition operand from stack
-			compiler.addInstr( Instruction( OpCode.StackPop ) );
+			compiler.addInstr( Instruction( OpCode.PopTop ) );
 
 			// Add `if body` code
 			ifSect.stmt.accept(compiler);
@@ -1582,6 +1592,11 @@ public:
 			{
 				stmtRange.front.accept( this );
 				stmtRange.popFront();
+
+				if( !stmtRange.empty )
+				{
+					addInstr( OpCode.PopTop );
+				}
 			}
 		}
 	}

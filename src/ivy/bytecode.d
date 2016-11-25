@@ -59,7 +59,7 @@ enum OpCode: ubyte {
 	Return,
 
 	// Stack operations
-	StackPop,
+	PopTop,
 
 	// Loop initialization and execution
 	InitLoop,

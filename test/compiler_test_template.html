@@ -5,11 +5,23 @@ expr {#
 			bb as str
 			cc: 2 + 2 as int;
 		def.body (#
-			expr 2 + 2;
+			expr 2 + 2*5;
+			expr 2 + 2*3;
 		#)
 	#);
 	test_def
 		aa: 10
 		bb: "Vasya"
 		cc: 7;
+
+	def test_args (#
+		def.named
+			x as int,
+			y as int;
+		def.body (#
+			expr x + y;
+		#)
+	#);
+
+	test_args x: 10 y: 20;
 #};
