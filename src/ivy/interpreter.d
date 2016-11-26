@@ -157,6 +157,11 @@ public:
 		}
 	}
 
+	override string toString()
+	{
+		return `<Exec frame for dir object "` ~ _dirObj._name ~ `">`;
+	}
+
 }
 
 import ivy.bytecode;
@@ -329,9 +334,13 @@ public:
 				// Base arithmetic operations execution
 				case OpCode.Add, OpCode.Sub, OpCode.Mul, OpCode.Div, OpCode.Mod:
 				{
+					import std.conv: to;
+					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected right operand, but exec stack is empty!" );
 					// Right value was evaluated last so it goes first in the stack
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
+
+					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
 					assert( ( leftVal.type == DataNodeType.Integer || leftVal.type == DataNodeType.Floating ) && leftVal.type == rightVal.type,
 						`Left and right values of arithmetic operation must have the same integer or floating type!` );
@@ -367,8 +376,12 @@ public:
 				// Logical binary operations
 				case OpCode.And, OpCode.Or, OpCode.Xor:
 				{
+					import std.conv: to;
+					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected right operand, but exec stack is empty!" );
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
+
+					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
 					assert( leftVal.type == DataNodeType.Boolean && leftVal.type == rightVal.type,
 						`Left and right values of arithmetic operation must have boolean type!` );
@@ -395,9 +408,13 @@ public:
 				// Comparision operations
 				case OpCode.LT, OpCode.GT, OpCode.LTEqual, OpCode.GTEqual:
 				{
+					import std.conv: to;
+					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected right operand, but exec stack is empty!" );
 					// Right value was evaluated last so it goes first in the stack
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
+
+					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
 					assert( leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type` );
 
@@ -441,9 +458,12 @@ public:
 				// Shallow equality comparision
 				case OpCode.Equal:
 				{
+					assert( !_stack.empty, "Cannot execute Equal instruction. Expected right operand, but exec stack is empty!" );
 					// Right value was evaluated last so it goes first in the stack
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
+
+					assert( !_stack.empty, "Cannot execute Equal instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
 					assert( leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type` );
 
@@ -481,8 +501,11 @@ public:
 				// Concatenates two arrays or strings and puts result onto stack
 				case OpCode.Concat:
 				{
+					assert( !_stack.empty, "Cannot execute Concat instruction. Expected right operand, but exec stack is empty!" );
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
+
+					assert( !_stack.empty, "Cannot execute Concat instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
 					assert( ( leftVal.type == DataNodeType.String || leftVal.type == DataNodeType.Array ) && leftVal.type == rightVal.type,
 						`Left and right values for concatenation operation must have the same string or array type!`
@@ -500,9 +523,29 @@ public:
 					break;
 				}
 
+				case OpCode.Append:
+				{
+					writeln( "OpCode.Append _stack: ", _stack );
+					import std.conv: to;
+					assert( !_stack.empty, "Cannot execute Append instruction. Expected right operand, but exec stack is empty!" );
+					TDataNode rightVal = _stack.back;
+					_stack.popBack();
+
+					assert( !_stack.empty, "Cannot execute Concat instruction. Expected left operand, but exec stack is empty!" );
+					TDataNode leftVal = _stack.back;
+					_stack.popBack();
+					assert( leftVal.type == DataNodeType.Array, "Left operand for Append instruction expected to be array, but got: " ~ leftVal.type.to!string );
+
+					leftVal ~= rightVal;
+					_stack ~= leftVal;
+
+					break;
+				}
+
 				// Useless unary plus operation
 				case OpCode.UnaryPlus:
 				{
+					assert( !_stack.empty, "Cannot execute UnaryPlus instruction. Operand expected, but exec stack is empty!" );
 					assert( _stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
 						`Operand for unary plus operation must have integer or floating type!` );
 
@@ -512,6 +555,7 @@ public:
 
 				case OpCode.UnaryMin:
 				{
+					assert( !_stack.empty, "Cannot execute UnaryMin instruction. Operand expected, but exec stack is empty!" );
 					assert( _stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
 						`Operand for unary minus operation must have integer or floating type!` );
 
@@ -529,6 +573,7 @@ public:
 
 				case OpCode.UnaryNot:
 				{
+					assert( !_stack.empty, "Cannot execute UnaryNot instruction. Operand expected, but exec stack is empty!" );
 					assert( _stack.back.type == DataNodeType.Boolean,
 						`Operand for unary not operation must have boolean type!` );
 
@@ -545,12 +590,14 @@ public:
 				// Stores data from stack into local context frame variable
 				case OpCode.StoreName:
 				{
+					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var name operand, but exec stack is empty!" );
 					assert( _stack.back.type == DataNodeType.String,
 						`Variable name operand must have string type!` );
 
 					string varName = _stack.back.str;
 					_stack.popBack(); // Remove var name from stack
 
+					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var value operand, but exec stack is empty!" );
 					setValue( varName, _stack.back );
 					_stack.popBack(); // Remove var value from stack
 					break;
@@ -626,10 +673,10 @@ public:
 				{
 					import std.range: empty, popBack, back;
 
-					assert( _stack.back.type == DataNodeType.Integer,
-						`Expected integer as arguments count in directive call` );
+					writeln( "CallDirective stack on init: : ", _stack );
 
 					size_t stackArgCount = instr.args[0];
+					assert( stackArgCount > 0, "Directive call must at least have 1 arguments in stack!" );
 					writeln( "CallDirective stackArgCount: ", stackArgCount );
 					assert( stackArgCount <= _stack.length, "Not enough arguments in execution stack" );
 					writeln( "CallDirective _stack: ", _stack );
@@ -640,56 +687,61 @@ public:
 
 					newFrame( dirObj, getModuleFrame(dirObj._codeObj._moduleObj._name) );
 
-					while( !_stack.empty )
+					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{
-						if( _stack.back.type == DataNodeType.Integer )
+						for( size_t i = 0; i < (stackArgCount - 1); )
 						{
+							assert( !_stack.empty, `Expected integer as arguments block header, but got empty exec stack!` );
+							assert( _stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!` );
 							size_t blockArgCount = _stack.back.integer >> 3;
 							writeln( "blockArgCount: ", blockArgCount );
 							int blockType = _stack.back.integer & 7;
+							assert( (_stack.back.integer & 4 ) == 0, `Seeems that stack is corrupted` );
 							writeln( "blockType: ", blockType );
+
 							_stack.popBack();
+							++i; // Block header was eaten, so increase counter
 
 							if( blockType == 1 )
 							{
-								for( size_t i = 0; i < blockArgCount; ++i )
+								size_t j = 0;
+								while( j < 2 * blockArgCount )
 								{
 									assert( !_stack.empty, "Execution stack is empty!" );
 									TDataNode attrValue = _stack.back;
-									_stack.popBack();
+									_stack.popBack(); ++j; // Parallel bookkeeping ;)
+
 									assert( !_stack.empty, "Execution stack is empty!" );
 									assert( _stack.back.type == DataNodeType.String, "Named attribute name must be string!" );
 									string attrName = _stack.back.str;
-									_stack.popBack();
+									_stack.popBack(); ++j;
+
 									setLocalValue( attrName, attrValue );
 								}
+								i += j; // Increase overall processed stack arguments count (2 items per iteration)
 								writeln( "_stack after parsing named arguments: ", _stack );
-
-
 							}
 							else if( blockType == 2 )
 							{
-
+								assert( false, "Interpreting positional arguments not implemented yet!" );
 							}
 							else
 							{
 								assert( false, "Unexpected arguments block type" );
 							}
-						}
-						else
-						{
-							break;
+
 						}
 					}
+					writeln( "_stack after parsing all arguments: ", _stack );
 
 					// TODO: Then let's try to get directive arguments and parse 'em
 
 					assert( !_stack.empty, "Expected directive object to call, but found end of execution stack!" );
 					assert( _stack.back.type == DataNodeType.Directive, `Expected directive object operand in directive call operation` );
-					_stack.popBack();
+					_stack.popBack(); // Drop directive object from stack
 
-					_stack ~= TDataNode(pk);
-					codeRange = _frameStack.back._dirObj._codeObj._instrs[];
+					_stack ~= TDataNode(pk+1); // Put next instruction index on the stack to return at
+					codeRange = dirObj._codeObj._instrs[]; // Set new instruction range to execute
 					pk = 0;
 
 					continue execution_loop;
@@ -706,6 +758,7 @@ public:
 			if( pk == codeRange.length ) // Ended with this code object
 			{
 				writeln( "_stack on code object end: ", _stack );
+				writeln( "_frameStack on code object end: ", _frameStack );
 				assert( !_frameStack.empty, "Frame stack shouldn't be empty yet'" );
 				// TODO: Consider case with noscope directive
 				_frameStack.popBack(); // Exit out of this frame
@@ -723,10 +776,17 @@ public:
 				assert( _stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer" );
 				pk = cast(size_t) _stack.back.integer;
 				_stack.popBack(); // Drop return address
+				codeRange = _frameStack.back._dirObj._codeObj._instrs[]; // Set old instruction range back
 
 				_stack ~= result; // Get result back
 			}
 
 		}
+	}
+
+	void setDebugBreakpoint(string modName, string sourceLine)
+	{
+		// TODO: Add some debug support
+
 	}
 }

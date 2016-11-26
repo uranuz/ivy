@@ -24,4 +24,13 @@ expr {#
 	#);
 
 	test_args x: 10 y: 20;
+
+	def some_markup (#
+		def.body {*
+			Просто текст
+		*}
+	#);
+
+	some_markup;
+	some_markup;
 #};

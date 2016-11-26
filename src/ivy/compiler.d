@@ -1317,6 +1317,7 @@ public:
 
 		void visit(INameExpression node)
 		{
+			/*
 			import std.range: empty, back;
 
 			if( !node )
@@ -1341,7 +1342,12 @@ public:
 			else
 			{
 				// Seems that it's built-in name or data context name
+				assert( false, `Cannot find variable with name "` ~ node.name ~ `"!` );
 			}
+			*/
+			uint constIndex = cast(uint) addConst( TDataNode( node.name ) );
+			// Load name constant instruction
+			addInstr( OpCode.LoadName, constIndex );
 		}
 
 		void visit(IOperatorExpression node) { visit( cast(IExpression) node ); }
@@ -1517,6 +1523,7 @@ public:
 								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 1;
 								uint blockHeaderConstIndex = cast(uint) addConst( TDataNode( blockHeader ) );
 								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
+								++stackItemsCount; // We should count args block header
 								break;
 							}
 							case DirDefAttrType.ExprAttr:
@@ -1542,6 +1549,7 @@ public:
 								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 1;
 								uint blockHeaderConstIndex = cast(uint) addConst( TDataNode( blockHeader ) );
 								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
+								++stackItemsCount; // We should count args block header
 								break;
 							}
 							case DirDefAttrType.IdentAttr:
@@ -1570,7 +1578,7 @@ public:
 				}
 
 				// After all preparations add instruction to call directive
-				addInstr( OpCode.CallDirective, cast(uint) (stackItemsCount+1) ); // items count item should be counted
+				addInstr( OpCode.CallDirective, cast(uint) stackItemsCount );
 			}
 		}
 
@@ -1587,15 +1595,26 @@ public:
 			if( !node )
 				compilerError( "Compound statement node is null!" );
 
+			if( node.isList )
+			{
+				TDataNode emptyArray = TDataNode[].init;
+				size_t emptyArrayConstIndex = addConst(emptyArray);
+				addInstr( OpCode.LoadConst, cast(uint) emptyArrayConstIndex );
+			}
+
 			auto stmtRange = node[];
 			while( !stmtRange.empty )
 			{
 				stmtRange.front.accept( this );
 				stmtRange.popFront();
 
-				if( !stmtRange.empty )
+				if( node.isList )
 				{
-					addInstr( OpCode.PopTop );
+					addInstr( OpCode.Append ); // Append result to result array
+				}
+				else if( !stmtRange.empty )
+				{
+					addInstr( OpCode.PopTop ); // Drop results, except last
 				}
 			}
 		}

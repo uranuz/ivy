@@ -18,6 +18,7 @@ enum OpCode: ubyte {
 
 	// Arrays or strings concatenation
 	Concat,
+	Append,
 
 	// General unary operations opcodes
 	UnaryMin,

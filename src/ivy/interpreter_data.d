@@ -576,7 +576,15 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 			}
 			break;
 		case Directive:
-			outRange.put( "<directive object>" );
+			import std.conv: text;
+			if( node.directive )
+			{
+				outRange.put( "<directive object: " ~ node.directive._name ~ ">" );
+			}
+			else
+			{
+				outRange.put( "<directive object (null)>" );
+			}
 			break;
 		case ClassObject:
 			assert(0);
