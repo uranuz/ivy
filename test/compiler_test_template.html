@@ -14,17 +14,6 @@ expr {#
 		bb: "Vasya"
 		cc: 7;
 
-	def test_args (#
-		def.named
-			x as int,
-			y as int;
-		def.body (#
-			expr x + y;
-		#)
-	#);
-
-	test_args x: 10 y: 20;
-
 	def some_markup (#
 		def.body {*
 			Просто текст
@@ -33,4 +22,17 @@ expr {#
 
 	some_markup;
 	some_markup;
+
+	def test_args (#
+		def.named
+			x as int,
+			y as int;
+		def.body (#
+			var z: 200;
+			var z: 300;
+			expr x + y + z;
+		#)
+	#);
+
+	test_args x: 10 y: 20;
 #};

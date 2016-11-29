@@ -52,7 +52,7 @@ void main()
 	writeln( compiler.toPrettyStr() );
 
 	DirectiveObject rootDirObj = new DirectiveObject;
-	rootDirObj._codeObj = compiler.getMainModule().getMainCodeObject();
+	rootDirObj._codeObj = compiler.mainModule.mainCodeObject;
 
 	Interpreter interp = new Interpreter(rootDirObj);
 	interp.execLoop();

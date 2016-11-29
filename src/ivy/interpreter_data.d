@@ -65,7 +65,7 @@ public:
 		return _consts[index];
 	}
 
-	CodeObject getMainCodeObject()
+	CodeObject mainCodeObject() @property
 	{
 		import std.conv: text;
 		assert( _entryPointIndex < _consts.length, `Cannot get main code object, because there is no constant with index ` ~ _entryPointIndex.text );

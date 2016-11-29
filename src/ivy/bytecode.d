@@ -43,6 +43,7 @@ enum OpCode: ubyte {
 
 	// Frame data load/ store
 	StoreName,
+	StoreLocalName,
 	LoadName,
 
 	// Preparing and calling directives

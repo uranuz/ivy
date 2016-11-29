@@ -176,8 +176,7 @@ public:
 	ExecutionFrame[] _frameStack;
 	ExecutionFrame _globalFrame;
 	ExecutionFrame[string] _moduleFrames;
-
-	//IvyRepository _ivyRepository; // Storage for parsed modules
+	ModuleObject[string] _moduleObjects;
 
 	this(DirectiveObject rootDirObj)
 	{
@@ -587,19 +586,39 @@ public:
 					break;
 				}
 
-				// Stores data from stack into local context frame variable
+				// Stores data from stack into context variable
 				case OpCode.StoreName:
 				{
-					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var name operand, but exec stack is empty!" );
-					assert( _stack.back.type == DataNodeType.String,
-						`Variable name operand must have string type!` );
+					writeln( "StoreName _stack: ", _stack );
+					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var value operand, but exec stack is empty!" );
+					TDataNode varValue = _stack.back;
+					_stack.popBack();
 
+					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var name operand, but exec stack is empty!" );
+					assert( _stack.back.type == DataNodeType.String, `Variable name operand must have string type!` );
 					string varName = _stack.back.str;
 					_stack.popBack(); // Remove var name from stack
 
+					setValue( varName, varValue );
+					_stack ~= TDataNode(); // For now we must put something onto stack
+					break;
+				}
+
+				// Stores data from stack into local context frame variable
+				case OpCode.StoreLocalName:
+				{
+					writeln( "StoreName _stack: ", _stack );
 					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var value operand, but exec stack is empty!" );
-					setValue( varName, _stack.back );
-					_stack.popBack(); // Remove var value from stack
+					TDataNode varValue = _stack.back;
+					_stack.popBack();
+
+					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var name operand, but exec stack is empty!" );
+					assert( _stack.back.type == DataNodeType.String, `Variable name operand must have string type!` );
+					string varName = _stack.back.str;
+					_stack.popBack(); // Remove var name from stack
+
+					setLocalValue( varName, varValue );
+					_stack ~= TDataNode(); // For now we must put something onto stack
 					break;
 				}
 
@@ -615,7 +634,35 @@ public:
 
 				case OpCode.ImportModule:
 				{
-					assert( false, "Unimplemented yet!" );
+					assert( !_stack.empty, "Cannot execute ImportModule instruction. Expected module name operand, but exec stack is empty!" );
+					assert( _stack.back.type == DataNodeType.String, "Cannot execute ImportModule instruction. Module name operand must be a string!" );
+					string moduleName = _stack.back.str;
+					_stack.popBack();
+
+					assert( moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: " ~ moduleName );
+
+					if( moduleName !in _moduleFrames )
+					{
+						// Run module here
+						ModuleObject modObject = _moduleObjects[moduleName];
+						assert( modObject, `Cannot execute ImportModule instruction, because module object "` ~ moduleName ~ `" is null!` );
+						CodeObject codeObject = modObject.mainCodeObject;
+						assert( codeObject, `Cannot execute ImportModule instruction, because main code object for module "` ~ moduleName ~ `" is null!` );
+
+						DirectiveObject dirObj = new DirectiveObject;
+						dirObj._name = `<` ~ moduleName ~ `>`;
+						dirObj._codeObj = codeObject;
+
+						newFrame(dirObj, null); // Create entry point module frame
+						codeRange = codeObject._instrs[];
+						pk = 0;
+
+						// TODO: Finish me ;) ... please
+					}
+
+
+
+
 					break;
 				}
 

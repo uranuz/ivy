@@ -636,27 +636,21 @@ class VarCompiler: IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
 	{
-		import std.range: empty, back;
+		import std.range: empty, back, empty;
 
 		if( !stmt || stmt.name != "var" )
 			compilerError( `Expected "var" directive statement!` );
-		//if( compiler._frameStack.empty )
-		//	compilerError( `Compiler frame stack is empty!` );
-		//if( !compiler._frameStack.back )
-		//	compilerError( `Compiler's current frame is null!` );
 
 		auto stmtRange = stmt[];
 		while( !stmtRange.empty )
 		{
-			string varName;
-
-			uint constIndex = cast(uint) compiler.addConst( TDataNode(varName) );
-
-			compiler.addInstr( OpCode.LoadConst, constIndex );
-
 			if( auto kwPair = cast(IKeyValueAttribute) stmtRange.front )
 			{
-				varName = kwPair.name;
+				if( kwPair.name.empty )
+					compilerError( `Variable name cannot be empty` );
+				uint constIndex = cast(uint) compiler.addConst( TDataNode(kwPair.name) );
+				compiler.addInstr( OpCode.LoadConst, constIndex );
+
 				if( !kwPair.value )
 					compilerError( "Expected value for 'var' directive" );
 
@@ -665,7 +659,11 @@ public:
 			}
 			else if( auto nameExpr = cast(INameExpression) stmtRange.front )
 			{
-				varName = nameExpr.name;
+				if( nameExpr.name.empty )
+					compilerError( `Variable name cannot be empty` );
+				uint constIndex = cast(uint) compiler.addConst( TDataNode(nameExpr.name) );
+				compiler.addInstr( OpCode.LoadConst, constIndex );
+
 				stmtRange.popFront();
 			}
 			else
@@ -692,7 +690,7 @@ public:
 				}
 			}
 
-			compiler.addInstr( Instruction(OpCode.StoreName) );
+			compiler.addInstr( Instruction(OpCode.StoreLocalName) );
 		}
 
 		if( !stmtRange.empty )
@@ -731,7 +729,6 @@ public:
 				compilerError( "Expected value for 'set' directive" );
 
 			uint constIndex = cast(uint) compiler.addConst( TDataNode( kwPair.name ) );
-
 			compiler.addInstr( OpCode.LoadConst, constIndex );
 
 			kwPair.value.accept(compiler); //Evaluating expression
@@ -956,6 +953,34 @@ public:
 }
 +/
 
+/// Compiles module into module object and saves it into dictionary
+class ImportCompiler: IDirectiveCompiler
+{
+private:
+	string _importPath = "test/";
+
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "import"  )
+			compilerError( "Expected 'import' directive" );
+
+		auto stmtRange = statement[];
+
+		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
+		if( !stmtRange.empty )
+			compilerError( `Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere` );
+
+		ModuleObject modObject = compiler.getOrCompileModule(moduleNameExpr.name);
+
+		uint modNameConstIndex = cast(uint) compiler.addConst( TDataNode(moduleNameExpr.name) );
+		compiler.addInstr( OpCode.LoadConst, modNameConstIndex );
+
+		compiler.addInstr( OpCode.ImportModule );
+	}
+
+}
+
 import std.stdio;
 /// Defines directive using ivy language
 class DefCompiler: IDirectiveCompiler
@@ -1041,19 +1066,19 @@ class DefCompiler: IDirectiveCompiler
 			if( !isNoscope )
 			{
 				// Compiler should enter frame of directive body, identified by index in source code
-				compiler.enterFrame( bodyStatement.location.index );
+				compiler.enterScope( bodyStatement.location.index );
 			}
 
-			codeObjIndex = cast(uint) compiler.newCodeObject(); // Creating code object
+			codeObjIndex = cast(uint) compiler.enterNewCodeObject(); // Creating code object
 
 			// Generating code for def.body
 			bodyStatement.accept(compiler);
 
 			scope(exit) {
-				compiler.exitCodeObj();
+				compiler.exitCodeObject();
 				if( !isNoscope )
 				{
-					compiler.exitFrame();
+					compiler.exitScope();
 				}
 			}
 		}
@@ -1112,11 +1137,11 @@ public:
 		_dirCompilers["def"] = new DefCompiler();
 
 		_mainModuleName = mainModuleName;
-		enterModuleFrame(mainModuleName);
-		newCodeObject( newModuleObject(mainModuleName) );
+		enterModuleScope(mainModuleName);
+		enterNewCodeObject( newModuleObject(mainModuleName) );
 	}
 
-	void enterModuleFrame( string moduleName )
+	void enterModuleScope( string moduleName )
 	{
 		if( auto table = moduleName in _modulesSymbolTables )
 		{
@@ -1129,7 +1154,7 @@ public:
 		}
 	}
 
-	void enterFrame( size_t sourceIndex )
+	void enterScope( size_t sourceIndex )
 	{
 		import std.range: empty, back;
 		assert( !_symbolTableStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty` );
@@ -1140,7 +1165,7 @@ public:
 		_symbolTableStack ~= childFrame;
 	}
 
-	void exitFrame()
+	void exitScope()
 	{
 		import std.range: empty, popBack;
 		assert( !_symbolTableStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!" );
@@ -1158,21 +1183,21 @@ public:
 		return newModObj;
 	}
 
-	size_t newCodeObject( ModuleObject moduleObj )
+	size_t enterNewCodeObject( ModuleObject moduleObj )
 	{
 		import std.range: back;
 		_codeObjStack ~= new CodeObject(moduleObj);
 		return this.addConst( TDataNode(_codeObjStack.back) );
 	}
 
-	size_t newCodeObject()
+	size_t enterNewCodeObject()
 	{
 		import std.range: back;
-		_codeObjStack ~= new CodeObject( this.getCurrentModule() );
+		_codeObjStack ~= new CodeObject( this.currentModule() );
 		return this.addConst( TDataNode(_codeObjStack.back) );
 	}
 
-	void exitCodeObj()
+	void exitCodeObject()
 	{
 		import std.range: empty, popBack;
 		assert( !_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!" );
@@ -1235,7 +1260,7 @@ public:
 		return _codeObjStack.back._moduleObj.addConst(value);
 	}
 
-	ModuleObject getCurrentModule()
+	ModuleObject currentModule() @property
 	{
 		import std.range: empty, back;
 		assert( !_codeObjStack.empty, "Cannot get current module object, because compiler code object stack is empty!" );
@@ -1244,7 +1269,7 @@ public:
 		return _codeObjStack.back._moduleObj;
 	}
 
-	CodeObject getCurrentCodeObject()
+	CodeObject currentCodeObject() @property
 	{
 		import std.range: empty, back;
 		assert( !_codeObjStack.empty, "Cannot get current code object, because compiler code object stack is empty!" );
@@ -1265,11 +1290,65 @@ public:
 		return symb;
 	}
 
-	ModuleObject getMainModule()
+	ModuleObject mainModule() @property
 	{
+		assert( _mainModuleName in _moduleObjects, `Cannot get main module object` );
 		return _moduleObjects[_mainModuleName];
 	}
 
+	ModuleObject getOrCompileModule(string moduleName)
+	{
+		if( moduleName !in _moduleObjects )
+		{
+			// Initiate module object compilation on demand
+			IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
+
+			enterNewCodeObject( newModuleObject(moduleName) );
+			enterModuleScope( moduleName );
+			moduleNode.accept(this);
+
+			scope(exit)
+			{
+				this.exitScope();
+				this.exitCodeObject();
+			}
+		}
+
+		return _moduleObjects[moduleName];
+	}
+
+	void compileModuleInit(string moduleName)
+	{
+		ModuleObject modObject = getOrCompileModule(moduleName);
+		CodeObject modCodeObject = modObject.mainCodeObject;
+
+		uint modCodeObjectConstIndex = cast(uint) addConst( TDataNode(modCodeObject) );
+		addInstr( OpCode.LoadConst, modCodeObjectConstIndex );
+
+		uint modNameConstIndex = cast(uint) addConst( TDataNode(moduleName) );
+		addInstr( OpCode.LoadConst, modNameConstIndex );
+
+		addInstr( OpCode.LoadDirective );
+
+		addInstr( OpCode.LoadName, modNameConstIndex ); // Load directive object from context
+
+		addInstr( OpCode.CallDirective, 1 ); // We have 1 argument in the stack (directive object itself)
+		addInstr( OpCode.PopTop ); // We need to drop result from the stack, because we don't care about it
+	}
+
+	void compileModulesInit()
+	{
+		foreach( moduleName; _modulesSymbolTables.keys )
+		{
+			if( moduleName == _mainModuleName )
+				continue; // For now just load main module at the end
+
+			compileModuleInit(moduleName);
+		}
+
+		compileModuleInit(_mainModuleName);
+
+	}
 
 	override {
 		void visit(IvyNode node) { assert(0); }
