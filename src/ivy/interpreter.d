@@ -178,9 +178,14 @@ public:
 	ExecutionFrame[string] _moduleFrames;
 	ModuleObject[string] _moduleObjects;
 
-	this(DirectiveObject rootDirObj)
+	this(ModuleObject[string] moduleObjects, string mainModuleName)
 	{
-		//_ivyRepository = new IvyRepository;
+		_moduleObjects = moduleObjects;
+		assert( mainModuleName in _moduleObjects, `Cannot get main module from module objects!` );
+
+		DirectiveObject rootDirObj = new DirectiveObject;
+		rootDirObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
+
 		_globalFrame = new ExecutionFrame(null, null);
 
 		newFrame(rootDirObj, null); // Create entry point module frame
@@ -639,6 +644,7 @@ public:
 					string moduleName = _stack.back.str;
 					_stack.popBack();
 
+					writeln( `ImportModule _moduleObjects: `, _moduleObjects );
 					assert( moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: " ~ moduleName );
 
 					if( moduleName !in _moduleFrames )
@@ -654,14 +660,13 @@ public:
 						dirObj._codeObj = codeObject;
 
 						newFrame(dirObj, null); // Create entry point module frame
+						_stack ~= TDataNode(pk+1);
 						codeRange = codeObject._instrs[];
 						pk = 0;
 
 						// TODO: Finish me ;) ... please
+						continue execution_loop;
 					}
-
-
-
 
 					break;
 				}
@@ -693,12 +698,15 @@ public:
 
 				case OpCode.LoadDirective:
 				{
+					writeln( `LoadDirective _stack: `, _stack );
+
 					assert( _stack.back.type == DataNodeType.String,
 						`Name operand for directive loading instruction should have string type` );
 					string varName = _stack.back.str;
 
 					_stack.popBack();
 
+					assert( !_stack.empty, `Expected directive code object, but got empty execution stack!` );
 					assert( _stack.back.type == DataNodeType.CodeObject,
 						`Code object operand for directive loading instruction should have CodeObject type` );
 

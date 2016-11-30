@@ -2,7 +2,7 @@ module ivy.interpreter_test;
 
 import std.stdio, std.json, std.file;
 
-import ivy.interpreter, ivy.directive_interpreters, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer, ivy.compiler;
+import ivy.interpreter, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer, ivy.compiler;
 
 
 
@@ -46,15 +46,17 @@ void main()
 	writeln(modulesSymbolTablesDump);
 	+/
 
-	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbTable, "test" );
+	string mainModuleName = "test";
+
+	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbTable, mainModuleName );
 	ast.accept(compiler);
 
 	writeln( compiler.toPrettyStr() );
 
-	DirectiveObject rootDirObj = new DirectiveObject;
-	rootDirObj._codeObj = compiler.mainModule.mainCodeObject;
+	ModuleObject[string] moduleObjects = compiler.moduleObjects;
+	writeln( `Module objects after compilation: `, moduleObjects );
 
-	Interpreter interp = new Interpreter(rootDirObj);
+	Interpreter interp = new Interpreter(moduleObjects, mainModuleName);
 	interp.execLoop();
 
 	import std.range: back;

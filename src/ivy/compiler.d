@@ -115,7 +115,7 @@ public:
 		import std.file: read;
 
 		// The module name is given. Try to build path to it
-		string fileName = buildNormalizedPath( only(_rootPath).chain( moduleName.splitter('.') ).array );
+		string fileName = buildNormalizedPath( only(_rootPath).chain( moduleName.splitter('.') ).array ) ~ ".html";
 
 		// Check if file name is not empty and located in root path
 		if( fileName.empty || !fileName.startsWith( buildNormalizedPath(_rootPath) ) )
@@ -507,10 +507,14 @@ public:
 					compilerError( `Couldn't load module: ` ~ moduleNameExpr.name );
 
 				_moduleStack ~= moduleNameExpr.name;
+				_frameStack ~= new SymbolTableFrame(null);
+				_moduleSymbols[moduleNameExpr.name] = _frameStack.back;
 				scope(exit)
 				{
 					assert( !_moduleStack.empty, `Compiler directive collector module stack is empty!` );
 					_moduleStack.popBack(); // We will exit module when finish with it
+					assert( !_frameStack.empty, `Compiler directive collector frame stack is empty!` );
+					_frameStack.popBack();
 				}
 
 				// Go to find directive definitions in this imported module
@@ -1135,6 +1139,7 @@ public:
 		_dirCompilers["if"] = new IfCompiler();
 		//_dirCompilers["for"] = new ForCompiler();
 		_dirCompilers["def"] = new DefCompiler();
+		_dirCompilers["import"] = new ImportCompiler();
 
 		_mainModuleName = mainModuleName;
 		enterModuleScope(mainModuleName);
@@ -1143,6 +1148,7 @@ public:
 
 	void enterModuleScope( string moduleName )
 	{
+		writeln( `_modulesSymbolTables: `, _modulesSymbolTables );
 		if( auto table = moduleName in _modulesSymbolTables )
 		{
 			assert( *table, `Cannot enter module sybol table frame, because it is null` );
@@ -1699,6 +1705,10 @@ public:
 		}
 	}
 
+	ModuleObject[string] moduleObjects() @property
+	{
+		return _moduleObjects;
+	}
 
 	// Assembles constants and code chunks into complete module bytecode
 	void assemble()
