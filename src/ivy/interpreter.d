@@ -62,30 +62,77 @@ public:
 		return varValuePtr.type;
 	}
 
-	TDataNode* findValue( string varName )
+	static TDataNode* findValueInDict( TDataNode* nodePtr, string varName )
 	{
-		import std.range: empty;
-		import std.algorithm: splitter;
+		import std.range: empty, take, front, popFront;
+		import std.array: array, split;
 		if( varName.empty )
 			interpretError( "VariableTable: Variable name cannot be empty" );
-		auto nameSplitter = varName.splitter('.');
-		TDataNode* nodePtr = nameSplitter.front in _dataDict.assocArray;
-		if( nodePtr is null )
-			return null;
-		nameSplitter.popFront();
+		string[] nameSplitted = varName.split('.');
 
-		while( !nameSplitter.empty  )
+		while( !nameSplitted.empty )
 		{
 			if( nodePtr.type != DataNodeType.AssocArray )
 				return null;
 
-			nodePtr = nameSplitter.front in nodePtr.assocArray;
-			nameSplitter.popFront();
+			nodePtr = nameSplitted.front in nodePtr.assocArray;
+			nameSplitted.popFront();
 			if( nodePtr is null )
 				return null;
 		}
-
 		return nodePtr;
+	}
+
+	TDataNode* findValue( string varName )
+	{
+		writeln( `Searching in _dataDict: `, _dataDict );
+
+		import std.range: empty, take, front, popFront, drop;
+		import std.array: array, split, join;
+		if( varName.empty )
+			interpretError( "VariableTable: Variable name cannot be empty" );
+
+		TDataNode* nodePtr = findValueInDict( &_dataDict, varName );
+		if( nodePtr )
+			return nodePtr;
+
+		// Reset and try to find in modules
+		string[] nameSplitted = varName.split('.');
+
+		for( size_t i = nameSplitted.length; i > 0; --i )
+		{
+			string sectionName = nameSplitted[].take(i).join(".");
+			string attrName = nameSplitted[].drop(i).join(".");
+			nodePtr = null;
+
+			TDataNode* modNodePtr = sectionName in _dataDict.assocArray;
+			writeln( ` Searching module frame: `, sectionName );
+
+			if( modNodePtr is null )
+			{
+				writeln( ` Searching module frame: `, sectionName, `, is null` );
+				continue;
+			}
+
+			if( modNodePtr.type != DataNodeType.ExecutionFrame )
+			{
+				writeln( ` Searching module frame: `, sectionName, `, is not module` );
+				continue; // Go try to find module with shorter name
+			}
+
+			ExecutionFrame modExecFrame = modNodePtr.execFrame;
+			assert( modExecFrame, `Module execution frame is null` );
+
+			// We do not look in imported module from another module
+			nodePtr = findValueInDict( &modExecFrame._dataDict, attrName );
+
+			writeln( ` Searching value in module frame: `, sectionName, `, value is: `, nodePtr.toString() );
+
+			if( nodePtr )
+				return nodePtr;
+		}
+
+		return null;
 	}
 
 	void setValue( string varName, TDataNode value )
@@ -218,13 +265,16 @@ public:
 
 		if( !_frameStack.empty )
 		{
+			assert( _frameStack.back, `Couldn't test variable existence, because frame stack is null!` );
 			if( _frameStack.back.canFindValue(varName) )
 				return true;
 
+			assert( _frameStack.back._moduleFrame, `Couldn't test variable existence in module frame, because it is null!` );
 			if( _frameStack.back._moduleFrame.canFindValue(varName) )
 				return true;
 		}
 
+		assert( _globalFrame, `Couldn't test variable existence in global frame, because it is null!` );
 		if( _globalFrame.canFindValue(varName) )
 			return true;
 
@@ -237,13 +287,19 @@ public:
 
 		if( !_frameStack.empty )
 		{
+			assert( _frameStack.back, `Couldn't find variable value, because frame stack is null!` );
 			if( TDataNode* valuePtr = _frameStack.back.findValue(varName) )
 				return valuePtr;
 
+			if( !_frameStack.back._moduleFrame )
+				return null;
+
+			//assert( _frameStack.back._moduleFrame, `Couldn't find variable value in module frame, because it is null!` );
 			if( TDataNode* valuePtr = _frameStack.back._moduleFrame.findValue(varName) )
 				return valuePtr;
 		}
 
+		assert( _globalFrame, `Couldn't find variable value in global frame, because it is null!` );
 		if( TDataNode* valuePtr = _globalFrame.findValue(varName) )
 			return valuePtr;
 
@@ -659,7 +715,13 @@ public:
 						dirObj._name = `<` ~ moduleName ~ `>`;
 						dirObj._codeObj = codeObject;
 
+						ExecutionFrame callerFrame = _frameStack.back;
+
 						newFrame(dirObj, null); // Create entry point module frame
+
+						// Put module frame in frame of the caller
+						callerFrame.setValue( moduleName, TDataNode(_frameStack.back) );
+
 						_stack ~= TDataNode(pk+1);
 						codeRange = codeObject._instrs[];
 						pk = 0;

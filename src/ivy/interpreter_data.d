@@ -3,7 +3,7 @@ module ivy.interpreter_data;
 import std.exception: enforceEx;
 import std.traits;
 
-enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, Directive, ClassObject };
+enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, Directive, ExecutionFrame };
 
 class DataNodeException : Exception
 {
@@ -124,6 +124,8 @@ class DirectiveObject
 	this() {}
 }
 
+import ivy.interpreter: ExecutionFrame;
+
 struct DataNode(S)
 {
 	alias String = S;
@@ -138,7 +140,7 @@ struct DataNode(S)
 			DataNode[String] assocArray;
 			CodeObject codeObject;
 			DirectiveObject directive;
-			IClassObject obj;
+			ExecutionFrame execFrame;
 		}
 	}
 
@@ -237,14 +239,14 @@ struct DataNode(S)
 	{
 		assign(val);
 	}
-	
-	IClassObject obj() @property
+
+	ExecutionFrame execFrame() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.ClassObject, "DataNode is not class object");
-		return storage.obj;
+		enforceEx!DataNodeException( type == DataNodeType.ExecutionFrame, "DataNode is not a execution frame");
+		return storage.execFrame;
 	}
-	
-	void obj(IClassObject val) @property
+
+	void execFrame(ExecutionFrame val) @property
 	{
 		assign(val);
 	}
@@ -294,10 +296,10 @@ struct DataNode(S)
 			typeTag = DataNodeType.Directive;
 			storage.directive = arg;
 		}
-		else static if( is( T : IClassObject ) )
+		else static if( is( T : ExecutionFrame ) )
 		{
-			typeTag = DataNodeType.ClassObject;
-			storage.obj = arg;
+			typeTag = DataNodeType.ExecutionFrame;
+			storage.execFrame = arg;
 		}
 		else static if( is(T : Value[Key], Key, Value) )
 		{
@@ -498,9 +500,8 @@ void writeDataNodeLines(TDataNode, OutRange)(
 		case Directive:
 			outRange.put( "<directive object>" );
 			break;
-		case ClassObject:
-			assert(0);
-			//outRange.put( node.obj.toString() );
+		case ExecutionFrame:
+			outRange.put( "<execution frame>" );
 			break;
 	}
 }
@@ -586,9 +587,8 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 				outRange.put( "<directive object (null)>" );
 			}
 			break;
-		case ClassObject:
-			assert(0);
-			//outRange.put(  node.obj.toString() );
+		case ExecutionFrame:
+			outRange.put( "<execution frame>" );
 			break;
 	}
 	

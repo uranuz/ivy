@@ -240,14 +240,39 @@ class BodyAttrDef: DirectiveDefinitionBlock
 	}
 }
 
-enum SymbolKind { DirectiveDefinition };
+enum SymbolKind { DirectiveDefinition, Module };
 
-struct Symbol
+class Symbol
 {
 	string name;
 	SymbolKind kind;
+
+}
+
+class DirectiveDefinitionSymbol: Symbol
+{
 	DirectiveDefinitionBlock[] dirDefBlocks;
-	IvyNode astNode;
+
+public:
+	this( string name, DirectiveDefinitionBlock[] dirDefBlocks )
+	{
+		this.name = name;
+		this.kind = SymbolKind.DirectiveDefinition;
+		this.dirDefBlocks = dirDefBlocks;
+	}
+}
+
+class ModuleSymbol: Symbol
+{
+	SymbolTableFrame symbolTable; // TODO: ****????
+
+public:
+	this( string name, SymbolTableFrame symbolTable )
+	{
+		this.name = name;
+		this.kind = SymbolKind.Module;
+		this.symbolTable = symbolTable;
+	}
 }
 
 class SymbolTableFrame
@@ -262,20 +287,50 @@ public:
 		_moduleFrame = moduleFrame;
 	}
 
-	Symbol* localLookup(string name)
+	Symbol localLookup(string name)
 	{
-		return name in _symbols;
+		return _symbols.get(name, null);
 	}
 
-	Symbol* lookup(string name)
+	Symbol lookup(string name)
 	{
 		if( Symbol* symb = name in _symbols )
+			return *symb;
+
+		// We need to try to look in module symbol table
+		if( Symbol symb = moduleLookup(name) )
 			return symb;
 
 		if( !_moduleFrame )
 			return null;
 
 		return _moduleFrame.lookup(name);
+	}
+
+	Symbol moduleLookup(string name)
+	{
+		import std.algorithm: splitter;
+		import std.string: join;
+		import std.range: take, drop;
+		import std.array: array;
+
+		auto splittedName = splitter(name, ".").array;
+		for( size_t i = 1; i <= splittedName.length; ++i )
+		{
+			string namePart = splittedName[].take(i).join(".");
+			if( Symbol* symb = namePart in _symbols )
+			{
+				if( symb.kind == SymbolKind.Module )
+				{
+					string modSymbolName = splittedName[].drop(i).join(".");
+					ModuleSymbol modSymbol = cast(ModuleSymbol) *symb;
+					if( Symbol childSymbol = modSymbol.symbolTable.lookup(modSymbolName) )
+						return childSymbol;
+				}
+			}
+
+		}
+		return null;
 	}
 
 	void add( Symbol symb )
@@ -467,7 +522,7 @@ public:
 				if( !_frameStack.back )
 					compilerError( `Cannot store symbol, because symbol table frame is null` );
 				// Add directive definition into existing frame
-				_frameStack.back.add( Symbol(dirNameExpr.name, SymbolKind.DirectiveDefinition, dirDefBlocks, node) );
+				_frameStack.back.add( new DirectiveDefinitionSymbol(dirNameExpr.name, dirDefBlocks) );
 
 				if( bodyStmt && !isNoscope )
 				{
@@ -506,19 +561,26 @@ public:
 				if( !moduleTree )
 					compilerError( `Couldn't load module: ` ~ moduleNameExpr.name );
 
-				_moduleStack ~= moduleNameExpr.name;
-				_frameStack ~= new SymbolTableFrame(null);
-				_moduleSymbols[moduleNameExpr.name] = _frameStack.back;
-				scope(exit)
 				{
-					assert( !_moduleStack.empty, `Compiler directive collector module stack is empty!` );
-					_moduleStack.popBack(); // We will exit module when finish with it
-					assert( !_frameStack.empty, `Compiler directive collector frame stack is empty!` );
-					_frameStack.popBack();
+					_moduleStack ~= moduleNameExpr.name;
+					_frameStack ~= new SymbolTableFrame(null);
+					_moduleSymbols[moduleNameExpr.name] = _frameStack.back;
+					scope(exit)
+					{
+						assert( !_moduleStack.empty, `Compiler directive collector module stack is empty!` );
+						_moduleStack.popBack(); // We will exit module when finish with it
+						assert( !_frameStack.empty, `Compiler directive collector frame stack is empty!` );
+						_frameStack.popBack();
+					}
+
+					// Go to find directive definitions in this imported module
+					moduleTree.accept(this);
 				}
 
-				// Go to find directive definitions in this imported module
-				moduleTree.accept(this);
+				assert( !_frameStack.empty, "Cannot store imported symbols, because symbol table frame stack is empty!" );
+				assert( _frameStack.back, "Cannot store imported symbols, because symbol table stack is null!" );
+				_frameStack.back.add( new ModuleSymbol(moduleNameExpr.name, _moduleSymbols[moduleNameExpr.name] ) );
+
 			}
 			else
 			{
@@ -1283,13 +1345,13 @@ public:
 		return _codeObjStack.back;
 	}
 
-	Symbol* symbolLookup(string name)
+	Symbol symbolLookup(string name)
 	{
 		import std.range: empty, back;
 		assert( !_symbolTableStack.empty, `Cannot look for symbol, because symbol table stack is empty` );
 		assert( _symbolTableStack.back, `Cannot look for symbol, current symbol table frame is null` );
 
-		Symbol* symb = _symbolTableStack.back.lookup(name);
+		Symbol symb = _symbolTableStack.back.lookup(name);
 		if( !symb )
 			compilerError( `Cannot find symbol "` ~ name ~ `"` );
 
@@ -1533,7 +1595,13 @@ public:
 			{
 				auto attrRange = node[];
 
-				Symbol* dirSymbol = this.symbolLookup( node.name );
+				Symbol symb = this.symbolLookup( node.name );
+				if( symb.kind != SymbolKind.DirectiveDefinition )
+					compilerError(`Expected directive definition symbol kind`);
+
+				DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
+				assert( dirSymbol, `Directive definition symbol is null` );
+
 				DirectiveDefinitionBlock[] dirDefBlocks = dirSymbol.dirDefBlocks[]; // Getting slice of list
 				bool isNoscope = false;
 
