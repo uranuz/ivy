@@ -28,7 +28,14 @@ class ExecutionFrame
 {
 private:
 	DirectiveObject _dirObj;
+
+	/*
+		Type of _dataDict should be Undef or Null if directive call or something that represented
+		by this ExecutionFrame haven't it's own data scope and uses parent scope for data.
+		In other cases _dataDict should be of AssocArray type for storing local variables
+	*/
 	TDataNode _dataDict;
+
 	ExecutionFrame _moduleFrame;
 	
 public:
@@ -39,6 +46,13 @@ public:
 
 		TDataNode[string] emptyDict;
 		_dataDict = emptyDict;
+	}
+
+	this(DirectiveObject dirObj, ExecutionFrame modFrame, TDataNode dataDict)
+	{
+		_dirObj = dirObj;
+		_moduleFrame = modFrame;
+		_dataDict = dataDict;
 	}
 
 	TDataNode getValue( string varName )
@@ -83,6 +97,7 @@ public:
 		return nodePtr;
 	}
 
+	// Basic method used to search symbols in context
 	TDataNode* findValue( string varName )
 	{
 		writeln( `Searching in _dataDict: `, _dataDict );
@@ -167,6 +182,7 @@ public:
 
 				if( parentPtr.type != DataNodeType.AssocArray )
 					interpretError( `Cannot create new value "` ~ varName ~ `", because parent is not of assoc array type!` );
+				// I think we shouldn't be able to add new variables to another module scope, only modify them
 
 				(*parentPtr)[shortName] = value;
 			}
@@ -202,6 +218,11 @@ public:
 
 			(*parentPtr)[shortName].assocArray.remove(shortName);
 		}
+	}
+
+	bool hasOwnScope() @property
+	{
+		return _dataDict.type == DataNodeType.AssocArray;
 	}
 
 	override string toString()
@@ -241,6 +262,11 @@ public:
 	void newFrame(DirectiveObject dirObj, ExecutionFrame modFrame)
 	{
 		_frameStack ~= new ExecutionFrame(dirObj, modFrame);
+	}
+
+	void newFrame(DirectiveObject dirObj, ExecutionFrame modFrame, TDataNode dataDict)
+	{
+		_frameStack ~= new ExecutionFrame(dirObj, modFrame, dataDict);
 	}
 
 	void removeFrame()
@@ -283,14 +309,25 @@ public:
 
 	TDataNode* findValue( string varName )
 	{
-		import std.range: empty, back;
+		import std.range: empty, back, popBack;
 
 		if( !_frameStack.empty )
 		{
-			assert( _frameStack.back, `Couldn't find variable value, because frame stack is null!` );
-			if( TDataNode* valuePtr = _frameStack.back.findValue(varName) )
-				return valuePtr;
+			auto frameStackSlice = _frameStack[];
 
+			for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
+			{
+				assert( frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
+				if( !frameStackSlice.back.hasOwnScope )
+				{
+					continue; // Let's try to find in parent
+				}
+
+				if( TDataNode* valuePtr = frameStackSlice.back.findValue(varName) )
+					return valuePtr;
+			}
+
+			// We always search in module's frame, where directive was defined
 			if( !_frameStack.back._moduleFrame )
 				return null;
 
@@ -703,6 +740,8 @@ public:
 					writeln( `ImportModule _moduleObjects: `, _moduleObjects );
 					assert( moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: " ~ moduleName );
 
+					ExecutionFrame callerFrame = _frameStack.back;
+
 					if( moduleName !in _moduleFrames )
 					{
 						// Run module here
@@ -715,8 +754,6 @@ public:
 						dirObj._name = `<` ~ moduleName ~ `>`;
 						dirObj._codeObj = codeObject;
 
-						ExecutionFrame callerFrame = _frameStack.back;
-
 						newFrame(dirObj, null); // Create entry point module frame
 
 						// Put module frame in frame of the caller
@@ -728,6 +765,11 @@ public:
 
 						// TODO: Finish me ;) ... please
 						continue execution_loop;
+					}
+					else
+					{
+						// If module is already imported then just put reference to it into caller's frame
+						callerFrame.setValue( moduleName, TDataNode(_moduleFrames[moduleName]) );
 					}
 
 					break;
@@ -802,7 +844,24 @@ public:
 					DirectiveObject dirObj = _stack[ _stack.length - stackArgCount ].directive;
 					assert( dirObj, `Directive object is null!` );
 
-					newFrame( dirObj, getModuleFrame(dirObj._codeObj._moduleObj._name) );
+					bool isNoscope = false;
+					if( _stack.back.type == DataNodeType.Integer && _stack.back.integer == 3 )
+					{
+						// There could be noscope attribute as first "block header"
+						isNoscope = true;
+						_stack.popBack();
+					}
+
+					if( isNoscope )
+					{
+						// If directive is noscope we create frame with _dataDict that is Undef
+						newFrame( dirObj, getModuleFrame(dirObj._codeObj._moduleObj._name), TDataNode() );
+					}
+					else
+					{
+						newFrame( dirObj, getModuleFrame(dirObj._codeObj._moduleObj._name) );
+					}
+
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{

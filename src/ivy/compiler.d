@@ -858,10 +858,10 @@ class IfCompiler: IDirectiveCompiler
 
 			// Add conditional jump instruction
 			// Remember address of jump instruction
-			size_t jumpInstrIndex = compiler.addInstr( Instruction( OpCode.JumpIfFalse ) );
+			size_t jumpInstrIndex = compiler.addInstr( OpCode.JumpIfFalse );
 
 			// Drop condition operand from stack
-			compiler.addInstr( Instruction( OpCode.PopTop ) );
+			compiler.addInstr( OpCode.PopTop );
 
 			// Add `if body` code
 			ifSect.stmt.accept(compiler);
@@ -1168,6 +1168,7 @@ class DefCompiler: IDirectiveCompiler
 class ByteCodeCompiler: AbstractNodeVisitor
 {
 private:
+
 	// Dictionary of native compilers for directives
 	IDirectiveCompiler[string] _dirCompilers;
 
@@ -1604,7 +1605,17 @@ public:
 
 				DirectiveDefinitionBlock[] dirDefBlocks = dirSymbol.dirDefBlocks[]; // Getting slice of list
 				bool isNoscope = false;
+				foreach( dirDef; dirDefBlocks )
+				{
+					// Quick workaround to find if directive is noscope
+					if( dirDef.type == DirDefAttrType.NoscopeAttr )
+					{
+						isNoscope = true;
+						break;
+					}
+				}
 
+				// Add instruction to load directive object from context by name
 				uint dirNameConstIndex = cast(uint) addConst( TDataNode(node.name) );
 				addInstr( OpCode.LoadName, dirNameConstIndex );
 
@@ -1673,7 +1684,7 @@ public:
 								}
 
 								// Add instruction to load value that consists of number of pairs in block and type of block
-								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 1;
+								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 1; // TODO: Change magic const to enum
 								uint blockHeaderConstIndex = cast(uint) addConst( TDataNode( blockHeader ) );
 								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
 								++stackItemsCount; // We should count args block header
@@ -1699,7 +1710,7 @@ public:
 								}
 
 								// Add instruction to load value that consists of number of positional arguments in block and type of block
-								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 1;
+								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 2; // TODO: Change magic const to enum
 								uint blockHeaderConstIndex = cast(uint) addConst( TDataNode( blockHeader ) );
 								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
 								++stackItemsCount; // We should count args block header
@@ -1728,6 +1739,14 @@ public:
 						}
 						dirDefBlocks.popFront();
 					}
+				}
+
+				if( isNoscope )
+				{
+					// For now interpreter expects noscope flag to be the top of the stack "block header"
+					uint noscopeFlagConstIndex = cast(uint) addConst( TDataNode(3) ); // TODO: Change magic const to enum
+					addInstr( OpCode.LoadConst, noscopeFlagConstIndex );
+					++stackItemsCount; // We should count flag
 				}
 
 				// After all preparations add instruction to call directive
