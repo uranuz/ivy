@@ -3,7 +3,7 @@ module ivy.interpreter_data;
 import std.exception: enforceEx;
 import std.traits;
 
-enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, Directive, ExecutionFrame };
+enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, Directive, ExecutionFrame, DataNodeRange };
 
 class DataNodeException : Exception
 {
@@ -124,6 +124,95 @@ class DirectiveObject
 	this() {}
 }
 
+interface IDataNodeRange
+{
+	alias TDataNode = DataNode!string;
+
+	bool empty() @property;
+	TDataNode front();
+	void popFront();
+	DataNodeType aggrType() @property;
+}
+
+class ArrayRange: IDataNodeRange
+{
+	alias TDataNode = DataNode!string;
+
+private:
+	TDataNode[] _array;
+
+public:
+	this( TDataNode[] arr )
+	{
+		_array = arr;
+	}
+
+	override {
+		bool empty() @property
+		{
+			import std.range: empty;
+			return _array.empty;
+		}
+
+		TDataNode front()
+		{
+			import std.range: front;
+			return _array.front;
+		}
+
+		void popFront()
+		{
+			import std.range: popFront;
+			_array.popFront();
+		}
+
+		DataNodeType aggrType() @property
+		{
+			return DataNodeType.Array;
+		}
+	}
+}
+
+class AssocArrayRange: IDataNodeRange
+{
+	alias TDataNode = DataNode!string;
+private:
+	TDataNode[string] _assocArray;
+	string[] _keys;
+
+public:
+	this( TDataNode[string] assocArr )
+	{
+		_assocArray = assocArr;
+		_keys = _assocArray.keys;
+	}
+
+	override {
+		bool empty() @property
+		{
+			import std.range: empty;
+			return _keys.empty;
+		}
+
+		TDataNode front()
+		{
+			import std.range: front;
+			return _assocArray[_keys.front];
+		}
+
+		void popFront()
+		{
+			import std.range: popFront;
+			_keys.popFront();
+		}
+
+		DataNodeType aggrType() @property
+		{
+			return DataNodeType.AssocArray;
+		}
+	}
+}
+
 import ivy.interpreter: ExecutionFrame;
 
 struct DataNode(S)
@@ -141,6 +230,7 @@ struct DataNode(S)
 			CodeObject codeObject;
 			DirectiveObject directive;
 			ExecutionFrame execFrame;
+			IDataNodeRange dataRange;
 		}
 	}
 
@@ -250,6 +340,17 @@ struct DataNode(S)
 	{
 		assign(val);
 	}
+
+	IDataNodeRange dataRange() @property
+	{
+		enforceEx!DataNodeException( type == DataNodeType.DataNodeRange, "DataNode is not a data node range");
+		return storage.dataRange;
+	}
+
+	void dataRange(IDataNodeRange val) @property
+	{
+		assign(val);
+	}
 	
 	DataNodeType type() @property
 	{
@@ -300,6 +401,11 @@ struct DataNode(S)
 		{
 			typeTag = DataNodeType.ExecutionFrame;
 			storage.execFrame = arg;
+		}
+		else static if( is( T : IDataNodeRange ) )
+		{
+			typeTag = DataNodeType.DataNodeRange;
+			storage.dataRange = arg;
 		}
 		else static if( is(T : Value[Key], Key, Value) )
 		{
@@ -503,6 +609,9 @@ void writeDataNodeLines(TDataNode, OutRange)(
 		case ExecutionFrame:
 			outRange.put( "<execution frame>" );
 			break;
+		case DataNodeRange:
+			outRange.put( "<data node range>" );
+			break;
 	}
 }
 
@@ -589,6 +698,9 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 			break;
 		case ExecutionFrame:
 			outRange.put( "<execution frame>" );
+			break;
+		case DataNodeRange:
+			outRange.put( "<data node range>" );
 			break;
 	}
 	

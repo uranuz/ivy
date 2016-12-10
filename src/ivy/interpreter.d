@@ -692,12 +692,10 @@ public:
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var name operand, but exec stack is empty!" );
-					assert( _stack.back.type == DataNodeType.String, `Variable name operand must have string type!` );
-					string varName = _stack.back.str;
-					_stack.popBack(); // Remove var name from stack
+					TDataNode varNameNode = getModuleConst( instr.args[0] );
+					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreName instruction. Variable name const must have string type!` );
 
-					setValue( varName, varValue );
+					setValue( varNameNode.str, varValue );
 					_stack ~= TDataNode(); // For now we must put something onto stack
 					break;
 				}
@@ -705,17 +703,15 @@ public:
 				// Stores data from stack into local context frame variable
 				case OpCode.StoreLocalName:
 				{
-					writeln( "StoreName _stack: ", _stack );
-					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var value operand, but exec stack is empty!" );
+					writeln( "StoreLocalName _stack: ", _stack );
+					assert( !_stack.empty, "Cannot execute StoreLocalName instruction. Expected var value operand, but exec stack is empty!" );
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var name operand, but exec stack is empty!" );
-					assert( _stack.back.type == DataNodeType.String, `Variable name operand must have string type!` );
-					string varName = _stack.back.str;
-					_stack.popBack(); // Remove var name from stack
+					TDataNode varNameNode = getModuleConst( instr.args[0] );
+					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreLocalName instruction. Variable name const must have string type!` );
 
-					setLocalValue( varName, varValue );
+					setLocalValue( varNameNode.str, varValue );
 					_stack ~= TDataNode(); // For now we must put something onto stack
 					break;
 				}
@@ -723,10 +719,10 @@ public:
 				// Loads data from local context frame variable by index of var name in module constants
 				case OpCode.LoadName:
 				{
-					TDataNode nameNode = getModuleConst( instr.args[0] );
-					assert( nameNode.type == DataNodeType.String, `Variable name operand must have string type!` );
+					TDataNode varNameNode = getModuleConst( instr.args[0] );
+					assert( varNameNode.type == DataNodeType.String, `Cannot execute LoadName instruction. Variable name operand must have string type!` );
 
-					_stack ~= getValue( nameNode.str );
+					_stack ~= getValue( varNameNode.str );
 					break;
 				}
 
@@ -781,16 +777,87 @@ public:
 					break;
 				}
 
-				case OpCode.InitLoop:
+				case OpCode.GetDataRange:
 				{
-					assert( false, "Unimplemented yet!" );
+					import std.range: empty, back, popBack;
+					assert( !_stack.empty, `Expected aggregate type for loop, but empty execution stack found` );
+					assert( _stack.back.type == DataNodeType.Array || _stack.back.type == DataNodeType.AssocArray,
+						`Expected array or assoc array as loop aggregate` );
+
+					TDataNode dataRange;
+					switch( _stack.back.type )
+					{
+						case DataNodeType.Array:
+						{
+							dataRange = new ArrayRange(_stack.back.array);
+							break;
+						}
+						case DataNodeType.AssocArray:
+						{
+							dataRange = new AssocArrayRange(_stack.back.assocArray);
+							break;
+						}
+						default:
+							assert( false, `This should never happen!` );
+					}
+					_stack.popBack();
+					_stack ~= dataRange;
+
 					break;
 				}
 
-				case OpCode.RunIter:
+				case OpCode.RunLoop:
 				{
-					assert( false, "Unimplemented yet!" );
+					writeln( "RunLoop beginning _stack: ", _stack );
+					assert( !_stack.empty, `Expected data range, but empty execution stack found` );
+					assert( _stack.back.type == DataNodeType.DataNodeRange, `Expected DataNodeRange` );
+					auto dataRange = _stack.back.dataRange;
+					writeln( "RunLoop dataRange.empty: ", dataRange.empty );
+					if( dataRange.empty )
+					{
+						writeln( "RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack );
+						assert( instr.args[0] < codeRange.length, `Cannot jump after the end of code object` );
+						pk = instr.args[0]+1;
+						_stack.popBack(); // Drop data range from stack as we no longer need it
+						continue execution_loop;
+					}
+
+					switch( dataRange.aggrType )
+					{
+						case DataNodeType.Array:
+						{
+							_stack ~= dataRange.front;
+							break;
+						}
+						case DataNodeType.AssocArray:
+						{
+							assert( dataRange.front.type == DataNodeType.Array, `Expected array as assoc array key-value pair` );
+							TDataNode[] aaPair = dataRange.front.array;
+							assert( aaPair.length > 1, `Assoc array pair must have two items` );
+							_stack ~= aaPair[0];
+							_stack ~= aaPair[1];
+
+							break;
+						}
+						default:
+							assert( false, `Unexpected range aggregate type!` );
+					}
+
+					// TODO: For now we just move range forward as take current value from it
+					// Maybe should fix it and make it move after loop block finish
+					dataRange.popFront();
+
+					writeln( "RunLoop. Iteration init finished. _stack is: ", _stack );
+
 					break;
+				}
+
+				case OpCode.Jump:
+				{
+					assert( instr.args[0] < codeRange.length, `Cannot jump after the end of code object` );
+
+					pk = instr.args[0];
+					continue execution_loop;
 				}
 
 				case OpCode.PopTop:
@@ -921,6 +988,25 @@ public:
 					pk = 0;
 
 					continue execution_loop;
+				}
+
+				case OpCode.MakeArray:
+				{
+					size_t arrayLen = instr.args[0];
+					TDataNode[] newArray;
+					newArray.length = arrayLen; // Preallocating is good ;)
+					writeln("MakeArray _stack: ", _stack );
+					writeln("MakeArray arrayLen: ", arrayLen);
+					for( size_t i = arrayLen; i > 0; --i )
+					{
+						assert( !_stack.empty, `Expected new array element, but got empty stack` );
+						// We take array items from the tail, so we must consider it!
+						newArray[i-1] =  _stack.back;
+						_stack.popBack();
+					}
+					_stack ~= TDataNode(newArray);
+
+					break;
 				}
 
 				default:

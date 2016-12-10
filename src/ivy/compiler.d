@@ -532,7 +532,10 @@ public:
 
 				scope(exit)
 				{
-					_frameStack.popBack();
+					if( bodyStmt && !isNoscope )
+					{
+						_frameStack.popBack();
+					}
 				}
 
 				if( bodyStmt )
@@ -710,12 +713,12 @@ public:
 		auto stmtRange = stmt[];
 		while( !stmtRange.empty )
 		{
+			uint varNameConstIndex;
 			if( auto kwPair = cast(IKeyValueAttribute) stmtRange.front )
 			{
 				if( kwPair.name.empty )
 					compilerError( `Variable name cannot be empty` );
-				uint constIndex = cast(uint) compiler.addConst( TDataNode(kwPair.name) );
-				compiler.addInstr( OpCode.LoadConst, constIndex );
+				varNameConstIndex = cast(uint) compiler.addConst( TDataNode(kwPair.name) );
 
 				if( !kwPair.value )
 					compilerError( "Expected value for 'var' directive" );
@@ -727,8 +730,7 @@ public:
 			{
 				if( nameExpr.name.empty )
 					compilerError( `Variable name cannot be empty` );
-				uint constIndex = cast(uint) compiler.addConst( TDataNode(nameExpr.name) );
-				compiler.addInstr( OpCode.LoadConst, constIndex );
+				varNameConstIndex = cast(uint) compiler.addConst( TDataNode(nameExpr.name) );
 
 				stmtRange.popFront();
 			}
@@ -756,7 +758,7 @@ public:
 				}
 			}
 
-			compiler.addInstr( Instruction(OpCode.StoreLocalName) );
+			compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
 		}
 
 		if( !stmtRange.empty )
@@ -794,12 +796,11 @@ public:
 			if( !kwPair.value )
 				compilerError( "Expected value for 'set' directive" );
 
-			uint constIndex = cast(uint) compiler.addConst( TDataNode( kwPair.name ) );
-			compiler.addInstr( OpCode.LoadConst, constIndex );
+			uint varNameConstIndex = cast(uint) compiler.addConst( TDataNode( kwPair.name ) );
 
 			kwPair.value.accept(compiler); //Evaluating expression
 
-			compiler.addInstr( Instruction(OpCode.StoreName) );
+			compiler.addInstr( OpCode.StoreName, varNameConstIndex );
 		}
 
 		if( !stmtRange.empty )
@@ -883,14 +884,14 @@ class IfCompiler: IDirectiveCompiler
 
 }
 
-/*
-class ForInterpreter : IDirectiveCompiler
+
+class ForCompiler : IDirectiveCompiler
 {
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
 		if( !statement || statement.name != "for"  )
-			interpretError( "Expected 'for' directive" );
+			compilerError( "Expected 'for' directive" );
 
 		auto stmtRange = statement[];
 
@@ -898,12 +899,12 @@ public:
 
 		string varName = varNameExpr.name;
 		if( varName.length == 0 )
-			interpretError("Loop variable name cannot be empty");
+			compilerError("Loop variable name cannot be empty");
 
 		INameExpression inAttribute = stmtRange.takeFrontAs!INameExpression("Expected 'in' attribute");
 
 		if( inAttribute.name != "in" )
-			interpretError( "Expected 'in' keyword" );
+			compilerError( "Expected 'in' keyword" );
 
 		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected 'for' aggregate expression");
 
@@ -913,35 +914,30 @@ public:
 		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement( "Expected loop body statement" );
 
 		if( !stmtRange.empty )
-			interpretError( "Expected end of directive after loop body. Maybe ';' is missing" );
+			compilerError( "Expected end of directive after loop body. Maybe ';' is missing" );
 
 		// TODO: Check somehow if aggregate has supported type
 
-		// Issue command to get array length
-		compiler._code ~= Instruction( OpCode.GetLength );
+		// Issue instruction to get iterator from aggregate in execution stack
+		compiler.addInstr( OpCode.GetDataRange );
 
-		// Prepare counter
-		uint zeroConstIndex = cast(uint) compiler._consts.length;
-		compiler._consts ~= TDataNode(0);
+		uint varNameConstIndex = cast(uint) compiler.addConst( TDataNode(varName) );
 
-		Instruction loadZeroInstr;
-		loadZeroInstr.args[0] = zeroConstIndex;
+		size_t loopStartInstrIndex = compiler.addInstr( OpCode.RunLoop );
 
-		uint oneConstIndex = cast(uint) compiler._consts.length;
-		compiler._consts ~= TDataNode(0);
-
-		Instruction loadOneInstr;
-		loadOneInstr.args[0] = oneConstIndex;
-
-		compiler._code ~= loadZeroInstr;
-
-
+		// Issue command to store current loop item in local context with specified name
+		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
+		compiler.addInstr( OpCode.PopTop ); // Drop extra empty node left from StoreLocalName
 
 		bodyStmt.accept(compiler);
+
+		uint loopEndInstrIndex = cast(uint) compiler.addInstr( OpCode.Jump, cast(uint) loopStartInstrIndex );
+
+		compiler.setInstrArg0( loopStartInstrIndex, loopEndInstrIndex + 1 );
 	}
 
 }
-*/
+
 
 // Produces OpCode.Nop
 class PassInterpreter : IDirectiveCompiler
@@ -1200,7 +1196,7 @@ public:
 		_dirCompilers["var"] = new VarCompiler();
 		_dirCompilers["expr"] = new ExprCompiler();
 		_dirCompilers["if"] = new IfCompiler();
-		//_dirCompilers["for"] = new ForCompiler();
+		_dirCompilers["for"] = new ForCompiler();
 		_dirCompilers["def"] = new DefCompiler();
 		_dirCompilers["import"] = new ImportCompiler();
 
@@ -1450,8 +1446,14 @@ public:
 					constIndex = cast(uint) addConst( TDataNode( node.toStr() ) );
 					break;
 				case LiteralType.Array:
-					assert( false, "Array literal code generation is not implemented yet!" );
-					break;
+					uint arrayLen = 0;
+					foreach( IvyNode elem; node.children )
+					{
+						elem.accept(this);
+						++arrayLen;
+					}
+					addInstr( OpCode.MakeArray, arrayLen );
+					return; // Return in order to not add extra instr
 				case LiteralType.AssocArray:
 					assert( false, "Assoc array literal code generation is not implemented yet!" );
 					break;
@@ -1521,7 +1523,7 @@ public:
 					break;
 			}
 
-			addInstr( Instruction(opcode) );
+			addInstr( opcode );
 		}
 		void visit(IBinaryExpression node)
 		{

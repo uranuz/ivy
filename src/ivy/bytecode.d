@@ -64,9 +64,11 @@ enum OpCode: ubyte {
 	PopTop,
 
 	// Loop initialization and execution
-	InitLoop,
-	RunIter
+	GetDataRange,
+	RunLoop,
 
+	// Data construction opcodes
+	MakeArray
 }
 
 // Minimal element of bytecode is instruction opcode with optional args

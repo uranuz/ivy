@@ -1,4 +1,4 @@
-expr {#
+expr (#
 	def test_def (#
 		def.named
 			aa as int
@@ -40,4 +40,7 @@ expr {#
 
 	dependency.test000;
 	expr dependency.aaa_ooo;
-#};
+	for name in ["Vasya", "Petya", "Vova"] (#
+		expr "ЫЫЫ"
+	#);
+#);
