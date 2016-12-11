@@ -781,6 +781,7 @@ public:
 				{
 					import std.range: empty, back, popBack;
 					assert( !_stack.empty, `Expected aggregate type for loop, but empty execution stack found` );
+					writeln( `GetDataRange begin _stack: `, _stack );
 					assert( _stack.back.type == DataNodeType.Array || _stack.back.type == DataNodeType.AssocArray,
 						`Expected array or assoc array as loop aggregate` );
 
@@ -800,8 +801,8 @@ public:
 						default:
 							assert( false, `This should never happen!` );
 					}
-					_stack.popBack();
-					_stack ~= dataRange;
+					_stack.popBack(); // Drop aggregate from stack
+					_stack ~= dataRange; // Push range onto stack
 
 					break;
 				}
@@ -817,9 +818,9 @@ public:
 					{
 						writeln( "RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack );
 						assert( instr.args[0] < codeRange.length, `Cannot jump after the end of code object` );
-						pk = instr.args[0]+1;
+						pk = instr.args[0];
 						_stack.popBack(); // Drop data range from stack as we no longer need it
-						continue execution_loop;
+						break;
 					}
 
 					switch( dataRange.aggrType )
@@ -864,6 +865,16 @@ public:
 				{
 					assert( !_stack.empty, "Cannot pop value from stack, because stack is empty" );
 					_stack.popBack();
+					break;
+				}
+
+				// Swaps two top items on the stack 
+				case OpCode.SwapTwo:
+				{
+					assert( _stack.length > 1, "Stack must have at least two items to swap" );
+					TDataNode tmp = _stack[$-1];
+					_stack[$-1] = _stack[$-2];
+					_stack[$-2] = tmp;
 					break;
 				}
 

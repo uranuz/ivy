@@ -62,6 +62,7 @@ enum OpCode: ubyte {
 
 	// Stack operations
 	PopTop,
+	SwapTwo,
 
 	// Loop initialization and execution
 	GetDataRange,

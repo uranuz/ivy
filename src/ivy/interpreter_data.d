@@ -556,10 +556,10 @@ void writeDataNodeLines(TDataNode, OutRange)(
 	final switch( node.type ) with( DataNodeType )
 	{
 		case Undef:
-			outRange.put( "" );
+			outRange.put( "undef" );
 			break;
 		case Null:
-			outRange.put( "" );
+			outRange.put( "null" );
 			break;
 		case Boolean:
 			outRange.put( node.boolean ? "true" : "false"  );
@@ -626,10 +626,10 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 	final switch( node.type ) with( DataNodeType )
 	{
 		case Undef:
-			outRange.put( "" );
+			outRange.put( "undef" );
 			break;
 		case Null:
-			outRange.put( "" );
+			outRange.put( "null" );
 			break;
 		case Boolean:
 			outRange.put( node.boolean ? "true" : "false"  );

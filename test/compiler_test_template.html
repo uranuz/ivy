@@ -1,46 +1,22 @@
 expr (#
 	def test_def (#
-		def.named
+		def.kv
 			aa as int
 			bb as str
 			cc: 2 + 2 as int;
-		def.body (#
+		def.body noscope (#
 			expr 2 + 2*5;
 			expr 2 + 2*3;
-		#)
-	#);
-	test_def
-		aa: 10
-		bb: "Vasya"
-		cc: 7;
-
-	def some_markup (#
-		def.body {*
-			Просто текст
-		*}
+		#);
 	#);
 
-	import dependency;
+	test_def aa: 5 bb: 6 cc: 10;
 
-	some_markup;
-	some_markup;
+	repeat item in ["Vasya", "Petya", "Vova"] {#
+		expr "Hello, " ~ item ~ "!";
+	#};
 
-	def test_args (#
-		def.named
-			x as int,
-			y as int;
-		def.body (#
-			var z: 200;
-			var z: 300;
-			expr x + y + z;
-		#)
-	#);
-
-	test_args x: 10 y: 20;
-
-	dependency.test000;
-	expr dependency.aaa_ooo;
-	for name in ["Vasya", "Petya", "Vova"] (#
-		expr "ЫЫЫ"
-	#);
+	for it in ["Gosha", "Fedya", "Masha"] {#
+		expr "Welcome, " ~ it ~ "! ";
+	#}
 #);

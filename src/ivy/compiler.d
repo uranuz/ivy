@@ -433,6 +433,7 @@ public:
 				ICodeBlockStatement attrsDefBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
 
 				IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
+
 				bool isNoscope = false;
 				ICompoundStatement bodyStmt;
 
@@ -446,7 +447,7 @@ public:
 
 					switch( attrsDefStmt.name )
 					{
-						case "def.named": {
+						case "def.kv": {
 							NamedAttrsDefBlock attrDefBlock = new NamedAttrsDefBlock();
 							while( !attrsDefStmtAttrRange.empty )
 							{
@@ -466,7 +467,7 @@ public:
 							dirDefBlocks ~= attrDefBlock;
 							break;
 						}
-						case "def.expr":
+						case "def.pos":
 						{
 							ExprAttrsDefBlock attrDefBlock = new ExprAttrsDefBlock();
 							while( !attrsDefStmtAttrRange.empty )
@@ -488,22 +489,28 @@ public:
 							dirDefBlocks ~= attrDefBlock;
 							break;
 						}
-						case "def.ident":
+						case "def.names":
+							assert( false, `Not implemented yet!` );
 							break;
 						case "def.kwd":
-							break;
-						case "def.result":
-
-							break;
-						case "def.noscope":
-							isNoscope = true;
+							assert( false, `Not implemented yet!` );
 							break;
 						case "def.body":
 							if( bodyStmt )
 								compilerError( `Multiple body statements are not allowed!` );
 
 							if( attrsDefStmtAttrRange.empty )
-								compilerError( "Expected compound statement as directive body statement, but got end of attributes list!" );
+								compilerError( "Unexpected end of def.body directive!" );
+							
+							// Try to parse noscope flag
+							INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
+							if( noscopeExpr && noscopeExpr.name == "noscope" )
+							{
+								isNoscope = true;
+								if( attrsDefStmtAttrRange.empty )
+									compilerError( "Expected directive body, but end of def.body directive found!" );
+								attrsDefStmtAttrRange.popFront();
+							}
 
 							bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
 							if( !bodyStmt )
@@ -921,9 +928,8 @@ public:
 		// Issue instruction to get iterator from aggregate in execution stack
 		compiler.addInstr( OpCode.GetDataRange );
 
-		uint varNameConstIndex = cast(uint) compiler.addConst( TDataNode(varName) );
-
 		size_t loopStartInstrIndex = compiler.addInstr( OpCode.RunLoop );
+		uint varNameConstIndex = cast(uint) compiler.addConst( TDataNode(varName) );
 
 		// Issue command to store current loop item in local context with specified name
 		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
@@ -931,11 +937,85 @@ public:
 
 		bodyStmt.accept(compiler);
 
+		// Drop result that we don't care about in this loop type
+		compiler.addInstr( OpCode.PopTop );
+
 		uint loopEndInstrIndex = cast(uint) compiler.addInstr( OpCode.Jump, cast(uint) loopStartInstrIndex );
+		compiler.setInstrArg0( loopStartInstrIndex, loopEndInstrIndex );
 
-		compiler.setInstrArg0( loopStartInstrIndex, loopEndInstrIndex + 1 );
+		// Push fake result to "make all happy" ;)
+		uint fakeResultConstIndex = cast(uint) compiler.addConst( TDataNode() );
+		compiler.addInstr( OpCode.LoadConst, fakeResultConstIndex );
 	}
+}
 
+class RepeatCompiler : IDirectiveCompiler
+{
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "repeat"  )
+			compilerError( "Expected 'repeat' directive" );
+
+		auto stmtRange = statement[];
+
+		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("Loop variable name expected");
+
+		string varName = varNameExpr.name;
+		if( varName.length == 0 )
+			compilerError("Loop variable name cannot be empty");
+
+		INameExpression inAttribute = stmtRange.takeFrontAs!INameExpression("Expected 'in' attribute");
+
+		if( inAttribute.name != "in" )
+			compilerError( "Expected 'in' keyword" );
+
+		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected loop aggregate expression");
+
+		// Compile code to calculate aggregate value
+		aggregateExpr.accept(compiler);
+
+		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement( "Expected loop body statement" );
+
+		if( !stmtRange.empty )
+			compilerError( "Expected end of directive after loop body. Maybe ';' is missing" );
+
+		// Issue instruction to get iterator from aggregate in execution stack
+		compiler.addInstr( OpCode.GetDataRange );
+
+		// Creating node for string result on stack
+		uint emptyStrConstIndex = cast(uint) compiler.addConst( TDataNode("") );
+		compiler.addInstr( OpCode.LoadConst, emptyStrConstIndex );
+		
+		// RunLoop expects  data node range on the top, but result aggregator
+		// can be left on (TOP - 1), so swap these...
+		compiler.addInstr( OpCode.SwapTwo );
+
+		// Run our super-duper loop 
+		size_t loopStartInstrIndex = compiler.addInstr( OpCode.RunLoop );
+
+		// Issue command to store current loop item in local context with specified name
+		uint varNameConstIndex = cast(uint) compiler.addConst( TDataNode(varName) );
+		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
+		compiler.addInstr( OpCode.PopTop ); // Drop extra empty node left from StoreLocalName
+		
+		// Swap data node range with result, so that we have it on (TOP - 1) when loop body finished
+		compiler.addInstr( OpCode.SwapTwo ); 
+
+		bodyStmt.accept(compiler);
+
+		// Concates current result to previous
+		compiler.addInstr( OpCode.Concat );
+
+		// Put data node range at the TOP and result on (TOP - 1) 
+		compiler.addInstr( OpCode.SwapTwo );
+
+		uint loopEndInstrIndex = cast(uint) compiler.addInstr( OpCode.Jump, cast(uint) loopStartInstrIndex );
+		// We need to say RunLoop where to jump when range become empty
+		compiler.setInstrArg0( loopStartInstrIndex, loopEndInstrIndex );
+		
+		// Data range is dropped by RunLoop already
+	}
 }
 
 
@@ -1071,41 +1151,40 @@ class DefCompiler: IDirectiveCompiler
 			while( !attrDefStmtRange.empty )
 			{
 				IDirectiveStatement attrDefStmt = attrDefStmtRange.front;
-				IAttributeRange attrDefStmtAttrRange = attrDefStmt[];
-
-				//DefAttrDeclType attrDeclType;
+				IAttributeRange attrsDefStmtAttrRange = attrDefStmt[];
 
 				switch( attrDefStmt.name )
 				{
-					case "def.named": {
-						//compileNamedAttrsBlock(attrDefStmtAttrRange);
+					case "def.kv": {
 						break;
 					}
-					case "def.expr": {
+					case "def.pos": {
 						break;
 					}
-					case "def.ident": {
+					case "def.names": {
 						break;
 					}
 					case "def.kwd": {
-						break;
-					}
-					case "def.result": {
-
-						break;
-					}
-					case "def.noscope": {
-						isNoscope = true; // Option to create new scope to store data for this directive
 						break;
 					}
 					case "def.body": {
 						if( bodyStatement )
 							compilerError( "Multiple body statements are not allowed!!!" );
 
-						if( attrDefStmtAttrRange.empty )
-							compilerError( "Expected compound statement as directive body statement, but got end of attributes list!" );
+						if( attrsDefStmtAttrRange.empty )
+							compilerError( "Unexpected end of def.body directive!" );
+						
+						// Try to parse noscope flag
+						INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
+						if( noscopeExpr && noscopeExpr.name == "noscope" )
+						{
+							isNoscope = true;
+							if( attrsDefStmtAttrRange.empty )
+								compilerError( "Expected directive body, but end of def.body directive found!" );
+							attrsDefStmtAttrRange.popFront();
+						}
 
-						bodyStatement = cast(ICompoundStatement) attrDefStmtAttrRange.front; // Getting body AST for statement
+						bodyStatement = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
 						if( !bodyStatement )
 							compilerError( "Expected compound statement as directive body statement" );
 
@@ -1197,6 +1276,7 @@ public:
 		_dirCompilers["expr"] = new ExprCompiler();
 		_dirCompilers["if"] = new IfCompiler();
 		_dirCompilers["for"] = new ForCompiler();
+		_dirCompilers["repeat"] = new RepeatCompiler();
 		_dirCompilers["def"] = new DefCompiler();
 		_dirCompilers["import"] = new ImportCompiler();
 
