@@ -232,6 +232,19 @@ public:
 
 }
 
+class RenderDirInterpreter: INativeDirectiveInterpreter
+{
+	void interpret( Interpreter interp )
+	{
+		import std.array: appender;
+		TDataNode result = interp.getValue("__result__");
+
+		auto renderedResult = appender!string();
+		result.writeDataNodeLines(renderedResult);
+		interp._stack ~= TDataNode(renderedResult.data);
+	}
+}
+
 import ivy.bytecode;
 
 class Interpreter
@@ -255,6 +268,12 @@ public:
 		rootDirObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
 
 		_globalFrame = new ExecutionFrame(null, null);
+
+		// Add native directive interpreter __render__ to global scope
+		DirectiveObject renderDirInterp = new DirectiveObject();
+		renderDirInterp._name = "__render__";
+		renderDirInterp._dirInterp = new RenderDirInterpreter();
+		_globalFrame.setValue( "__render__", TDataNode(renderDirInterp) );
 
 		newFrame(rootDirObj, null); // Create entry point module frame
 	}
@@ -328,12 +347,11 @@ public:
 			}
 
 			// We always search in module's frame, where directive was defined
-			if( !_frameStack.back._moduleFrame )
-				return null;
-
-			//assert( _frameStack.back._moduleFrame, `Couldn't find variable value in module frame, because it is null!` );
-			if( TDataNode* valuePtr = _frameStack.back._moduleFrame.findValue(varName) )
-				return valuePtr;
+			if( _frameStack.back._moduleFrame )
+			{
+				if( TDataNode* valuePtr = _frameStack.back._moduleFrame.findValue(varName) )
+					return valuePtr;
+			}
 		}
 
 		assert( _globalFrame, `Couldn't find variable value in global frame, because it is null!` );
@@ -465,7 +483,7 @@ public:
 							}
 						}
 						default:
-							assert(false, `This should never happen!` );
+							assert( false, `This should never happen!` );
 					}
 					break;
 				}
@@ -497,7 +515,7 @@ public:
 							}
 						}
 						default:
-							assert(false, `This should never happen!` );
+							assert( false, `This should never happen!` );
 					}
 					break;
 				}
@@ -591,7 +609,7 @@ public:
 				// Load constant from programme data table into stack
 				case OpCode.LoadConst:
 				{
-					_stack ~= getModuleConst( instr.args[0] );
+					_stack ~= getModuleConst( instr.arg );
 					break;
 				}
 
@@ -692,7 +710,7 @@ public:
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
-					TDataNode varNameNode = getModuleConst( instr.args[0] );
+					TDataNode varNameNode = getModuleConst( instr.arg );
 					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreName instruction. Variable name const must have string type!` );
 
 					setValue( varNameNode.str, varValue );
@@ -708,7 +726,7 @@ public:
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
-					TDataNode varNameNode = getModuleConst( instr.args[0] );
+					TDataNode varNameNode = getModuleConst( instr.arg );
 					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreLocalName instruction. Variable name const must have string type!` );
 
 					setLocalValue( varNameNode.str, varValue );
@@ -719,7 +737,7 @@ public:
 				// Loads data from local context frame variable by index of var name in module constants
 				case OpCode.LoadName:
 				{
-					TDataNode varNameNode = getModuleConst( instr.args[0] );
+					TDataNode varNameNode = getModuleConst( instr.arg );
 					assert( varNameNode.type == DataNodeType.String, `Cannot execute LoadName instruction. Variable name operand must have string type!` );
 
 					_stack ~= getValue( varNameNode.str );
@@ -817,8 +835,8 @@ public:
 					if( dataRange.empty )
 					{
 						writeln( "RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack );
-						assert( instr.args[0] < codeRange.length, `Cannot jump after the end of code object` );
-						pk = instr.args[0];
+						assert( instr.arg < codeRange.length, `Cannot jump after the end of code object` );
+						pk = instr.arg;
 						_stack.popBack(); // Drop data range from stack as we no longer need it
 						break;
 					}
@@ -855,10 +873,31 @@ public:
 
 				case OpCode.Jump:
 				{
-					assert( instr.args[0] < codeRange.length, `Cannot jump after the end of code object` );
+					assert( instr.arg < codeRange.length, `Cannot jump after the end of code object` );
 
-					pk = instr.args[0];
+					pk = instr.arg;
 					continue execution_loop;
+				}
+
+				case OpCode.JumpIfFalse:
+				{
+					import std.algorithm: canFind;
+					assert( !_stack.empty, `Cannot evaluate logical value, because stack is empty` );
+					assert( [ DataNodeType.Boolean, DataNodeType.Undef, DataNodeType.Null ].canFind(_stack.back.type),
+						`Expected null, undef or boolean in logical context as jump condition` );
+					assert( instr.arg < codeRange.length, `Cannot jump after the end of code object` );
+					TDataNode condNode = _stack.back;
+					_stack.popBack();
+					
+					if( condNode.type == DataNodeType.Boolean && condNode.boolean )
+					{
+						break;
+					}
+					else
+					{
+						pk = instr.arg;
+						continue execution_loop;
+					}
 				}
 
 				case OpCode.PopTop:
@@ -912,7 +951,7 @@ public:
 
 					writeln( "CallDirective stack on init: : ", _stack );
 
-					size_t stackArgCount = instr.args[0];
+					size_t stackArgCount = instr.arg;
 					assert( stackArgCount > 0, "Directive call must at least have 1 arguments in stack!" );
 					writeln( "CallDirective stackArgCount: ", stackArgCount );
 					assert( stackArgCount <= _stack.length, "Not enough arguments in execution stack" );
@@ -930,14 +969,24 @@ public:
 						_stack.popBack();
 					}
 
-					if( isNoscope )
+					ExecutionFrame moduleFrame;
+					if( dirObj._codeObj )
 					{
-						// If directive is noscope we create frame with _dataDict that is Undef
-						newFrame( dirObj, getModuleFrame(dirObj._codeObj._moduleObj._name), TDataNode() );
+						moduleFrame = getModuleFrame( dirObj._codeObj._moduleObj._name );
 					}
 					else
 					{
-						newFrame( dirObj, getModuleFrame(dirObj._codeObj._moduleObj._name) );
+						moduleFrame = getModuleFrame( "__main__" );
+					}
+
+					if( isNoscope )
+					{
+						// If directive is noscope we create frame with _dataDict that is Undef
+						newFrame( dirObj, moduleFrame, TDataNode() );
+					}
+					else
+					{
+						newFrame( dirObj, moduleFrame );
 					}
 
 
@@ -966,6 +1015,7 @@ public:
 									_stack.popBack(); ++j; // Parallel bookkeeping ;)
 
 									assert( !_stack.empty, "Execution stack is empty!" );
+									writeln( `CallDirective debug, _stack is: `, _stack );
 									assert( _stack.back.type == DataNodeType.String, "Named attribute name must be string!" );
 									string attrName = _stack.back.str;
 									_stack.popBack(); ++j;
@@ -988,22 +1038,34 @@ public:
 					}
 					writeln( "_stack after parsing all arguments: ", _stack );
 
-					// TODO: Then let's try to get directive arguments and parse 'em
-
 					assert( !_stack.empty, "Expected directive object to call, but found end of execution stack!" );
 					assert( _stack.back.type == DataNodeType.Directive, `Expected directive object operand in directive call operation` );
 					_stack.popBack(); // Drop directive object from stack
 
-					_stack ~= TDataNode(pk+1); // Put next instruction index on the stack to return at
-					codeRange = dirObj._codeObj._instrs[]; // Set new instruction range to execute
-					pk = 0;
+					if( dirObj._codeObj )
+					{
+						_stack ~= TDataNode(pk+1); // Put next instruction index on the stack to return at
+						codeRange = dirObj._codeObj._instrs[]; // Set new instruction range to execute
+						pk = 0;
+						continue execution_loop;
+					}
+					else
+					{
+						assert( dirObj._dirInterp, `Directive object expected to have non null code object or native directive interpreter object!` );
+						dirObj._dirInterp.interpret(this); // Run native directive interpreter
+						
+						if( !isNoscope )
+						{
+							_frameStack.popBack(); // Drop context from stack after end of execution
+						}
+					}
 
-					continue execution_loop;
+					break;
 				}
 
 				case OpCode.MakeArray:
 				{
-					size_t arrayLen = instr.args[0];
+					size_t arrayLen = instr.arg;
 					TDataNode[] newArray;
 					newArray.length = arrayLen; // Preallocating is good ;)
 					writeln("MakeArray _stack: ", _stack );
@@ -1012,7 +1074,7 @@ public:
 					{
 						assert( !_stack.empty, `Expected new array element, but got empty stack` );
 						// We take array items from the tail, so we must consider it!
-						newArray[i-1] =  _stack.back;
+						newArray[i-1] = _stack.back;
 						_stack.popBack();
 					}
 					_stack ~= TDataNode(newArray);
@@ -1022,7 +1084,7 @@ public:
 
 				default:
 				{
-					assert( false, "Unexpected code of operation" );
+					assert( false, "Unexpected code of operation: " ~ instr.opcode.text );
 					break;
 				}
 			}
@@ -1036,7 +1098,7 @@ public:
 				// TODO: Consider case with noscope directive
 				_frameStack.popBack(); // Exit out of this frame
 
-				// If frame stack happens to be empty - it mean we nave done with programme
+				// If frame stack happens to be empty - it means that we nave done with programme
 				if( _frameStack.empty )
 					break;
 

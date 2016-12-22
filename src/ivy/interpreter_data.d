@@ -100,16 +100,22 @@ public:
 		return index;
 	}
 
-	void setInstrArg0( size_t index, uint arg )
+	void setInstrArg( size_t index, size_t arg )
 	{
 		assert( index < _instrs.length, "Cannot set argument 0 of instruction, because instruction not exists!" );
-		_instrs[index].args[0] = arg;
+		_instrs[index].arg = arg;
 	}
 
 	size_t getInstrCount()
 	{
 		return _instrs.length;
 	}
+}
+
+interface INativeDirectiveInterpreter
+{
+	import ivy.interpreter: Interpreter;
+	void interpret( Interpreter interp );
 }
 
 /**
@@ -120,6 +126,9 @@ class DirectiveObject
 {
 	string _name; // Name of directive
 	CodeObject _codeObj; // Code object related to this directive
+	
+	// If this is natively implemented directive then _codeObj is null, but this must not be null
+	INativeDirectiveInterpreter _dirInterp;
 
 	this() {}
 }

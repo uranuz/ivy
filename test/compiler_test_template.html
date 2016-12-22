@@ -1,22 +1,17 @@
-expr (#
-	def test_def (#
+expr (%
+	def test_def {%
 		def.kv
 			aa as int
 			bb as str
 			cc: 2 + 2 as int;
-		def.body noscope (#
-			expr 2 + 2*5;
+		def.body noscope {%
 			expr 2 + 2*3;
-		#);
-	#);
+		%};
+	%};
 
 	test_def aa: 5 bb: 6 cc: 10;
 
-	repeat item in ["Vasya", "Petya", "Vova"] {#
-		expr "Hello, " ~ item ~ "!";
-	#};
-
-	for it in ["Gosha", "Fedya", "Masha"] {#
-		expr "Welcome, " ~ it ~ "! ";
-	#}
-#);
+	repeat item in ["Vasya", "Petya", "Vova"] {%
+		expr "Good bye, " ~ item ~ "!";
+	%};
+%);

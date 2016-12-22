@@ -72,9 +72,9 @@ enum OpCode: ubyte {
 	MakeArray
 }
 
-// Minimal element of bytecode is instruction opcode with optional args
+// Minimal element of bytecode is instruction opcode with optional arg
 struct Instruction
 {
 	OpCode opcode; // So... it's instruction opcode
-	uint[1] args; // One arg for now
+	size_t arg; // One arg for now
 }

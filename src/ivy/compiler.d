@@ -720,12 +720,12 @@ public:
 		auto stmtRange = stmt[];
 		while( !stmtRange.empty )
 		{
-			uint varNameConstIndex;
+			size_t varNameConstIndex;
 			if( auto kwPair = cast(IKeyValueAttribute) stmtRange.front )
 			{
 				if( kwPair.name.empty )
 					compilerError( `Variable name cannot be empty` );
-				varNameConstIndex = cast(uint) compiler.addConst( TDataNode(kwPair.name) );
+				varNameConstIndex = compiler.addConst( TDataNode(kwPair.name) );
 
 				if( !kwPair.value )
 					compilerError( "Expected value for 'var' directive" );
@@ -737,7 +737,7 @@ public:
 			{
 				if( nameExpr.name.empty )
 					compilerError( `Variable name cannot be empty` );
-				varNameConstIndex = cast(uint) compiler.addConst( TDataNode(nameExpr.name) );
+				varNameConstIndex = compiler.addConst( TDataNode(nameExpr.name) );
 
 				stmtRange.popFront();
 			}
@@ -803,10 +803,9 @@ public:
 			if( !kwPair.value )
 				compilerError( "Expected value for 'set' directive" );
 
-			uint varNameConstIndex = cast(uint) compiler.addConst( TDataNode( kwPair.name ) );
-
 			kwPair.value.accept(compiler); //Evaluating expression
 
+			size_t varNameConstIndex = compiler.addConst( TDataNode( kwPair.name ) );
 			compiler.addInstr( OpCode.StoreName, varNameConstIndex );
 		}
 
@@ -860,6 +859,12 @@ class IfCompiler: IDirectiveCompiler
 			}
 		}
 
+		// Array used to store instr indexes of jump instructions after each
+		// if, elif block, used to jump to the end of directive after block
+		// has been executed 
+		size_t[] jumpInstrIndexes;
+		jumpInstrIndexes.length = ifSects.length;
+
 		foreach( i, ifSect; ifSects )
 		{
 			ifSect.cond.accept(compiler);
@@ -868,25 +873,43 @@ class IfCompiler: IDirectiveCompiler
 			// Remember address of jump instruction
 			size_t jumpInstrIndex = compiler.addInstr( OpCode.JumpIfFalse );
 
-			// Drop condition operand from stack
-			compiler.addInstr( OpCode.PopTop );
-
 			// Add `if body` code
 			ifSect.stmt.accept(compiler);
 
+			// Instruction to jump after the end of if directive when
+			// current body finished
+			jumpInstrIndexes[i] = compiler.addInstr( OpCode.Jump );
+			
 			// Getting address of instruction following after if body
-			uint jumpElseIndex = cast(uint) compiler.getInstrCount();
+			size_t jumpElseIndex = compiler.getInstrCount();
 
-			compiler.setInstrArg0( jumpInstrIndex, jumpElseIndex );
+			compiler.setInstrArg( jumpInstrIndex, jumpElseIndex );
 		}
 
 		if( elseBody )
 		{
+			// Compile elseBody
 			elseBody.accept(compiler);
+		}
+		else
+		{
+			// It's fake elseBody used to push fake return value onto stack
+			size_t emptyNodeConstIndex = compiler.addConst( TDataNode() );
+			compiler.addInstr( OpCode.LoadConst, emptyNodeConstIndex );
+		}
+
+		size_t afterEndInstrIndex = compiler.getInstrCount();
+		compiler.addInstr( OpCode.Nop ); // Need some fake to jump if it's end of code object
+
+		foreach( currIndex; jumpInstrIndexes )
+		{
+			// Fill all generated jump instructions with address of instr after directive end 
+			compiler.setInstrArg( currIndex, afterEndInstrIndex );
 		}
 
 		if( !stmtRange.empty )
 			compilerError( `Expected end of "if" directive. Maybe ';' is missing` );
+
 	}
 
 }
@@ -929,7 +952,7 @@ public:
 		compiler.addInstr( OpCode.GetDataRange );
 
 		size_t loopStartInstrIndex = compiler.addInstr( OpCode.RunLoop );
-		uint varNameConstIndex = cast(uint) compiler.addConst( TDataNode(varName) );
+		size_t varNameConstIndex = compiler.addConst( TDataNode(varName) );
 
 		// Issue command to store current loop item in local context with specified name
 		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
@@ -940,11 +963,11 @@ public:
 		// Drop result that we don't care about in this loop type
 		compiler.addInstr( OpCode.PopTop );
 
-		uint loopEndInstrIndex = cast(uint) compiler.addInstr( OpCode.Jump, cast(uint) loopStartInstrIndex );
-		compiler.setInstrArg0( loopStartInstrIndex, loopEndInstrIndex );
+		size_t loopEndInstrIndex = compiler.addInstr( OpCode.Jump, loopStartInstrIndex );
+		compiler.setInstrArg( loopStartInstrIndex, loopEndInstrIndex );
 
 		// Push fake result to "make all happy" ;)
-		uint fakeResultConstIndex = cast(uint) compiler.addConst( TDataNode() );
+		size_t fakeResultConstIndex = compiler.addConst( TDataNode() );
 		compiler.addInstr( OpCode.LoadConst, fakeResultConstIndex );
 	}
 }
@@ -984,18 +1007,18 @@ public:
 		compiler.addInstr( OpCode.GetDataRange );
 
 		// Creating node for string result on stack
-		uint emptyStrConstIndex = cast(uint) compiler.addConst( TDataNode("") );
+		size_t emptyStrConstIndex = compiler.addConst( TDataNode(TDataNode[].init) );
 		compiler.addInstr( OpCode.LoadConst, emptyStrConstIndex );
 		
 		// RunLoop expects  data node range on the top, but result aggregator
 		// can be left on (TOP - 1), so swap these...
 		compiler.addInstr( OpCode.SwapTwo );
 
-		// Run our super-duper loop 
+		// Run our super-duper loop
 		size_t loopStartInstrIndex = compiler.addInstr( OpCode.RunLoop );
 
 		// Issue command to store current loop item in local context with specified name
-		uint varNameConstIndex = cast(uint) compiler.addConst( TDataNode(varName) );
+		size_t varNameConstIndex = compiler.addConst( TDataNode(varName) );
 		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
 		compiler.addInstr( OpCode.PopTop ); // Drop extra empty node left from StoreLocalName
 		
@@ -1004,15 +1027,24 @@ public:
 
 		bodyStmt.accept(compiler);
 
-		// Concates current result to previous
-		compiler.addInstr( OpCode.Concat );
+		if( bodyStmt.isList )
+		{
+			// Concates current result to previous
+			compiler.addInstr( OpCode.Concat );
+		}
+		else
+		{
+			// Concates current result to previous
+			compiler.addInstr( OpCode.Append );
+		}
+		
 
 		// Put data node range at the TOP and result on (TOP - 1) 
 		compiler.addInstr( OpCode.SwapTwo );
 
-		uint loopEndInstrIndex = cast(uint) compiler.addInstr( OpCode.Jump, cast(uint) loopStartInstrIndex );
+		size_t loopEndInstrIndex = compiler.addInstr( OpCode.Jump, loopStartInstrIndex );
 		// We need to say RunLoop where to jump when range become empty
-		compiler.setInstrArg0( loopStartInstrIndex, loopEndInstrIndex );
+		compiler.setInstrArg( loopStartInstrIndex, loopEndInstrIndex );
 		
 		// Data range is dropped by RunLoop already
 	}
@@ -1115,7 +1147,7 @@ public:
 
 		ModuleObject modObject = compiler.getOrCompileModule(moduleNameExpr.name);
 
-		uint modNameConstIndex = cast(uint) compiler.addConst( TDataNode(moduleNameExpr.name) );
+		size_t modNameConstIndex = compiler.addConst( TDataNode(moduleNameExpr.name) );
 		compiler.addInstr( OpCode.LoadConst, modNameConstIndex );
 
 		compiler.addInstr( OpCode.ImportModule );
@@ -1129,7 +1161,7 @@ class DefCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "def"  )
+		if( !statement || statement.name != "def" )
 			compilerError( "Expected 'def' directive" );
 
 		auto stmtRange = statement[];
@@ -1202,7 +1234,7 @@ class DefCompiler: IDirectiveCompiler
 
 		// Here should go commands to compile directive body
 
-		uint codeObjIndex;
+		size_t codeObjIndex;
 		{
 			if( !isNoscope )
 			{
@@ -1210,7 +1242,7 @@ class DefCompiler: IDirectiveCompiler
 				compiler.enterScope( bodyStatement.location.index );
 			}
 
-			codeObjIndex = cast(uint) compiler.enterNewCodeObject(); // Creating code object
+			codeObjIndex = compiler.enterNewCodeObject(); // Creating code object
 
 			// Generating code for def.body
 			bodyStatement.accept(compiler);
@@ -1228,7 +1260,7 @@ class DefCompiler: IDirectiveCompiler
 		compiler.addInstr( OpCode.LoadConst, codeObjIndex );
 
 		// Add directive name to module constants
-		uint dirNameConstIndex = cast(uint) compiler.addConst( TDataNode(defNameExpr.name) );
+		size_t dirNameConstIndex = compiler.addConst( TDataNode(defNameExpr.name) );
 
 		// Add instruction to load directive name from consts
 		compiler.addInstr( OpCode.LoadConst, dirNameConstIndex );
@@ -1368,22 +1400,22 @@ public:
 		return _codeObjStack.back.addInstr( Instruction(opcode) );
 	}
 
-	size_t addInstr( OpCode opcode, uint arg0 )
+	size_t addInstr( OpCode opcode, size_t arg )
 	{
 		import std.range: empty, back;
 		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
 		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
 
-		return _codeObjStack.back.addInstr( Instruction(opcode, arg0) );
+		return _codeObjStack.back.addInstr( Instruction(opcode, arg) );
 	}
 
-	void setInstrArg0( size_t index, uint arg )
+	void setInstrArg( size_t index, size_t arg )
 	{
 		import std.range: empty, back;
 		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
 		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
 
-		return _codeObjStack.back.setInstrArg0( index, arg );
+		return _codeObjStack.back.setInstrArg( index, arg );
 	}
 
 	size_t getInstrCount()
@@ -1467,10 +1499,10 @@ public:
 		ModuleObject modObject = getOrCompileModule(moduleName);
 		CodeObject modCodeObject = modObject.mainCodeObject;
 
-		uint modCodeObjectConstIndex = cast(uint) addConst( TDataNode(modCodeObject) );
+		size_t modCodeObjectConstIndex = addConst( TDataNode(modCodeObject) );
 		addInstr( OpCode.LoadConst, modCodeObjectConstIndex );
 
-		uint modNameConstIndex = cast(uint) addConst( TDataNode(moduleName) );
+		size_t modNameConstIndex = addConst( TDataNode(moduleName) );
 		addInstr( OpCode.LoadConst, modNameConstIndex );
 
 		addInstr( OpCode.LoadDirective );
@@ -1504,26 +1536,26 @@ public:
 		void visit(ILiteralExpression node)
 		{
 			LiteralType litType;
-			uint constIndex;
+			size_t constIndex;
 			switch( node.literalType )
 			{
 				case LiteralType.Undef:
-					constIndex = cast(uint) addConst( TDataNode() ); // Undef is default
+					constIndex = addConst( TDataNode() ); // Undef is default
 					break;
 				case LiteralType.Null:
-					constIndex = cast(uint) addConst( TDataNode(null) );
+					constIndex = addConst( TDataNode(null) );
 					break;
 				case LiteralType.Boolean:
-					constIndex = cast(uint) addConst( TDataNode( node.toBoolean() ) );
+					constIndex = addConst( TDataNode( node.toBoolean() ) );
 					break;
 				case LiteralType.Integer:
-					constIndex = cast(uint) addConst( TDataNode( node.toInteger() ) );
+					constIndex = addConst( TDataNode( node.toInteger() ) );
 					break;
 				case LiteralType.Floating:
-					constIndex = cast(uint) addConst( TDataNode( node.toFloating() ) );
+					constIndex = addConst( TDataNode( node.toFloating() ) );
 					break;
 				case LiteralType.String:
-					constIndex = cast(uint) addConst( TDataNode( node.toStr() ) );
+					constIndex = addConst( TDataNode( node.toStr() ) );
 					break;
 				case LiteralType.Array:
 					uint arrayLen = 0;
@@ -1557,7 +1589,7 @@ public:
 			if( !_symbolTableStack.back )
 				compilerError( "Compiler current symbol table frame is null!" );
 
-			uint constIndex = cast(uint) addConst( TDataNode( node.name ) );
+			size_t constIndex = addConst( TDataNode( node.name ) );
 			if( _symbolTableStack.back.lookup(node.name) )
 			{
 				// Regular name
@@ -1575,7 +1607,7 @@ public:
 				assert( false, `Cannot find variable with name "` ~ node.name ~ `"!` );
 			}
 			*/
-			uint constIndex = cast(uint) addConst( TDataNode( node.name ) );
+			size_t constIndex = addConst( TDataNode( node.name ) );
 			// Load name constant instruction
 			addInstr( OpCode.LoadName, constIndex );
 		}
@@ -1698,7 +1730,7 @@ public:
 				}
 
 				// Add instruction to load directive object from context by name
-				uint dirNameConstIndex = cast(uint) addConst( TDataNode(node.name) );
+				size_t dirNameConstIndex = addConst( TDataNode(node.name) );
 				addInstr( OpCode.LoadName, dirNameConstIndex );
 
 				// Keeps count of stack arguments actualy used by this call. First is directive object
@@ -1731,7 +1763,7 @@ public:
 										compilerError( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
 
 									// Add name of named argument into stack
-									uint nameConstIndex = cast(uint) addConst( TDataNode(keyValueAttr.name) );
+									size_t nameConstIndex = addConst( TDataNode(keyValueAttr.name) );
 									addInstr( OpCode.LoadConst, nameConstIndex );
 									++stackItemsCount;
 
@@ -1753,7 +1785,7 @@ public:
 										if( defVal )
 										{
 											// Add name of named argument into stack
-											uint nameConstIndex = cast(uint) addConst( TDataNode(name) );
+											size_t nameConstIndex = addConst( TDataNode(name) );
 											addInstr( OpCode.LoadConst, nameConstIndex );
 											++stackItemsCount;
 
@@ -1766,8 +1798,8 @@ public:
 								}
 
 								// Add instruction to load value that consists of number of pairs in block and type of block
-								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 1; // TODO: Change magic const to enum
-								uint blockHeaderConstIndex = cast(uint) addConst( TDataNode( blockHeader ) );
+								size_t blockHeader = ( argCount << 3 ) + 1; // TODO: Change magic const to enum
+								size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
 								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
 								++stackItemsCount; // We should count args block header
 								break;
@@ -1792,8 +1824,8 @@ public:
 								}
 
 								// Add instruction to load value that consists of number of positional arguments in block and type of block
-								uint blockHeader = ( ( cast(uint) argCount ) << 3 ) + 2; // TODO: Change magic const to enum
-								uint blockHeaderConstIndex = cast(uint) addConst( TDataNode( blockHeader ) );
+								size_t blockHeader = ( argCount << 3 ) + 2; // TODO: Change magic const to enum
+								size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
 								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
 								++stackItemsCount; // We should count args block header
 								break;
@@ -1826,21 +1858,20 @@ public:
 				if( isNoscope )
 				{
 					// For now interpreter expects noscope flag to be the top of the stack "block header"
-					uint noscopeFlagConstIndex = cast(uint) addConst( TDataNode(3) ); // TODO: Change magic const to enum
+					size_t noscopeFlagConstIndex = addConst( TDataNode(3) ); // TODO: Change magic const to enum
 					addInstr( OpCode.LoadConst, noscopeFlagConstIndex );
 					++stackItemsCount; // We should count flag
 				}
 
 				// After all preparations add instruction to call directive
-				addInstr( OpCode.CallDirective, cast(uint) stackItemsCount );
+				addInstr( OpCode.CallDirective, stackItemsCount );
 			}
 		}
 
 		void visit(IDataFragmentStatement node)
 		{
 			// Nothing special. Just store this piece of data into table
-			uint constIndex = cast(uint) addConst( TDataNode(node.data) );
-
+			size_t constIndex = addConst( TDataNode(node.data) );
 			addInstr( OpCode.LoadConst, constIndex );
 		}
 
@@ -1853,15 +1884,37 @@ public:
 			{
 				TDataNode emptyArray = TDataNode[].init;
 				size_t emptyArrayConstIndex = addConst(emptyArray);
-				addInstr( OpCode.LoadConst, cast(uint) emptyArrayConstIndex );
+				addInstr( OpCode.LoadConst, emptyArrayConstIndex );
 			}
+
+			size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
+			size_t resultNameConstIndex = addConst( TDataNode("__result__") );
+
+			// In order to make call to __render__ creating block header for one positional argument
+			// witch is currently at the TOP of the execution stack
+			size_t blockHeader = ( 1 << 3 ) + 1; //TODO: Change block type magic constant to enum!
+			size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
 
 			auto stmtRange = node[];
 			while( !stmtRange.empty )
 			{
+				addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
+				
+				// Add name for key-value argument
+				addInstr( OpCode.LoadConst, resultNameConstIndex );
+				
 				stmtRange.front.accept( this );
 				stmtRange.popFront();
 
+				addInstr( OpCode.LoadConst, blockHeaderConstIndex ); // Add argument block header
+
+				// Stack layout is:
+				// TOP: argument block header
+				// TOP - 1: Current result argument
+				// TOP - 2: Current result var name argument
+				// TOP - 3: Directive object for __render__
+				addInstr( OpCode.CallDirective, 4 );
+				
 				if( node.isList )
 				{
 					addInstr( OpCode.Append ); // Append result to result array
@@ -1915,7 +1968,7 @@ public:
 						result ~= "\r\nCode object " ~ i.text ~ "\r\n";
 						foreach( k, instr; con.codeObject._instrs )
 						{
-							result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.args.to!string ~ "\r\n";
+							result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.arg.text ~ "\r\n";
 						}
 					}
 				}

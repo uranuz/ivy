@@ -23,23 +23,31 @@ static immutable whitespaceChars = " \n\t\r";
 static immutable delimChars = "()[]{}%*-+/#,:|.<>=!";
 static immutable intChars = "0123456789";
 
-static immutable codeBlockBegin = "(#";
-static immutable codeBlockEnd = "#)";
-static immutable codeListBegin = "{#";
-static immutable codeListEnd = "#}";
-static immutable mixedBlockBegin = "{*" ;
-static immutable mixedBlockEnd = "*}";
-static immutable commentBlockBegin = "/*";
-static immutable commentBlockEnd = "*/";
-static immutable rawDataBlockBegin = "{$$";
-static immutable rawDataBlockEnd = "$$}";
 static immutable exprBlockBegin = "{{";
 static immutable exprBlockEnd = "}}";
+
+static immutable codeBlockBegin = "(%";
+//static immutable rawCodeBlockBegin = "{{=";
+static immutable codeBlockEnd = "%)";
+
+static immutable codeListBegin = "{%";
+//static immutable rawCodeListBegin = "{%=";
+static immutable codeListEnd = "%}";
+
+static immutable mixedBlockBegin = "{*";
+//static immutable rawMixedBlockBegin = "{*=";
+static immutable mixedBlockEnd = "*}";
+
+static immutable commentBlockBegin = "{#";
+static immutable commentBlockEnd = "#}";
+
+static immutable dataBlockBegin = `{"`;
+static immutable dataBlockEnd = `"}`;
+
 
 enum LexemeType {
 	Unknown = 0,
 	Add,
-	Assign,
 	Colon,
 	Comma,
 	Div,
@@ -68,16 +76,20 @@ enum LexemeType {
 	String,
 	Name,
 	ExprBlockBegin,
+	//RawExprBlockBegin,
 	ExprBlockEnd,
 	CodeBlockBegin,
+	//RawCodeBlockBegin,
 	CodeBlockEnd,
 	CodeListBegin,
+	//RawCodeListBegin,
 	CodeListEnd,
 	MixedBlockBegin,
+	//RawMixedBlockBegin,
 	MixedBlockEnd,
 	Comment,
 	Data,
-	RawDataBlock,
+	DataBlock,
 	Invalid,
 	EndOfFile,
 	
@@ -482,29 +494,42 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 	
 	__gshared LexRule[] mixedContextRules = [
+		//staticRule( rawCodeBlockBegin, LexemeType.RawCodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
+
+		//staticRule( rawCodeListBegin, LexemeType.RawCodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
 		staticRule( codeListBegin, LexemeType.CodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
+
+		//staticRule( rawMixedBlockBegin, LexemeType.RawMixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
+		
+		//staticRule( rawExprBlockBegin, LexemeType.RawExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
 		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
 		dynamicRule( &parseData, LexemeType.Data, LexemeFlag.Literal )
 	];
 	
 	__gshared LexRule[] codeContextRules = [
-		dynamicRule( &parseRawData, LexemeType.RawDataBlock, LexemeFlag.Literal ),
+		dynamicRule( &parseDataBlock, LexemeType.DataBlock, LexemeFlag.Literal ),
 	
+		//staticRule( rawCodeBlockBegin, LexemeType.RawCodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
 		staticRule( codeBlockEnd, LexemeType.CodeBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.CodeBlockBegin ),
+		
+		//staticRule( rawCodeListBegin, LexemeType.RawCodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
 		staticRule( codeListBegin, LexemeType.CodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
 		staticRule( codeListEnd, LexemeType.CodeListEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.CodeListBegin ),
+
+		//staticRule( rawMixedBlockBegin, LexemeType.RawMixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
+
+		//staticRule( rawExprBlockBegin, LexemeType.RawExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
 		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
 		staticRule( exprBlockEnd, LexemeType.ExprBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.ExprBlockBegin ),
 		
 		staticRule( "+", LexemeType.Add, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "==", LexemeType.Equal, LexemeFlag.Operator, LexemeFlag.Compare ),
-		staticRule( "=", LexemeType.Assign, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( ":", LexemeType.Colon, LexemeFlag.Operator ),
 		staticRule( ",", LexemeType.Comma, LexemeFlag.Operator ),
 		staticRule( "/", LexemeType.Div, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
@@ -526,7 +551,6 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		staticRule( ";", LexemeType.Semicolon, LexemeFlag.Separator),
 		staticRule( "-", LexemeType.Sub, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "~", LexemeType.Tilde, LexemeFlag.Operator ),
-		//staticRule( "}", LexemeType.CodeBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.CodeBlockBegin ), // Also using } instead of #} for closing code block
 
 		dynamicRule( &parseFloat, LexemeType.Float, LexemeFlag.Literal ),
 		dynamicRule( &parseInteger, LexemeType.Integer, LexemeFlag.Literal ),
@@ -969,8 +993,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		codeBlockBegin,
 		codeListBegin,
 		mixedBlockBegin,
-		mixedBlockEnd,
-		exprBlockBegin
+		mixedBlockEnd
+		//,exprBlockBegin
 	];
 
 	static bool parseData(ref SourceRange source, ref const(LexRule) rule)
@@ -992,17 +1016,17 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		return true;
 	}
 	
-	static bool parseRawData(ref SourceRange source, ref const(LexRule) rule)
+	static bool parseDataBlock(ref SourceRange source, ref const(LexRule) rule)
 	{
 		if( source.empty )
 			return false;
 		
-		if( !source.match(rawDataBlockBegin) )
+		if( !source.match(dataBlockBegin) )
 			return false;
 		
 		while( !source.empty )
 		{
-			if( source.match(rawDataBlockEnd) )
+			if( source.match(dataBlockEnd) )
 				return true;
 				
 			source.popFront();

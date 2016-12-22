@@ -247,7 +247,7 @@ public:
 				result = parseMixedBlock();
 				break;
 			}
-			case RawDataBlock:
+			case DataBlock:
 			{
 				error( "Parsing raw data block is unimplemented for now!");
 				break;
@@ -310,7 +310,7 @@ public:
 			error( "Expected " ~ endLexemeType.to!string );
 		lexer.popFront(); //Skip CodeBlockEnd
 
-		statement = new CodeBlockStatement!(config)(blockLocation, statements, endLexemeType == LexemeType.CodeListBegin );
+		statement = new CodeBlockStatement!(config)(blockLocation, statements, endLexemeType == LexemeType.CodeListEnd );
 		
 		return statement;
 	}
