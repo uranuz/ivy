@@ -571,7 +571,7 @@ void writeDataNodeLines(TDataNode, OutRange)(
 			outRange.put( "null" );
 			break;
 		case Boolean:
-			outRange.put( node.boolean ? "true" : "false"  );
+			outRange.put( node.boolean ? "true" : "false" );
 			break;
 		case Integer:
 			outRange.put( node.integer.to!string );

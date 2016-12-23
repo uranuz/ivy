@@ -98,12 +98,14 @@ class CompilerModuleRepository
 
 private:
 	string _rootPath;
+	string _fileExtension;
 	IvyNode[string] _moduleTrees;
 
 public:
-	this( string rootPath = "."  )
+	this( string rootPath = ".", string fileExtension = ".ivy" )
 	{
 		_rootPath = rootPath;
+		_fileExtension = fileExtension;
 	}
 
 	void loadModuleFromFile(string moduleName)
@@ -115,7 +117,8 @@ public:
 		import std.file: read;
 
 		// The module name is given. Try to build path to it
-		string fileName = buildNormalizedPath( only(_rootPath).chain( moduleName.splitter('.') ).array ) ~ ".html";
+		string fileName = buildNormalizedPath( only(_rootPath).chain( moduleName.splitter('.') ).array ) ~ _fileExtension;
+		debug writeln( "loadModuleFromFile fileName: ", fileName, ", rootPath: ", buildNormalizedPath(_rootPath) );
 
 		// Check if file name is not empty and located in root path
 		if( fileName.empty || !fileName.startsWith( buildNormalizedPath(_rootPath) ) )
@@ -611,7 +614,6 @@ public:
 			}
 
 		}
-
 	}
 
 	AttributeDeclaration analyzeValueAttr(IAttributeRange attrRange)
@@ -685,6 +687,13 @@ public:
 	CompilerModuleRepository getModuleRepository() @property
 	{
 		return _moduleRepo;
+	}
+
+	void run()
+	{
+		import std.range: back;
+		IvyNode ast = _moduleRepo.getModuleTree( _moduleStack.back );
+		ast.accept(this);
 	}
 }
 
@@ -1296,8 +1305,6 @@ private:
 
 	string _mainModuleName;
 
-
-
 public:
 	this( CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName )
 	{
@@ -1319,7 +1326,7 @@ public:
 
 	void enterModuleScope( string moduleName )
 	{
-		writeln( `_modulesSymbolTables: `, _modulesSymbolTables );
+		debug writeln( `_modulesSymbolTables: `, _modulesSymbolTables );
 		if( auto table = moduleName in _modulesSymbolTables )
 		{
 			assert( *table, `Cannot enter module sybol table frame, because it is null` );
@@ -1492,39 +1499,6 @@ public:
 		}
 
 		return _moduleObjects[moduleName];
-	}
-
-	void compileModuleInit(string moduleName)
-	{
-		ModuleObject modObject = getOrCompileModule(moduleName);
-		CodeObject modCodeObject = modObject.mainCodeObject;
-
-		size_t modCodeObjectConstIndex = addConst( TDataNode(modCodeObject) );
-		addInstr( OpCode.LoadConst, modCodeObjectConstIndex );
-
-		size_t modNameConstIndex = addConst( TDataNode(moduleName) );
-		addInstr( OpCode.LoadConst, modNameConstIndex );
-
-		addInstr( OpCode.LoadDirective );
-
-		addInstr( OpCode.LoadName, modNameConstIndex ); // Load directive object from context
-
-		addInstr( OpCode.CallDirective, 1 ); // We have 1 argument in the stack (directive object itself)
-		addInstr( OpCode.PopTop ); // We need to drop result from the stack, because we don't care about it
-	}
-
-	void compileModulesInit()
-	{
-		foreach( moduleName; _modulesSymbolTables.keys )
-		{
-			if( moduleName == _mainModuleName )
-				continue; // For now just load main module at the end
-
-			compileModuleInit(moduleName);
-		}
-
-		compileModuleInit(_mainModuleName);
-
 	}
 
 	override {
@@ -1932,10 +1906,11 @@ public:
 		return _moduleObjects;
 	}
 
-	// Assembles constants and code chunks into complete module bytecode
-	void assemble()
+	// Runs main compiler phase starting from main module
+	void run()
 	{
-		// TODO: Do it please!
+		IvyNode mainModuleAST = _moduleRepo.getModuleTree(_mainModuleName);
+		mainModuleAST.accept(this);
 	}
 
 	string toPrettyStr()
@@ -1983,3 +1958,56 @@ public:
 
 }
 
+// Representation of programme ready for execution
+class ExecutableProgramme
+{
+private:
+	ModuleObject[string] _moduleObjects;
+	string _mainModuleName;
+
+public:
+	this( ModuleObject[string] moduleObjects, string mainModuleName )
+	{
+		_moduleObjects = moduleObjects;
+		_mainModuleName = mainModuleName;
+	}
+
+	/// Run programme main module with arguments passed as mainModuleScope parameter
+	TDataNode run( TDataNode mainModuleScope = TDataNode() )
+	{
+		import std.range: back;
+
+		import ivy.interpreter: Interpreter;
+		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope );
+		interp.execLoop();
+
+		return interp._stack.back;
+	}
+}
+
+/// Simple method that can be used to compile source file and get executable
+ExecutableProgramme compileFile(string sourceFileName, string rootPath)
+{
+	import std.path: extension, stripExtension, relativePath, dirSeparator, dirName;
+	import std.array: split, join, empty;
+
+	if( rootPath.empty )
+		rootPath = sourceFileName.dirName();
+
+	// Calculating main module name
+	string mainModuleName = sourceFileName.relativePath(rootPath).stripExtension().split(dirSeparator).join('.');
+
+	// Creating object that manages reading source files, parse and store them as AST
+	auto compilerModuleRepo = new CompilerModuleRepository( rootPath, extension(sourceFileName) );
+
+	// Preliminary compiler phase that analyse imported modules and stores neccessary info about directives
+	auto symbCollector = new CompilerSymbolsCollector(compilerModuleRepo, mainModuleName);
+	symbCollector.run(); // Run analyse
+
+	// Main compiler phase that generates bytecode for modules
+	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbCollector.getModuleSymbols(), mainModuleName );
+	compiler.run(); // Run compilation itself
+
+	// Creating additional object that stores all neccessary info for user
+	return new ExecutableProgramme(compiler.moduleObjects, mainModuleName);
+}

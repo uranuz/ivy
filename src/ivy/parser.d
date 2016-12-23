@@ -80,7 +80,7 @@ public:
 				import std.conv: to;
 	
 				string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
-				writeln( shortFuncName, "[", line, "]: ", data, ", frontValue is: ", parser.lexer.frontValue.array.to!string );
+				debug writeln( shortFuncName, "[", line, "]: ", data, ", frontValue is: ", parser.lexer.frontValue.array.to!string );
 			}
 		}
 	}

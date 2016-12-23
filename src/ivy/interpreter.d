@@ -100,7 +100,7 @@ public:
 	// Basic method used to search symbols in context
 	TDataNode* findValue( string varName )
 	{
-		writeln( `Searching in _dataDict: `, _dataDict );
+		debug writeln( `Searching in _dataDict: `, _dataDict );
 
 		import std.range: empty, take, front, popFront, drop;
 		import std.array: array, split, join;
@@ -121,17 +121,17 @@ public:
 			nodePtr = null;
 
 			TDataNode* modNodePtr = sectionName in _dataDict.assocArray;
-			writeln( ` Searching module frame: `, sectionName );
+			debug writeln( ` Searching module frame: `, sectionName );
 
 			if( modNodePtr is null )
 			{
-				writeln( ` Searching module frame: `, sectionName, `, is null` );
+				debug writeln( ` Searching module frame: `, sectionName, `, is null` );
 				continue;
 			}
 
 			if( modNodePtr.type != DataNodeType.ExecutionFrame )
 			{
-				writeln( ` Searching module frame: `, sectionName, `, is not module` );
+				debug writeln( ` Searching module frame: `, sectionName, `, is not module` );
 				continue; // Go try to find module with shorter name
 			}
 
@@ -141,7 +141,7 @@ public:
 			// We do not look in imported module from another module
 			nodePtr = findValueInDict( &modExecFrame._dataDict, attrName );
 
-			writeln( ` Searching value in module frame: `, sectionName, `, value is: `, nodePtr.toString() );
+			debug writeln( ` Searching value in module frame: `, sectionName, `, value is: `, nodePtr.toString() );
 
 			if( nodePtr )
 				return nodePtr;
@@ -259,7 +259,7 @@ public:
 	ExecutionFrame[string] _moduleFrames;
 	ModuleObject[string] _moduleObjects;
 
-	this(ModuleObject[string] moduleObjects, string mainModuleName)
+	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict)
 	{
 		_moduleObjects = moduleObjects;
 		assert( mainModuleName in _moduleObjects, `Cannot get main module from module objects!` );
@@ -275,7 +275,7 @@ public:
 		renderDirInterp._dirInterp = new RenderDirInterpreter();
 		_globalFrame.setValue( "__render__", TDataNode(renderDirInterp) );
 
-		newFrame(rootDirObj, null); // Create entry point module frame
+		newFrame(rootDirObj, null, dataDict); // Create entry point module frame
 	}
 
 	void newFrame(DirectiveObject dirObj, ExecutionFrame modFrame)
@@ -640,7 +640,7 @@ public:
 
 				case OpCode.Append:
 				{
-					writeln( "OpCode.Append _stack: ", _stack );
+					debug writeln( "OpCode.Append _stack: ", _stack );
 					import std.conv: to;
 					assert( !_stack.empty, "Cannot execute Append instruction. Expected right operand, but exec stack is empty!" );
 					TDataNode rightVal = _stack.back;
@@ -705,7 +705,7 @@ public:
 				// Stores data from stack into context variable
 				case OpCode.StoreName:
 				{
-					writeln( "StoreName _stack: ", _stack );
+					debug writeln( "StoreName _stack: ", _stack );
 					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var value operand, but exec stack is empty!" );
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
@@ -721,7 +721,7 @@ public:
 				// Stores data from stack into local context frame variable
 				case OpCode.StoreLocalName:
 				{
-					writeln( "StoreLocalName _stack: ", _stack );
+					debug writeln( "StoreLocalName _stack: ", _stack );
 					assert( !_stack.empty, "Cannot execute StoreLocalName instruction. Expected var value operand, but exec stack is empty!" );
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
@@ -751,7 +751,7 @@ public:
 					string moduleName = _stack.back.str;
 					_stack.popBack();
 
-					writeln( `ImportModule _moduleObjects: `, _moduleObjects );
+					debug writeln( `ImportModule _moduleObjects: `, _moduleObjects );
 					assert( moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: " ~ moduleName );
 
 					ExecutionFrame callerFrame = _frameStack.back;
@@ -799,7 +799,7 @@ public:
 				{
 					import std.range: empty, back, popBack;
 					assert( !_stack.empty, `Expected aggregate type for loop, but empty execution stack found` );
-					writeln( `GetDataRange begin _stack: `, _stack );
+					debug writeln( `GetDataRange begin _stack: `, _stack );
 					assert( _stack.back.type == DataNodeType.Array || _stack.back.type == DataNodeType.AssocArray,
 						`Expected array or assoc array as loop aggregate` );
 
@@ -827,14 +827,14 @@ public:
 
 				case OpCode.RunLoop:
 				{
-					writeln( "RunLoop beginning _stack: ", _stack );
+					debug writeln( "RunLoop beginning _stack: ", _stack );
 					assert( !_stack.empty, `Expected data range, but empty execution stack found` );
 					assert( _stack.back.type == DataNodeType.DataNodeRange, `Expected DataNodeRange` );
 					auto dataRange = _stack.back.dataRange;
-					writeln( "RunLoop dataRange.empty: ", dataRange.empty );
+					debug writeln( "RunLoop dataRange.empty: ", dataRange.empty );
 					if( dataRange.empty )
 					{
-						writeln( "RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack );
+						debug writeln( "RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack );
 						assert( instr.arg < codeRange.length, `Cannot jump after the end of code object` );
 						pk = instr.arg;
 						_stack.popBack(); // Drop data range from stack as we no longer need it
@@ -866,7 +866,7 @@ public:
 					// Maybe should fix it and make it move after loop block finish
 					dataRange.popFront();
 
-					writeln( "RunLoop. Iteration init finished. _stack is: ", _stack );
+					debug writeln( "RunLoop. Iteration init finished. _stack is: ", _stack );
 
 					break;
 				}
@@ -919,7 +919,7 @@ public:
 
 				case OpCode.LoadDirective:
 				{
-					writeln( `LoadDirective _stack: `, _stack );
+					debug writeln( `LoadDirective _stack: `, _stack );
 
 					assert( _stack.back.type == DataNodeType.String,
 						`Name operand for directive loading instruction should have string type` );
@@ -949,13 +949,13 @@ public:
 				{
 					import std.range: empty, popBack, back;
 
-					writeln( "CallDirective stack on init: : ", _stack );
+					debug writeln( "CallDirective stack on init: : ", _stack );
 
 					size_t stackArgCount = instr.arg;
 					assert( stackArgCount > 0, "Directive call must at least have 1 arguments in stack!" );
-					writeln( "CallDirective stackArgCount: ", stackArgCount );
+					debug writeln( "CallDirective stackArgCount: ", stackArgCount );
 					assert( stackArgCount <= _stack.length, "Not enough arguments in execution stack" );
-					writeln( "CallDirective _stack: ", _stack );
+					debug writeln( "CallDirective _stack: ", _stack );
 					assert( _stack[ _stack.length - stackArgCount ].type == DataNodeType.Directive, `Expected directive object operand in directive call operation` );
 
 					DirectiveObject dirObj = _stack[ _stack.length - stackArgCount ].directive;
@@ -997,10 +997,10 @@ public:
 							assert( !_stack.empty, `Expected integer as arguments block header, but got empty exec stack!` );
 							assert( _stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!` );
 							size_t blockArgCount = _stack.back.integer >> 3;
-							writeln( "blockArgCount: ", blockArgCount );
+							debug writeln( "blockArgCount: ", blockArgCount );
 							int blockType = _stack.back.integer & 7;
 							assert( (_stack.back.integer & 4 ) == 0, `Seeems that stack is corrupted` );
-							writeln( "blockType: ", blockType );
+							debug writeln( "blockType: ", blockType );
 
 							_stack.popBack();
 							++i; // Block header was eaten, so increase counter
@@ -1015,7 +1015,7 @@ public:
 									_stack.popBack(); ++j; // Parallel bookkeeping ;)
 
 									assert( !_stack.empty, "Execution stack is empty!" );
-									writeln( `CallDirective debug, _stack is: `, _stack );
+									debug writeln( `CallDirective debug, _stack is: `, _stack );
 									assert( _stack.back.type == DataNodeType.String, "Named attribute name must be string!" );
 									string attrName = _stack.back.str;
 									_stack.popBack(); ++j;
@@ -1023,7 +1023,7 @@ public:
 									setLocalValue( attrName, attrValue );
 								}
 								i += j; // Increase overall processed stack arguments count (2 items per iteration)
-								writeln( "_stack after parsing named arguments: ", _stack );
+								debug writeln( "_stack after parsing named arguments: ", _stack );
 							}
 							else if( blockType == 2 )
 							{
@@ -1036,7 +1036,7 @@ public:
 
 						}
 					}
-					writeln( "_stack after parsing all arguments: ", _stack );
+					debug writeln( "_stack after parsing all arguments: ", _stack );
 
 					assert( !_stack.empty, "Expected directive object to call, but found end of execution stack!" );
 					assert( _stack.back.type == DataNodeType.Directive, `Expected directive object operand in directive call operation` );
@@ -1068,8 +1068,8 @@ public:
 					size_t arrayLen = instr.arg;
 					TDataNode[] newArray;
 					newArray.length = arrayLen; // Preallocating is good ;)
-					writeln("MakeArray _stack: ", _stack );
-					writeln("MakeArray arrayLen: ", arrayLen);
+					debug writeln("MakeArray _stack: ", _stack );
+					debug writeln("MakeArray arrayLen: ", arrayLen);
 					for( size_t i = arrayLen; i > 0; --i )
 					{
 						assert( !_stack.empty, `Expected new array element, but got empty stack` );
@@ -1092,8 +1092,8 @@ public:
 
 			if( pk == codeRange.length ) // Ended with this code object
 			{
-				writeln( "_stack on code object end: ", _stack );
-				writeln( "_frameStack on code object end: ", _frameStack );
+				debug writeln( "_stack on code object end: ", _stack );
+				debug writeln( "_frameStack on code object end: ", _frameStack );
 				assert( !_frameStack.empty, "Frame stack shouldn't be empty yet'" );
 				// TODO: Consider case with noscope directive
 				_frameStack.popBack(); // Exit out of this frame
