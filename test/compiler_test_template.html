@@ -12,12 +12,18 @@ expr {%
 	test_def aa: 5 bb: 6 cc: 10;
 
 	repeat item in ["Vasya", "Petya", "Vova"] {%
-		expr "<span>Good bye, " ~ item ~ "!</span>";
+		expr "<span>Congratulations, " ~ item ~ "!</span>";
 	%};
 
-	if true {*
+	var isHello: false;
+	if isHello {*
 		<div>Hello!</div>
 		{% expr 123 %}
 		{% expr "Vasya" %}
+	*} else {*
+		<div>Good bye!</div>
 	*};
+
+	import test.dependency;
+	test.dependency.test000;
 %};

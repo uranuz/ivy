@@ -1541,8 +1541,24 @@ public:
 					addInstr( OpCode.MakeArray, arrayLen );
 					return; // Return in order to not add extra instr
 				case LiteralType.AssocArray:
-					assert( false, "Assoc array literal code generation is not implemented yet!" );
-					break;
+					uint aaLen = 0;
+					foreach( IvyNode elem; node.children )
+					{
+						IAssocArrayPair aaPair = cast(IAssocArrayPair) elem;
+						if( !aaPair )
+							compilerError( "Expected assoc array pair!" );
+
+						size_t aaKeyConstIndex = addConst( TDataNode(aaPair.key) );
+						addInstr( OpCode.LoadConst, aaKeyConstIndex );
+
+						if( !aaPair.value )
+							compilerError( "Expected assoc array value!" );
+						aaPair.value.accept(this);
+
+						++aaLen;
+					}
+					addInstr( OpCode.MakeAssocArray, aaLen );
+					return;
 				default:
 					assert( false, "Expected literal expression node!" );
 					break;
@@ -1838,7 +1854,7 @@ public:
 				}
 
 				// After all preparations add instruction to call directive
-				addInstr( OpCode.CallDirective, stackItemsCount );
+				addInstr( OpCode.RunCallable, stackItemsCount );
 			}
 		}
 
@@ -1886,8 +1902,8 @@ public:
 				// TOP: argument block header
 				// TOP - 1: Current result argument
 				// TOP - 2: Current result var name argument
-				// TOP - 3: Directive object for __render__
-				addInstr( OpCode.CallDirective, 4 );
+				// TOP - 3: Callable object for __render__
+				addInstr( OpCode.RunCallable, 4 );
 				
 				if( node.isList )
 				{
@@ -1909,8 +1925,33 @@ public:
 	// Runs main compiler phase starting from main module
 	void run()
 	{
+		// We create __render__ invocation on the result of module execution !!!
+		
 		IvyNode mainModuleAST = _moduleRepo.getModuleTree(_mainModuleName);
+		
+		size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
+		size_t resultNameConstIndex = addConst( TDataNode("__result__") );
+
+		// In order to make call to __render__ creating block header for one positional argument
+		// witch is currently at the TOP of the execution stack
+		size_t blockHeader = ( 1 << 3 ) + 1; //TODO: Change block type magic constant to enum!
+		size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
+
+		addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
+				
+		// Add name for key-value argument
+		addInstr( OpCode.LoadConst, resultNameConstIndex );
+		
 		mainModuleAST.accept(this);
+
+		addInstr( OpCode.LoadConst, blockHeaderConstIndex ); // Add argument block header
+
+		// Stack layout is:
+		// TOP: argument block header
+		// TOP - 1: Current result argument
+		// TOP - 2: Current result var name argument
+		// TOP - 3: Callable object for __render__
+		addInstr( OpCode.RunCallable, 4 );
 	}
 
 	string toPrettyStr()

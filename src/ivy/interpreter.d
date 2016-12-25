@@ -26,8 +26,8 @@ void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
 
 class ExecutionFrame
 {
-private:
-	DirectiveObject _dirObj;
+//private:
+	CallableObject _callableObj;
 
 	/*
 		Type of _dataDict should be Undef or Null if directive call or something that represented
@@ -39,18 +39,18 @@ private:
 	ExecutionFrame _moduleFrame;
 	
 public:
-	this(DirectiveObject dirObj, ExecutionFrame modFrame)
+	this(CallableObject callableObj, ExecutionFrame modFrame)
 	{
-		_dirObj = dirObj;
+		_callableObj = callableObj;
 		_moduleFrame = modFrame;
 
 		TDataNode[string] emptyDict;
 		_dataDict = emptyDict;
 	}
 
-	this(DirectiveObject dirObj, ExecutionFrame modFrame, TDataNode dataDict)
+	this(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
 	{
-		_dirObj = dirObj;
+		_callableObj = callableObj;
 		_moduleFrame = modFrame;
 		_dataDict = dataDict;
 	}
@@ -76,81 +76,75 @@ public:
 		return varValuePtr.type;
 	}
 
-	static TDataNode* findValueInDict( TDataNode* nodePtr, string varName )
+	// Basic method used to search symbols in context
+	TDataNode* findLocalValue( string varName, bool addParentDicts )
 	{
-		import std.range: empty, take, front, popFront;
-		import std.array: array, split;
+		debug writeln("Start findLocalValue for varName: ", varName);
+		import std.range: empty, front, popFront;
+		import std.array: split;
 		if( varName.empty )
 			interpretError( "VariableTable: Variable name cannot be empty" );
-		string[] nameSplitted = varName.split('.');
 
+		TDataNode *nodePtr;
+		if( _dataDict.type == DataNodeType.AssocArray )
+			nodePtr = &_dataDict;
+		else
+			interpretError( "VariableTable: cannot find variable in execution frame, because callable doesn't have it's on scope!" );
+
+		string[] nameSplitted = varName.split('.');
 		while( !nameSplitted.empty )
 		{
-			if( nodePtr.type != DataNodeType.AssocArray )
-				return null;
+			if( nodePtr.type == DataNodeType.AssocArray )
+			{
+				TDataNode* tmpNodePtr = nameSplitted.front in nodePtr.assocArray;
+				
+				// Special hack to add parent dicts when importing some modules from nested folder,
+				// but we don't add extra parent dicts into foreign module frames
+				if( !tmpNodePtr && addParentDicts )
+				{
+					nodePtr.assocArray[nameSplitted.front] = (TDataNode[string]).init;
+					nodePtr = &nodePtr.assocArray[nameSplitted.front];
+				}
+				else
+				{
+					nodePtr = tmpNodePtr;
+				}
+			}
+			else if( nodePtr.type == DataNodeType.ExecutionFrame )
+			{
+				if( !nodePtr.execFrame )
+					interpretError( `Cannot find value, because execution frame is null!!!` );
 
-			nodePtr = nameSplitted.front in nodePtr.assocArray;
+				if( nodePtr.execFrame._dataDict.type != DataNodeType.AssocArray )
+					interpretError( `Cannot find value, because execution frame data dict is not of assoc array type!!!` );
+				nodePtr = nameSplitted.front in nodePtr.execFrame._dataDict.assocArray;
+			}
+			else
+			{
+				return null;
+			}
+			
 			nameSplitted.popFront();
 			if( nodePtr is null )
 				return null;
 		}
+
 		return nodePtr;
 	}
 
-	// Basic method used to search symbols in context
-	TDataNode* findValue( string varName )
+	TDataNode* findValue(string varName, bool addParentDicts = false)
 	{
-		debug writeln( `Searching in _dataDict: `, _dataDict );
-
-		import std.range: empty, take, front, popFront, drop;
-		import std.array: array, split, join;
-		if( varName.empty )
-			interpretError( "VariableTable: Variable name cannot be empty" );
-
-		TDataNode* nodePtr = findValueInDict( &_dataDict, varName );
+		TDataNode* nodePtr = findLocalValue(varName, addParentDicts);
 		if( nodePtr )
 			return nodePtr;
-
-		// Reset and try to find in modules
-		string[] nameSplitted = varName.split('.');
-
-		for( size_t i = nameSplitted.length; i > 0; --i )
-		{
-			string sectionName = nameSplitted[].take(i).join(".");
-			string attrName = nameSplitted[].drop(i).join(".");
-			nodePtr = null;
-
-			TDataNode* modNodePtr = sectionName in _dataDict.assocArray;
-			debug writeln( ` Searching module frame: `, sectionName );
-
-			if( modNodePtr is null )
-			{
-				debug writeln( ` Searching module frame: `, sectionName, `, is null` );
-				continue;
-			}
-
-			if( modNodePtr.type != DataNodeType.ExecutionFrame )
-			{
-				debug writeln( ` Searching module frame: `, sectionName, `, is not module` );
-				continue; // Go try to find module with shorter name
-			}
-
-			ExecutionFrame modExecFrame = modNodePtr.execFrame;
-			assert( modExecFrame, `Module execution frame is null` );
-
-			// We do not look in imported module from another module
-			nodePtr = findValueInDict( &modExecFrame._dataDict, attrName );
-
-			debug writeln( ` Searching value in module frame: `, sectionName, `, value is: `, nodePtr.toString() );
-
-			if( nodePtr )
-				return nodePtr;
-		}
-
+		
+		if( _moduleFrame )
+			return _moduleFrame.findLocalValue(varName, addParentDicts);
+		
 		return null;
 	}
 
-	void setValue( string varName, TDataNode value )
+	void setValue( string varName, TDataNode value, bool addParentDicts = false )
 	{
 		import std.range: empty;
 		import std.algorithm: splitter;
@@ -158,7 +152,7 @@ public:
 		if( varName.empty )
 			interpretError("Variable name cannot be empty!");
 
-		TDataNode* valuePtr = findValue(varName);
+		TDataNode* valuePtr = findValue(varName, addParentDicts);
 		if( valuePtr )
 		{
 			*valuePtr = value;
@@ -176,7 +170,7 @@ public:
 			else
 			{
 				// Try to find parent
-				TDataNode* parentPtr = findValue(splName.join('.'));
+				TDataNode* parentPtr = findValue(splName.join('.'), addParentDicts);
 				if( parentPtr is null )
 					interpretError( `Cannot create new variable "` ~ varName ~ `", because parent not exists!` );
 
@@ -224,10 +218,15 @@ public:
 	{
 		return _dataDict.type == DataNodeType.AssocArray;
 	}
+	
+	CallableKind callableKind() @property
+	{
+		return _callableObj._kind;
+	}
 
 	override string toString()
 	{
-		return `<Exec frame for dir object "` ~ _dirObj._name ~ `">`;
+		return `<Exec frame for dir object "` ~ _callableObj._name ~ `">`;
 	}
 
 }
@@ -264,28 +263,30 @@ public:
 		_moduleObjects = moduleObjects;
 		assert( mainModuleName in _moduleObjects, `Cannot get main module from module objects!` );
 
-		DirectiveObject rootDirObj = new DirectiveObject;
-		rootDirObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
+		CallableObject rootCallableObj = new CallableObject;
+		rootCallableObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
+		rootCallableObj._kind = CallableKind.Module;
+		rootCallableObj._name = "__main__";
 
 		_globalFrame = new ExecutionFrame(null, null);
 
 		// Add native directive interpreter __render__ to global scope
-		DirectiveObject renderDirInterp = new DirectiveObject();
+		CallableObject renderDirInterp = new CallableObject();
 		renderDirInterp._name = "__render__";
 		renderDirInterp._dirInterp = new RenderDirInterpreter();
 		_globalFrame.setValue( "__render__", TDataNode(renderDirInterp) );
 
-		newFrame(rootDirObj, null, dataDict); // Create entry point module frame
+		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
 	}
 
-	void newFrame(DirectiveObject dirObj, ExecutionFrame modFrame)
+	void newFrame(CallableObject callableObj, ExecutionFrame modFrame)
 	{
-		_frameStack ~= new ExecutionFrame(dirObj, modFrame);
+		_frameStack ~= new ExecutionFrame(callableObj, modFrame);
 	}
 
-	void newFrame(DirectiveObject dirObj, ExecutionFrame modFrame, TDataNode dataDict)
+	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
 	{
-		_frameStack ~= new ExecutionFrame(dirObj, modFrame, dataDict);
+		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict);
 	}
 
 	void removeFrame()
@@ -345,13 +346,6 @@ public:
 				if( TDataNode* valuePtr = frameStackSlice.back.findValue(varName) )
 					return valuePtr;
 			}
-
-			// We always search in module's frame, where directive was defined
-			if( _frameStack.back._moduleFrame )
-			{
-				if( TDataNode* valuePtr = _frameStack.back._moduleFrame.findValue(varName) )
-					return valuePtr;
-			}
 		}
 
 		assert( _globalFrame, `Couldn't find variable value in global frame, because it is null!` );
@@ -366,7 +360,16 @@ public:
 		TDataNode* valuePtr = findValue(varName);
 
 		if( valuePtr is null )
+		{
+			debug {
+				foreach( i, frame; _frameStack[] )
+				{
+					writeln( `Scope frame lvl `, i, `, _dataDict: `, frame._dataDict );
+				}
+			}
+
 			interpretError( "Undefined variable with name '" ~ varName ~ "'" );
+		}
 
 		return *valuePtr;
 	}
@@ -418,11 +421,11 @@ public:
 		import std.conv: text;
 		assert( !_frameStack.empty, `_frameStack is empty` );
 		assert( _frameStack.back, `_frameStack.back is null` );
-		assert( _frameStack.back._dirObj, `_frameStack.back._dirObj is null` );
-		assert( _frameStack.back._dirObj._codeObj, `_frameStack.back._dirObj._codeObj is null` );
-		assert( _frameStack.back._dirObj._codeObj._moduleObj, `_frameStack.back._dirObj._codeObj._moduleObj is null` );
+		assert( _frameStack.back._callableObj, `_frameStack.back._callableObj is null` );
+		assert( _frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null` );
+		assert( _frameStack.back._callableObj._codeObj._moduleObj, `_frameStack.back._callableObj._codeObj._moduleObj is null` );
 
-		return _frameStack.back._dirObj._codeObj._moduleObj.getConst(index);
+		return _frameStack.back._callableObj._codeObj._moduleObj.getConst(index);
 	}
 
 	void execLoop()
@@ -434,10 +437,10 @@ public:
 
 		assert( !_frameStack.empty, `_frameStack is empty` );
 		assert( _frameStack.back, `_frameStack.back is null` );
-		assert( _frameStack.back._dirObj, `_frameStack.back._dirObj is null` );
-		assert( _frameStack.back._dirObj._codeObj, `_frameStack.back._dirObj._codeObj is null` );
+		assert( _frameStack.back._callableObj, `_frameStack.back._callableObj is null` );
+		assert( _frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null` );
 
-		auto codeRange = _frameStack.back._dirObj._codeObj._instrs[];
+		auto codeRange = _frameStack.back._callableObj._codeObj._instrs[];
 		size_t pk = 0;
 
 		execution_loop:
@@ -764,14 +767,15 @@ public:
 						CodeObject codeObject = modObject.mainCodeObject;
 						assert( codeObject, `Cannot execute ImportModule instruction, because main code object for module "` ~ moduleName ~ `" is null!` );
 
-						DirectiveObject dirObj = new DirectiveObject;
-						dirObj._name = `<` ~ moduleName ~ `>`;
-						dirObj._codeObj = codeObject;
+						CallableObject callableObj = new CallableObject;
+						callableObj._name = moduleName;
+						callableObj._kind = CallableKind.Module;
+						callableObj._codeObj = codeObject;
 
-						newFrame(dirObj, null); // Create entry point module frame
+						newFrame(callableObj, null); // Create entry point module frame
 
 						// Put module frame in frame of the caller
-						callerFrame.setValue( moduleName, TDataNode(_frameStack.back) );
+						callerFrame.setValue( moduleName, TDataNode(_frameStack.back), true );
 
 						_stack ~= TDataNode(pk+1);
 						codeRange = codeObject._instrs[];
@@ -783,7 +787,7 @@ public:
 					else
 					{
 						// If module is already imported then just put reference to it into caller's frame
-						callerFrame.setValue( moduleName, TDataNode(_moduleFrames[moduleName]) );
+						callerFrame.setValue( moduleName, TDataNode(_moduleFrames[moduleName]), true );
 					}
 
 					break;
@@ -935,7 +939,7 @@ public:
 					_stack.popBack(); // Remove code object from stack
 
 					assert( codeObj, `Code object operand for directive loading instruction is null` );
-					DirectiveObject dirObj = new DirectiveObject;
+					CallableObject dirObj = new CallableObject;
 					dirObj._name = varName;
 					dirObj._codeObj = codeObj;
 
@@ -945,21 +949,21 @@ public:
 					break;
 				}
 
-				case OpCode.CallDirective:
+				case OpCode.RunCallable:
 				{
 					import std.range: empty, popBack, back;
 
-					debug writeln( "CallDirective stack on init: : ", _stack );
+					debug writeln( "RunCallable stack on init: : ", _stack );
 
 					size_t stackArgCount = instr.arg;
-					assert( stackArgCount > 0, "Directive call must at least have 1 arguments in stack!" );
-					debug writeln( "CallDirective stackArgCount: ", stackArgCount );
+					assert( stackArgCount > 0, "Call must at least have 1 arguments in stack!" );
+					debug writeln( "RunCallable stackArgCount: ", stackArgCount );
 					assert( stackArgCount <= _stack.length, "Not enough arguments in execution stack" );
-					debug writeln( "CallDirective _stack: ", _stack );
-					assert( _stack[ _stack.length - stackArgCount ].type == DataNodeType.Directive, `Expected directive object operand in directive call operation` );
+					debug writeln( "RunCallable _stack: ", _stack );
+					assert( _stack[ _stack.length - stackArgCount ].type == DataNodeType.Callable, `Expected directive object operand in directive call operation` );
 
-					DirectiveObject dirObj = _stack[ _stack.length - stackArgCount ].directive;
-					assert( dirObj, `Directive object is null!` );
+					CallableObject callableObj = _stack[ _stack.length - stackArgCount ].callable;
+					assert( callableObj, `Callable object is null!` );
 
 					bool isNoscope = false;
 					if( _stack.back.type == DataNodeType.Integer && _stack.back.integer == 3 )
@@ -970,9 +974,9 @@ public:
 					}
 
 					ExecutionFrame moduleFrame;
-					if( dirObj._codeObj )
+					if( callableObj._codeObj )
 					{
-						moduleFrame = getModuleFrame( dirObj._codeObj._moduleObj._name );
+						moduleFrame = getModuleFrame( callableObj._codeObj._moduleObj._name );
 					}
 					else
 					{
@@ -982,11 +986,11 @@ public:
 					if( isNoscope )
 					{
 						// If directive is noscope we create frame with _dataDict that is Undef
-						newFrame( dirObj, moduleFrame, TDataNode() );
+						newFrame( callableObj, moduleFrame, TDataNode() );
 					}
 					else
 					{
-						newFrame( dirObj, moduleFrame );
+						newFrame( callableObj, moduleFrame );
 					}
 
 
@@ -1015,7 +1019,7 @@ public:
 									_stack.popBack(); ++j; // Parallel bookkeeping ;)
 
 									assert( !_stack.empty, "Execution stack is empty!" );
-									debug writeln( `CallDirective debug, _stack is: `, _stack );
+									debug writeln( `RunCallable debug, _stack is: `, _stack );
 									assert( _stack.back.type == DataNodeType.String, "Named attribute name must be string!" );
 									string attrName = _stack.back.str;
 									_stack.popBack(); ++j;
@@ -1039,20 +1043,20 @@ public:
 					debug writeln( "_stack after parsing all arguments: ", _stack );
 
 					assert( !_stack.empty, "Expected directive object to call, but found end of execution stack!" );
-					assert( _stack.back.type == DataNodeType.Directive, `Expected directive object operand in directive call operation` );
+					assert( _stack.back.type == DataNodeType.Callable, `Expected directive object operand in directive call operation` );
 					_stack.popBack(); // Drop directive object from stack
 
-					if( dirObj._codeObj )
+					if( callableObj._codeObj )
 					{
 						_stack ~= TDataNode(pk+1); // Put next instruction index on the stack to return at
-						codeRange = dirObj._codeObj._instrs[]; // Set new instruction range to execute
+						codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
 						pk = 0;
 						continue execution_loop;
 					}
 					else
 					{
-						assert( dirObj._dirInterp, `Directive object expected to have non null code object or native directive interpreter object!` );
-						dirObj._dirInterp.interpret(this); // Run native directive interpreter
+						assert( callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!` );
+						callableObj._dirInterp.interpret(this); // Run native directive interpreter
 						
 						if( !isNoscope )
 						{
@@ -1079,6 +1083,27 @@ public:
 					}
 					_stack ~= TDataNode(newArray);
 
+					break;
+				}
+
+				case OpCode.MakeAssocArray:
+				{
+					size_t aaLen = instr.arg;
+					TDataNode[string] newAssocArray;
+
+					for( size_t i = 0; i < aaLen; ++i )
+					{
+						assert( !_stack.empty, `Expected assoc array value, but got empty stack` );
+						TDataNode val = _stack.back;
+						_stack.popBack();
+
+						assert( !_stack.empty, `Expected assoc array key, but got empty stack` );
+						assert( _stack.back.type == DataNodeType.String, `Expected string as assoc array key` );
+						
+						newAssocArray[_stack.back.str] = val;
+						_stack.popBack();
+					}
+					_stack ~= TDataNode(newAssocArray);
 					break;
 				}
 
@@ -1111,7 +1136,7 @@ public:
 				assert( _stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer" );
 				pk = cast(size_t) _stack.back.integer;
 				_stack.popBack(); // Drop return address
-				codeRange = _frameStack.back._dirObj._codeObj._instrs[]; // Set old instruction range back
+				codeRange = _frameStack.back._callableObj._codeObj._instrs[]; // Set old instruction range back
 
 				_stack ~= result; // Get result back
 			}

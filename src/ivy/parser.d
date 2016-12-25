@@ -521,7 +521,7 @@ public:
 
 				IAssocArrayPair[] assocPairs;
 
-				while( !lexer.empty )
+				while( !lexer.empty && !lexer.front.test( LexemeType.RBrace ) )
 				{
 					CustLocation aaPairLoc = this.currentLocation;
 					string aaKey;

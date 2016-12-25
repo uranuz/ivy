@@ -3,7 +3,7 @@ module ivy.interpreter_data;
 import std.exception: enforceEx;
 import std.traits;
 
-enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, Directive, ExecutionFrame, DataNodeRange };
+enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, Callable, ExecutionFrame, DataNodeRange };
 
 class DataNodeException : Exception
 {
@@ -38,7 +38,7 @@ class ModuleObject
 
 	string _name; // Module name that used to reference it in source code
 	string _fileName; // Source file name for this module
-	size_t _entryPointIndex; // Index of directive in _consts that is entry point to module
+	size_t _entryPointIndex; // Index of callable in _consts that is entry point to module
 
 	TDataNode[] _consts; // List of constant data for this module
 
@@ -77,7 +77,7 @@ public:
 
 /**
 	Code object is inner runtime representation of chunk of source file.
-	Usually it's representation of directive.
+	Usually it's representation of directive or module.
 	Code object consists of list of instructions and other metadata
 */
 class CodeObject
@@ -118,13 +118,16 @@ interface INativeDirectiveInterpreter
 	void interpret( Interpreter interp );
 }
 
+enum CallableKind { ScopedDirective, NoscopeDirective, Module, Package }
+
 /**
-	Directive object is representation of directive prepared for execution.
+	Callable object is representation of directive or module prepared for execution.
 	Consists of it's code object (that will be executed) and some context (module for example)
 */
-class DirectiveObject
+class CallableObject
 {
 	string _name; // Name of directive
+	CallableKind _kind; // Used to know whether is's directive or module, or package module
 	CodeObject _codeObj; // Code object related to this directive
 	
 	// If this is natively implemented directive then _codeObj is null, but this must not be null
@@ -237,7 +240,7 @@ struct DataNode(S)
 			DataNode[] array;
 			DataNode[String] assocArray;
 			CodeObject codeObject;
-			DirectiveObject directive;
+			CallableObject callable;
 			ExecutionFrame execFrame;
 			IDataNodeRange dataRange;
 		}
@@ -328,13 +331,13 @@ struct DataNode(S)
 		assign(val);
 	}
 
-	DirectiveObject directive() @property
+	CallableObject callable() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.Directive, "DataNode is not a directive");
-		return storage.directive;
+		enforceEx!DataNodeException( type == DataNodeType.Callable, "DataNode is not callable object");
+		return storage.callable;
 	}
 
-	void directive(DirectiveObject val) @property
+	void callable(CallableObject val) @property
 	{
 		assign(val);
 	}
@@ -401,10 +404,10 @@ struct DataNode(S)
 			typeTag = DataNodeType.CodeObject;
 			storage.codeObject = arg;
 		}
-		else static if( is( T : DirectiveObject ) )
+		else static if( is( T : CallableObject ) )
 		{
-			typeTag = DataNodeType.Directive;
-			storage.directive = arg;
+			typeTag = DataNodeType.Callable;
+			storage.callable = arg;
 		}
 		else static if( is( T : ExecutionFrame ) )
 		{
@@ -565,10 +568,10 @@ void writeDataNodeLines(TDataNode, OutRange)(
 	final switch( node.type ) with( DataNodeType )
 	{
 		case Undef:
-			outRange.put( "undef" );
+			outRange.put( "" );
 			break;
 		case Null:
-			outRange.put( "null" );
+			outRange.put( "" );
 			break;
 		case Boolean:
 			outRange.put( node.boolean ? "true" : "false" );
@@ -612,8 +615,8 @@ void writeDataNodeLines(TDataNode, OutRange)(
 				outRange.put( "<code object (null)>" );
 			}
 			break;
-		case Directive:
-			outRange.put( "<directive object>" );
+		case Callable:
+			outRange.put( "<callable object, " ~ node.callable._kind.to!string ~ ">" );
 			break;
 		case ExecutionFrame:
 			outRange.put( "<execution frame>" );
@@ -694,11 +697,11 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 				outRange.put( "<code object (null)>" );
 			}
 			break;
-		case Directive:
+		case Callable:
 			import std.conv: text;
-			if( node.directive )
+			if( node.callable )
 			{
-				outRange.put( "<directive object: " ~ node.directive._name ~ ">" );
+				outRange.put( "<callable object, " ~ node.callable._kind.to!string ~ ">" );
 			}
 			else
 			{
@@ -706,7 +709,14 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 			}
 			break;
 		case ExecutionFrame:
-			outRange.put( "<execution frame>" );
+			debug {
+				outRange.put( "<execution frame: " );
+				writeDataNodeAsString( node.execFrame._dataDict, outRange, maxRecursion - 1);
+				outRange.put( ">" );
+			} else {
+				outRange.put( "<execution frame>" );
+			}
+
 			break;
 		case DataNodeRange:
 			outRange.put( "<data node range>" );

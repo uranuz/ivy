@@ -48,7 +48,7 @@ enum OpCode: ubyte {
 
 	// Preparing and calling directives
 	LoadDirective,
-	CallDirective,
+	RunCallable,
 
 	// Import another module
 	ImportModule,
@@ -69,7 +69,8 @@ enum OpCode: ubyte {
 	RunLoop,
 
 	// Data construction opcodes
-	MakeArray
+	MakeArray,
+	MakeAssocArray
 }
 
 // Minimal element of bytecode is instruction opcode with optional arg
