@@ -1,96 +1,93 @@
 text {*
-	{# import second_template #}
+	{% import second_template }
 
-	{# def test {#
+	{% def test {
 			def.named
 				attr as str
 				name as int
 				items: "Petya"
 				config: "Vova"
 				variadic: 10;
-			def.body {#
+			def.body {
 				text "Дурак ты, Вася!";
-			#}
-		#};
-		def test2 {#
+			}
+		};
+		def test2 {
 			def.named name as str;
 			def.body {*
-				Дурак ты, {# def.getAttr name #}
+				Дурак ты, {= name }
 			*};
-		#};
-		def list_render {#
+		};
+		def list_render {%
 			def.named
 				title as string
 				list as array;
 			def.body {*
-				<h2>Title is: (# def.getAttr title #)</h2>
-				<div> {#
-					var local_list: (# def.getAttr list #);
-					for list_item in local_list {*
+				<h2>Title is: {= title }</h2>
+				<div> {%
+					for list_item in list {*
 						<div>
 							<span>Item name:</span>
-							<span>{# text list_item #}</span>
+							<span>{= list_item }</span>
 						</div>
 					*}
-				#}
+				}
 				</div>
 			*}
-		#}
-	#}
+		}
+	}
 	<!doctype html>
 	<html>
 		<head>
-			<title>{# text "First html template in this lang" #}</title>
+			<title>{= "First html template in this lang" }</title>
 			<meta charset="utf-8">
 		</head>
 		<body>
 			
 			<section>
-				{# text
-					{#
-						if x > 10 (#
-							text content;
-						#)
-						elif x > 5
-						(# text content2 #)
-						else
-						(# text content3 #);
-						
-						if y == "yes" {*
-							Вход выполнен
-						*} else {*
-							Вход не выполнен
-						*};
-					#}
-				#}
+				{%
+					if x > 10 {%
+						text content;
+					}
+					elif x > 5
+					{% text content2 }
+					else
+					{% text content3 };
+					
+					if y == "yes" {*
+						Вход выполнен
+					*} else {*
+						Вход не выполнен
+					*};
+				}
 				<ul>
-					{# text
-						{# var arr: ["Vasya", "Petya", "Vovan"] #};
+					{% text
+						{% var arr: ["Vasya", "Petya", "Vovan"] };
 						text
-						{# for item in ["AAA", "BBB", "CCC"] {*
-								Человек {# text item #}!!!
+						{% for item in ["AAA", "BBB", "CCC"] {*
+								Человек {% text item }!!!
 							*}
-						#}
-					#}
-					{# test name: "Вася" #}
-					{# test2 name: "Федя" #}
-					{# test2 name: "Толя" #}
-					{# test2 name: "Саша" #}
+						}
+					}
+					{% test name: "Вася" }
+					{% test2 name: "Федя" }
+					{% test2 name: "Толя" }
+					{% test2 name: "Саша" }
 
 				</ul>
 				
 			</section>
 			<div>
-				{# list_render title: "Текстик" list: [
+				{% list_render title: "Текстик" list: [
 						"Яблоко", "Дыня", "Ананас"
 					]
-				#}
+				}
 			</div>
 			<div>
-				{# trololo #}
+				{% trololo }
 			</div>
 			<div>
-				Йа надеюсь йа смогу сложить два плюс два: <span>{# sum arg1: 2 arg2: 2 #}</span>
+				Йа надеюсь йа смогу сложить два плюс два: <span>{% sum arg1: 2 arg2: 2 }</span>
 			</div>
 		</body>
 	</html> 

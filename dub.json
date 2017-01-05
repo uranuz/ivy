@@ -45,6 +45,7 @@
 		{
 			"name": "lexer_test", 
 			"targetType": "executable",
+			"targetName": "lexer_test",
 			"platforms": [],
 			"versions": [],
 			"libs": [],

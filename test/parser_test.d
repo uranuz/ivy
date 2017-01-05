@@ -31,46 +31,20 @@ void main()
 	string source = cast(string) std.file.read(sourceFileName);
 
 	auto parser = new Parser!(TextRange)(source, sourceFileName);
-
-	void printLexemes()
-	{
-		writeln;
-		writeln("List of lexemes:");
-		
-		import std.array: array;
-		
-		foreach( lex; parser.lexer.lexemes )
-		{
-			writeln( cast(LexemeType) lex.info.typeIndex, "  content: ", lex.getSlice(parser.lexer.sourceRange).array );
-		}
-		
-		writeln;
-	
-	}
-	
 	IvyNode ast;
-	
-	try {
-		parser.lexer.popFront();
-		ast = parser.parseDirectiveStatement();
-	} catch(Throwable e) {
-		printLexemes();
+	scope(exit) {
+		writeln;
+		writeln("Recursive printing of nodes:");
 		
-		throw e;
+		import std.stdio;
+		import std.json;
+		
+		JSONValue astJSON;
+		
+		writeASTasJSON(parser.lexer.sourceRange, ast, astJSON);
+		
+		stdout.writeln(toJSON(&astJSON, true));
 	}
-	
-	writeln;
-	writeln("Recursive printing of nodes:");
-	
-	import std.stdio;
-	import std.json;
-	
-	JSONValue astJSON;
-	
-	writeASTasJSON(parser.lexer.sourceRange, ast, astJSON);
-	
-	stdout.writeln(toJSON(&astJSON, true));
-	
-	printLexemes();
 
+	ast = parser.parse();
 }

@@ -199,26 +199,33 @@ interface ICompoundStatement: IStatement
 	
 	IStatementRange opSlice();
 	IStatementRange opSlice(size_t begin, size_t end);
-
-	bool isList() @property;
 	
 	//IStatement opIndex(size_t index);
 }
 
-interface IStatementRange
+interface IvyNodeRange
 {
-	@property IStatement front();
+	@property IvyNode front();
 	void popFront();
 	
-	@property IStatement back();
+	@property IvyNode back();
 	void popBack();
 	
 	@property bool empty();
 	//@property size_t length();
 	
-	@property IStatementRange save();
+	@property IvyNodeRange save();
 	
-	IStatement opIndex(size_t index);
+	IvyNode opIndex(size_t index);
+}
+
+interface IStatementRange: IvyNodeRange
+{
+	// Covariant overrides
+	override	@property IStatement front();
+	override @property IStatement back();
+	override @property IStatementRange save();
+	override IStatement opIndex(size_t index);
 }
 
 interface IDirectiveStatementRange: IStatementRange
@@ -232,25 +239,12 @@ interface IDirectiveStatementRange: IStatementRange
 
 interface ICodeBlockStatement: ICompoundStatement
 {
+	// Covariant overrides
 	override IDirectiveStatementRange opSlice();
 	override IDirectiveStatementRange opSlice(size_t begin, size_t end);
 }
 
-interface IAttributeRange
-{
-	@property IvyNode front();
-	void popFront();
-	
-	@property IvyNode back();
-	void popBack();
-	
-	@property bool empty();
-	//@property size_t length();
-	
-	@property IAttributeRange save();
-	
-	IvyNode opIndex(size_t index);
-}
+interface IAttributeRange: IvyNodeRange {}
 
 interface IDirectiveStatement: IStatement
 {

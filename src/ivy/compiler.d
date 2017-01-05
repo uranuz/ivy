@@ -1036,17 +1036,8 @@ public:
 
 		bodyStmt.accept(compiler);
 
-		if( bodyStmt.isList )
-		{
-			// Concates current result to previous
-			compiler.addInstr( OpCode.Concat );
-		}
-		else
-		{
-			// Concates current result to previous
-			compiler.addInstr( OpCode.Append );
-		}
-		
+		// Apend current result to previous
+		compiler.addInstr( OpCode.Append );
 
 		// Put data node range at the TOP and result on (TOP - 1) 
 		compiler.addInstr( OpCode.SwapTwo );
@@ -1870,12 +1861,9 @@ public:
 			if( !node )
 				compilerError( "Compound statement node is null!" );
 
-			if( node.isList )
-			{
-				TDataNode emptyArray = TDataNode[].init;
-				size_t emptyArrayConstIndex = addConst(emptyArray);
-				addInstr( OpCode.LoadConst, emptyArrayConstIndex );
-			}
+			TDataNode emptyArray = TDataNode[].init;
+			size_t emptyArrayConstIndex = addConst(emptyArray);
+			addInstr( OpCode.LoadConst, emptyArrayConstIndex );
 
 			size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
 			size_t resultNameConstIndex = addConst( TDataNode("__result__") );
@@ -1905,14 +1893,7 @@ public:
 				// TOP - 3: Callable object for __render__
 				addInstr( OpCode.RunCallable, 4 );
 				
-				if( node.isList )
-				{
-					addInstr( OpCode.Append ); // Append result to result array
-				}
-				else if( !stmtRange.empty )
-				{
-					addInstr( OpCode.PopTop ); // Drop results, except last
-				}
+				addInstr( OpCode.Append ); // Append result to result array
 			}
 		}
 	}

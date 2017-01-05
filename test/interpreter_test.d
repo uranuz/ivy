@@ -56,7 +56,7 @@ void main()
 	ModuleObject[string] moduleObjects = compiler.moduleObjects;
 	writeln( `Module objects after compilation: `, moduleObjects );
 
-	Interpreter interp = new Interpreter(moduleObjects, mainModuleName);
+	Interpreter interp = new Interpreter(moduleObjects, mainModuleName, TDataNode());
 	interp.execLoop();
 
 	import std.range: back;
