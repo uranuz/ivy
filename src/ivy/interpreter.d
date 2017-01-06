@@ -717,7 +717,6 @@ public:
 					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreName instruction. Variable name const must have string type!` );
 
 					setValue( varNameNode.str, varValue );
-					_stack ~= TDataNode(); // For now we must put something onto stack
 					break;
 				}
 
@@ -733,7 +732,6 @@ public:
 					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreLocalName instruction. Variable name const must have string type!` );
 
 					setLocalValue( varNameNode.str, varValue );
-					_stack ~= TDataNode(); // For now we must put something onto stack
 					break;
 				}
 
@@ -960,6 +958,7 @@ public:
 					debug writeln( "RunCallable stackArgCount: ", stackArgCount );
 					assert( stackArgCount <= _stack.length, "Not enough arguments in execution stack" );
 					debug writeln( "RunCallable _stack: ", _stack );
+					debug writeln( "RunCallable callable type: ", _stack[ _stack.length - stackArgCount ].type );
 					assert( _stack[ _stack.length - stackArgCount ].type == DataNodeType.Callable, `Expected directive object operand in directive call operation` );
 
 					CallableObject callableObj = _stack[ _stack.length - stackArgCount ].callable;

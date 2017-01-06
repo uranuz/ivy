@@ -27,7 +27,7 @@ void main()
 		
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 	
-	string sourceFileName = "test/html_template.html";
+	string sourceFileName = "test/compiler_test_template.html";
 	string source = cast(string) std.file.read(sourceFileName);
 
 	auto parser = new Parser!(TextRange)(source, sourceFileName);

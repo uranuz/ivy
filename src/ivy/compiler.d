@@ -777,6 +777,10 @@ public:
 			compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
 		}
 
+		// For now we expect that directive should return some value on the stack
+		size_t fakeValueConstIndex = compiler.addConst( TDataNode() );
+		compiler.addInstr( OpCode.LoadConst, fakeValueConstIndex );
+
 		if( !stmtRange.empty )
 			compilerError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
 	}
@@ -800,7 +804,7 @@ class SetInterpreter : IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "set"  )
+		if( !statement || statement.name != "set" )
 			compilerError( "Expected 'set' directive" );
 
 		auto stmtRange = statement[];
@@ -817,6 +821,10 @@ public:
 			size_t varNameConstIndex = compiler.addConst( TDataNode( kwPair.name ) );
 			compiler.addInstr( OpCode.StoreName, varNameConstIndex );
 		}
+
+		// For now we expect that directive should return some value on the stack
+		size_t fakeValueConstIndex = compiler.addConst( TDataNode() );
+		compiler.addInstr( OpCode.LoadConst, fakeValueConstIndex );
 
 		if( !stmtRange.empty )
 			compilerError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
@@ -965,7 +973,6 @@ public:
 
 		// Issue command to store current loop item in local context with specified name
 		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
-		compiler.addInstr( OpCode.PopTop ); // Drop extra empty node left from StoreLocalName
 
 		bodyStmt.accept(compiler);
 
@@ -1029,7 +1036,6 @@ public:
 		// Issue command to store current loop item in local context with specified name
 		size_t varNameConstIndex = compiler.addConst( TDataNode(varName) );
 		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
-		compiler.addInstr( OpCode.PopTop ); // Drop extra empty node left from StoreLocalName
 		
 		// Swap data node range with result, so that we have it on (TOP - 1) when loop body finished
 		compiler.addInstr( OpCode.SwapTwo ); 

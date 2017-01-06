@@ -6,7 +6,7 @@ import ivy.lexer, ivy.lexer_tools, ivy.common;
 
 void main()
 {
-	string source = cast(string) std.file.read("test/html_template.html");
+	string source = cast(string) std.file.read("test/compiler_test_template.html");
 
 	import std.uni: isAlpha;
 	alias MyLexer = Lexer!(string, LocationConfig.init);
