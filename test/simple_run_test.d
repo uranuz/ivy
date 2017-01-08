@@ -8,9 +8,11 @@ import ivy;
 
 void main()
 {
-	import std.path: getcwd;
+	import std.path: getcwd, buildNormalizedPath;
 	string sourceFileName = "test/compiler_test_template.html";
-	ExecutableProgramme prog = ivy.compileFile( sourceFileName, [getcwd()] );
+
+	auto progCache = new ProgrammeCache!(true)([getcwd()]);
+	ExecutableProgramme prog = progCache.getProgramme( buildNormalizedPath(getcwd(), sourceFileName) );
 	
 	TDataNode[string] dataDict;
 	TDataNode result = prog.run( TDataNode(dataDict) );

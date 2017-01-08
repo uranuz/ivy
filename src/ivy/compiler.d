@@ -2069,21 +2069,39 @@ ExecutableProgramme compileFile(string sourceFileName, string[] importPaths = nu
 	return compileModule( mainModuleName, importPaths, extension(sourceFileName) );
 }
 
-/+
-class ProgrammeCache
+/// Dump-simple in-memory cache for compiled programmes
+class ProgrammeCache(bool useCache = true)
 {
 private:
+	string[] _importPaths;
+	ExecutableProgramme[string] _progs;
+
+	static if(useCache)
+	{
+		import core.sync.mutex: Mutex;
+		Mutex _mutex;
+	}
 
 public:
-	ExecutableProgramme getProgramme(string )
+	this( string[] importPaths )
 	{
-
+		_importPaths = importPaths;
+		static if(useCache)
+		{
+			_mutex = new Mutex();
+		}
 	}
 
-	private ExecutableProgramme _loadProgramme(string )
+	ExecutableProgramme getProgramme(string sourceFileName)
 	{
+		if( sourceFileName !in _progs )
+		{
+			synchronized( _mutex )
+			{
+				_progs[sourceFileName] = compileFile(sourceFileName, _importPaths);
+			}
+		}
 
+		return _progs[sourceFileName];
 	}
-
 }
-+/
