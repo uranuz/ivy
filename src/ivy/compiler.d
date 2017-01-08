@@ -97,33 +97,54 @@ class CompilerModuleRepository
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
 private:
-	string _rootPath;
+	string[] _importPaths;
 	string _fileExtension;
 	IvyNode[string] _moduleTrees;
 
 public:
-	this( string rootPath = ".", string fileExtension = ".ivy" )
+	this( string[] importPaths, string fileExtension = ".ivy" )
 	{
-		_rootPath = rootPath;
+		_importPaths = importPaths;
 		_fileExtension = fileExtension;
 	}
 
 	void loadModuleFromFile(string moduleName)
 	{
 		import std.algorithm: splitter, startsWith;
-		import std.array: array;
-		import std.range: only, chain, empty;
-		import std.path: buildNormalizedPath;
-		import std.file: read;
+		import std.array: array, join;
+		import std.range: only, chain, empty, front;
+		import std.path: buildNormalizedPath, isAbsolute;
+		import std.file: read, exists, isFile;
 
-		// The module name is given. Try to build path to it
-		string fileName = buildNormalizedPath( only(_rootPath).chain( moduleName.splitter('.') ).array ) ~ _fileExtension;
-		debug writeln( "loadModuleFromFile fileName: ", fileName, ", rootPath: ", buildNormalizedPath(_rootPath) );
+		debug writeln( "loadModuleFromFile attempt to load module: ", moduleName );
 
-		// Check if file name is not empty and located in root path
-		if( fileName.empty || !fileName.startsWith( buildNormalizedPath(_rootPath) ) )
-			compilerError( `Incorrect path to module: ` ~ fileName );
+		string fileName;
+		string[] existingFiles;
+		foreach( importPath; _importPaths )
+		{
+			if( !isAbsolute(importPath) )
+				continue;
+			
+			// The module name is given. Try to build path to it
+			fileName = buildNormalizedPath( only(importPath).chain( moduleName.splitter('.') ).array ) ~ _fileExtension;
 
+			// Check if file name is not empty and located in root path
+			if( fileName.empty || !fileName.startsWith( buildNormalizedPath(importPath) ) )
+				compilerError( `Incorrect path to module: ` ~ fileName );
+
+			if( std.file.exists(fileName) && std.file.isFile(fileName) )
+				existingFiles ~= fileName;
+		}
+
+		if( existingFiles.length == 0 )
+			compilerError( `Cannot load module ` ~ moduleName ~ `. Searching in import paths: ` ~ _importPaths.join(", ") );
+		else if( existingFiles.length == 1 )
+			fileName = existingFiles.front; // Success
+		else
+			compilerError( `Found multiple source files in import paths matching module name `
+				~ moduleName ~ `. Following files matched: ` ~ existingFiles.join(", ") );
+
+		debug writeln( "loadModuleFromFile loading module from file: ", fileName );
 		string fileContent = cast(string) std.file.read(fileName);
 
 		import ivy.parser;
@@ -249,7 +270,6 @@ class Symbol
 {
 	string name;
 	SymbolKind kind;
-
 }
 
 class DirectiveDefinitionSymbol: Symbol
@@ -2013,29 +2033,57 @@ public:
 	}
 }
 
-/// Simple method that can be used to compile source file and get executable
-ExecutableProgramme compileFile(string sourceFileName, string rootPath)
+ExecutableProgramme compileModule( string mainModuleName, string[] importPaths, string fileExtension = ".ivy" )
 {
-	import std.path: extension, stripExtension, relativePath, dirSeparator, dirName;
-	import std.array: split, join, empty;
+	import std.range: empty;
 
-	if( rootPath.empty )
-		rootPath = sourceFileName.dirName();
-
-	// Calculating main module name
-	string mainModuleName = sourceFileName.relativePath(rootPath).stripExtension().split(dirSeparator).join('.');
-
+	if( importPaths.empty )
+		compilerError( `List of compiler import paths must not be empty!` );
+	
 	// Creating object that manages reading source files, parse and store them as AST
-	auto compilerModuleRepo = new CompilerModuleRepository( rootPath, extension(sourceFileName) );
+	auto moduleRepo = new CompilerModuleRepository(importPaths, fileExtension);
 
 	// Preliminary compiler phase that analyse imported modules and stores neccessary info about directives
-	auto symbCollector = new CompilerSymbolsCollector(compilerModuleRepo, mainModuleName);
-	symbCollector.run(); // Run analyse
+	auto symbolsCollector = new CompilerSymbolsCollector(moduleRepo, mainModuleName);
+	symbolsCollector.run(); // Run analyse
 
 	// Main compiler phase that generates bytecode for modules
-	auto compiler = new ByteCodeCompiler( compilerModuleRepo, symbCollector.getModuleSymbols(), mainModuleName );
+	auto compiler = new ByteCodeCompiler( moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName );
 	compiler.run(); // Run compilation itself
 
 	// Creating additional object that stores all neccessary info for user
 	return new ExecutableProgramme(compiler.moduleObjects, mainModuleName);
 }
+
+/// Simple method that can be used to compile source file and get executable
+ExecutableProgramme compileFile(string sourceFileName, string[] importPaths = null)
+{
+	import std.path: extension, stripExtension, relativePath, dirSeparator, dirName;
+	import std.array: split, join, empty, front;
+
+	importPaths = sourceFileName.dirName() ~ importPaths; // For now let main source file path be in import paths
+
+	// Calculating main module name
+	string mainModuleName = sourceFileName.relativePath(importPaths.front).stripExtension().split(dirSeparator).join('.');
+
+	return compileModule( mainModuleName, importPaths, extension(sourceFileName) );
+}
+
+/+
+class ProgrammeCache
+{
+private:
+
+public:
+	ExecutableProgramme getProgramme(string )
+	{
+
+	}
+
+	private ExecutableProgramme _loadProgramme(string )
+	{
+
+	}
+
+}
++/
