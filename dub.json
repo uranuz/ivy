@@ -76,6 +76,18 @@
 			"buildRequirements": ["silenceWarnings"],
 			"buildOptions": ["debugInfo"],
 			"sourceFiles": [ "test/simple_run_test.d" ]
+		},
+		{
+			"name": "json_parser_test",
+			"targetType": "executable",
+			"targetPath": "./",
+			"targetName": "json_parser_test",
+			"platforms": [],
+			"versions": [],
+			"libs": [],
+			"buildRequirements": ["silenceWarnings"],
+			"buildOptions": ["debugInfo"],
+			"sourceFiles": [ "test/json_parser_test.d" ]
 		}
 	]
 }

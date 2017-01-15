@@ -2061,7 +2061,7 @@ ExecutableProgramme compileFile(string sourceFileName, string[] importPaths = nu
 	import std.path: extension, stripExtension, relativePath, dirSeparator, dirName;
 	import std.array: split, join, empty, front;
 
-	importPaths = sourceFileName.dirName() ~ importPaths; // For now let main source file path be in import paths
+	//importPaths = sourceFileName.dirName() ~ importPaths; // For now let main source file path be in import paths
 
 	// Calculating main module name
 	string mainModuleName = sourceFileName.relativePath(importPaths.front).stripExtension().split(dirSeparator).join('.');
@@ -2074,10 +2074,11 @@ class ProgrammeCache(bool useCache = true)
 {
 private:
 	string[] _importPaths;
-	ExecutableProgramme[string] _progs;
 
 	static if(useCache)
 	{
+		ExecutableProgramme[string] _progs;
+
 		import core.sync.mutex: Mutex;
 		Mutex _mutex;
 	}
@@ -2094,14 +2095,20 @@ public:
 
 	ExecutableProgramme getProgramme(string sourceFileName)
 	{
-		if( sourceFileName !in _progs )
+		static if(useCache)
 		{
-			synchronized( _mutex )
+			if( sourceFileName !in _progs )
 			{
-				_progs[sourceFileName] = compileFile(sourceFileName, _importPaths);
+				synchronized( _mutex )
+				{
+					_progs[sourceFileName] = compileFile(sourceFileName, _importPaths);
+				}
 			}
+			return _progs[sourceFileName];
 		}
-
-		return _progs[sourceFileName];
+		else
+		{
+			return compileFile(sourceFileName, _importPaths);
+		}
 	}
 }
