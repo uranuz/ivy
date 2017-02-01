@@ -30,13 +30,7 @@ enum LiteralType { NotLiteral, Undef, Null, Boolean, Integer, Floating, String, 
 
 interface IExpression: IvyNode
 {
-	// bool checkValue();
-	// bool checkScalar();
-	// bool checkBoolean();
-	// bool checkIntegral();
-	// bool checkFloating();
-	// bool checkArithmetic();
-	// bool checkString();
+
 	@property {
 		IStatement asStatement();
 		
@@ -242,6 +236,12 @@ interface ICodeBlockStatement: ICompoundStatement
 	// Covariant overrides
 	override IDirectiveStatementRange opSlice();
 	override IDirectiveStatementRange opSlice(size_t begin, size_t end);
+
+	bool isListBlock() @property;
+}
+
+interface IMixedBlockStatement: ICompoundStatement
+{
 }
 
 interface IAttributeRange: IvyNodeRange {}

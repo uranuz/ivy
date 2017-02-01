@@ -34,6 +34,7 @@ enum OpCode: ubyte {
 	LT,
 	GT,
 	Equal,
+	NotEqual,
 	LTEqual,
 	GTEqual,
 

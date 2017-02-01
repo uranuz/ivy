@@ -4,8 +4,6 @@ import ivy.json, ivy.interpreter_data;
 
 void main()
 {
-	alias TDataNode = DataNode!(string);
-	
 	string jsonStr = `
 	{
 		"name": "Vasya",
@@ -23,9 +21,8 @@ void main()
 		]
 	}
 	`;
-	
-	auto parser = JSONParser!(string)(jsonStr);
-	TDataNode parsedJSON = parser.parse();
+
+	auto parsedJSON = parseIvyJSON(jsonStr);
 
 	import std.array: appender;
 	auto buf = appender!string;

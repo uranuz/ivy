@@ -511,9 +511,9 @@ struct DataNode(S)
 	
 	void opIndexAssign(T)(auto ref T value, String key)
 	{
-		enforceEx!DataNodeException( type == DataNodeType.AssocArray || type == DataNodeType.Null, "DataNode is not a dict or null");
+		enforceEx!DataNodeException( type == DataNodeType.AssocArray || type == DataNodeType.Null || type == DataNodeType.Undef, "DataNode is not a dict, null or undef");
 		
-		if( type == DataNodeType.Null )
+		if( type != DataNodeType.AssocArray )
 			this = (DataNode[String]).init;
 		
 		storage.assocArray[key] = value;
@@ -588,17 +588,17 @@ void writeDataNodeLines(TDataNode, OutRange)(
 		case Array:
 			foreach( i, ref el; node.array )
 			{
-				if( linesRecursion == 0 )
-				{
-					writeDataNodeAsString(el, outRange, maxRecursion - 1);
-				}
-				else
-				{			
+				//if( linesRecursion == 0 )
+				//{
+					//writeDataNodeAsString(el, outRange, maxRecursion - 1);
+				//}
+				//else
+				//{			
 					//if( i != 0 )
 						//outRange.put( "\r\n" );
 						
 					writeDataNodeLines(el, outRange, linesRecursion - 1, maxRecursion - 1);
-				}
+				//}
 			}
 			break;
 		case AssocArray:

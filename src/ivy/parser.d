@@ -30,12 +30,11 @@ public:
 	alias LexerType = Lexer!(String, config);
 	alias CustLocation = CustomizedLocation!(config);
 	alias ParserT = Parser!R;
-	
+
 	LexerType lexer;
 	string fileName;
 	size_t spacesPerTab = 4;
-	bool isDirectiveContext = true;
-	
+
 	this(String source, string fileName)
 	{
 		this.lexer = LexerType(source);
@@ -188,7 +187,7 @@ public:
 			error( "Directive statement name cannot be empty!" );
 
 		IvyNode[] attrs;
-		while( !lexer.empty && !lexer.front.test( [LexemeType.Semicolon, LexemeType.RBrace] ) )
+		while( !lexer.empty && !lexer.front.test( [LexemeType.Semicolon, LexemeType.CodeBlockEnd, LexemeType.CodeListEnd] ) )
 		{
 			//Try parse named attribute
 			IvyNode attr = parseNamedAttribute();
@@ -206,8 +205,7 @@ public:
 			{
 				loger.write( "Attempt to parse unnamed attribute" );
 				//Named attribute was not found will try to parse unnamed one
-				//True means that we not catch some post expressions in this context
-				attr = parseBlockOrExpression( true );
+				attr = parseBlockOrExpression();
 				
 				if( attr )
 				{
@@ -223,11 +221,11 @@ public:
 		}
 		
 		stmt = new DirectiveStatement!(config)(loc, statementName, attrs);
-		
+
 		return stmt;
 	}
 	
-	IvyNode parseBlockOrExpression( bool isDirectiveContext = false )
+	IvyNode parseBlockOrExpression()
 	{
 		loger.write( "Start parsing block or expression" );
 		import std.array: array;
@@ -239,7 +237,12 @@ public:
 		
 		switch( lexer.front.typeIndex ) with(LexemeType)
 		{
-			case ExprBlockBegin, CodeBlockBegin:
+			case ExprBlockBegin:
+			{
+				result = parseExpressionBlock();
+				break;
+			}
+			case CodeBlockBegin, CodeListBegin:
 			{
 				result = parseCodeBlock();
 				break;
@@ -272,7 +275,7 @@ public:
 			}
 			default:
 			{
-				result = parseExpression( isDirectiveContext );
+				result = parseExpression();
 				break;
 			}
 		}
@@ -280,7 +283,7 @@ public:
 		return result;
 	}
 	
-	IDirectiveStatement parseExpressionBlock()
+	ICodeBlockStatement parseExpressionBlock()
 	{
 		// This method doesn't parse whole block, but just creates "=" directive from expressions before ";"
 		loger.write( "Start parsing expression block" );
@@ -292,10 +295,10 @@ public:
 	
 		lexer.popFront(); // Skip ExprBlockBegin
 
-		IDirectiveStatement stmt;
+		ICodeBlockStatement stmt;
 		IvyNode[] attrs;
 
-		while( !lexer.empty && !lexer.front.test(LexemeType.RBrace) )
+		while( !lexer.empty && !lexer.front.test(LexemeType.ExprBlockEnd) )
 		{
 			IExpression attr = parseExpression();
 			if( !attr )
@@ -307,53 +310,39 @@ public:
 			}
 
 			attrs ~= attr;
-			if( lexer.front.test(LexemeType.Semicolon) )
-			{
-				break; // We finished with starting expression block, so get out
-			}
-		}
-		
-		if( lexer.front.test( LexemeType.Semicolon ) )
-		{
-			lexer.popFront(); // Skip statements delimeter
-		}
-		else if( !lexer.front.test(LexemeType.RBrace) )
-		{
-			error( "Expected semicolon as directive statements delimiter" );
 		}
 
-		stmt = new DirectiveStatement!(config)(blockLocation, "expr", attrs);
+		if( !lexer.front.test(LexemeType.ExprBlockEnd) )
+			error( "Expected semicolon as directive statements delimiter" );
+		lexer.popFront(); // Skip ExprBlockEnd
+
+		IDirectiveStatement dirStmt = new DirectiveStatement!(config)(blockLocation, "expr", attrs);
+
+		stmt = new CodeBlockStatement!(config)(blockLocation, [dirStmt], false );
 
 		return stmt;
 	}
 
-	ICompoundStatement parseCodeBlock()
+	ICodeBlockStatement parseCodeBlock()
 	{
 		loger.write( "Start parsing of code block" );
-		import std.conv: to;
-		
-		ICompoundStatement statement;
+
+		ICodeBlockStatement statement;
 		IDirectiveStatement[] statements;
 					
 		CustLocation blockLocation = this.currentLocation;
 		
-		if( !lexer.front.test([LexemeType.ExprBlockBegin, LexemeType.CodeBlockBegin, LexemeType.LBrace]) )
-			error( "Expected ExprBlockBegin or CodeBlockBegin" );
-
-		if( lexer.front.test(LexemeType.ExprBlockBegin) )
-		{
-			loger.write( "Going to parse expression block..." );
-			statements ~= parseExpressionBlock();
-		}
-		else
-		{
-			lexer.popFront(); // Skip CodeBlockBegin or LBrace
-			if( lexer.empty || lexer.front.test(LexemeType.RBrace) )
-				error( "Unexpected end of code block" );
-		}
+		if( !lexer.front.test([LexemeType.CodeBlockBegin, LexemeType.CodeListBegin, LexemeType.LBrace]) )
+			error( "Expected CodeBlockBegin, CodeListBegin or LBrace" );
 		
+		auto beginLexemeType = lexer.front.typeIndex;
+		auto endLexemeType = lexer.front.info.pairTypeIndex;
+		lexer.popFront(); // Skip CodeBlockBegin, CodeListBegin or LBrace
+			
+		if( lexer.empty || lexer.front.test(endLexemeType) )
+			error( "Unexpected end of code block" );
 
-		while( !lexer.empty && !lexer.front.test(LexemeType.RBrace) )
+		while( !lexer.empty && !lexer.front.test(endLexemeType) )
 		{
 			IDirectiveStatement stmt;
 
@@ -369,7 +358,7 @@ public:
 			{
 				lexer.popFront(); // Skip statements delimeter
 			}
-			else if( !lexer.front.test(LexemeType.RBrace) )
+			else if( !lexer.front.test(endLexemeType) )
 			{
 				error( "Expected semicolon as directive statements delimiter" );
 			}
@@ -377,11 +366,11 @@ public:
 			statements ~= stmt;
 		}
 		
-		if( !lexer.front.test(LexemeType.RBrace) )
-			error( "Expected RBrace" );
+		if( !lexer.front.test(endLexemeType) )
+			error( "Expected CodeBlockEnd, CodeListEnd or RBrace" );
 		lexer.popFront(); //Skip RBrace
 
-		statement = new CodeBlockStatement!(config)(blockLocation, statements);
+		statement = new CodeBlockStatement!(config)( blockLocation, statements, beginLexemeType != LexemeType.CodeBlockBegin );
 		
 		return statement;
 	}
@@ -408,7 +397,12 @@ public:
 
 			switch( lexer.front.typeIndex )
 			{
-				case LexemeType.CodeBlockBegin, LexemeType.ExprBlockBegin:
+				case LexemeType.ExprBlockBegin:
+				{
+					statements ~= parseExpressionBlock();
+					break;
+				}
+				case LexemeType.CodeBlockBegin, LexemeType.CodeListBegin:
 				{
 					statements ~= parseCodeBlock();
 					break;
@@ -434,7 +428,7 @@ public:
 		return statement;
 	}
 
-	IExpression parseExpression( bool isDirectiveContext = false )
+	IExpression parseExpression()
 	{
 		import std.array: array;
 		import std.conv: to;
@@ -615,14 +609,14 @@ public:
 				
 				if( !lexer.front.test(LexemeType.RParen) )
 					error( "Expected right paren, closing expression!" );
-				lexer.popFront();
+				lexer.popFront(); // Skip RParent
 				
 				break;
 			}
 			case LBracket:
 			{
 				loger.write("Start parsing array literal");
-				lexer.popFront();
+				lexer.popFront(); // Skip LBracket
 				
 				IExpression[] values;
 				
@@ -650,7 +644,7 @@ public:
 				
 				if( !lexer.front.test(LexemeType.RBracket) )
 					error( "Expected right bracket, closing array literal!" );
-				lexer.popFront();
+				lexer.popFront(); // Skip RBracket
 				
 				expr = new ArrayLiteralExp!(config)(loc, values);
 			
@@ -669,7 +663,10 @@ public:
 		//Parse post expr here such as call syntax and array index syntax
 		if( expr )
 		{
-			expr = parsePostExp( expr, this.isDirectiveContext );
+			// TODO: This need to be reworked:
+			// For now I failed to disambiguate post expressions like call expr or index expr
+			// from plain parentheses and array literal in directive context. Need to think how to solve
+			//expr = parsePostExp( expr, this.isDirectiveContext );
 		}
 		else
 		{
@@ -679,7 +676,10 @@ public:
 		return expr;
 	}
 
-	IExpression parsePostExp( IExpression preExpr, bool isDirectiveContext )
+	static if(false)
+	{
+	// This bunch of code unused for now
+	IExpression parsePostExp( IExpression preExpr )
 	{
 		import std.conv: to;
 
@@ -698,7 +698,7 @@ public:
 			}
 			case LParen:
 			{
-				if( isDirectiveContext )
+				if( true )
 				{
 					expr = preExpr;
 					break; // Do not catch post expr in directive context
@@ -740,12 +740,13 @@ public:
 			}
 			case LBracket:
 			{
-				if( isDirectiveContext )
+				if( true )
 				{
 					expr = preExpr;
 					break; // Do not catch post expr in directive context
 				}
-				lexer.popFront();
+
+				lexer.popFront(); // Skip LBracket
 				IExpression indexExpr = parseExpression();
 
 				if( !indexExpr )
@@ -773,6 +774,8 @@ public:
 		return expr;
 	}
 	
+	} // static if
+	
 	String parseQuotedString()
 	{
 		String result;
@@ -782,9 +785,7 @@ public:
 			error( "Expected quoted string literal" );
 		
 		auto strRange = lexer.frontValue.save;
-		
-		auto ch = strRange.front;
-		
+
 		if( strRange.front != '\"' )
 			error( "Expected \"" );
 		strRange.popFront();
@@ -794,71 +795,21 @@ public:
 		
 		while( !strRange.empty && strRange.front != '\"' )
 		{
-			ch = strRange.front;
-			
 			if( strRange.front == '\\' )
 			{
-				strRange.popFront();
-				
-				ch = strRange.front;
-				
-				auto resPart = clearStrRange[0..clearCount].array;
-				
-				result ~= resPart;
+				strRange.popFront(); // Skip slash
+
+				// Put previous (clear from escape symbols) part to result
+				result ~= clearStrRange[0..clearCount].array; 
 				
 				switch( strRange.front )
 				{
-					case 'b':
+					case 'b', 'f', 'n', 'r', 't', 'v', '0', '\'', '\"', '\\':
 					{
-						result ~= '\b';
+						result ~= strRange.front;
+						strRange.popFront(); // Skip escaped character
 						break;
 					}
-					case 'f':
-					{
-						result ~= '\f';
-						break;
-					}
-					case 'n':
-					{
-						result ~= '\n';
-						break;
-					}
-					case 'r':
-					{
-						result ~= '\r';
-						break;
-					}
-					case 't':
-					{
-						result ~= '\t';
-						break;
-					}
-					case 'v':
-					{
-						result ~= '\v';
-						break;
-					}
-					case '0':
-					{
-						result ~= '\0';
-						break;
-					}
-					case '\'':
-					{
-						result ~= '\'';
-						break;
-					}
-					case '\"':
-					{
-						result ~= '\"';
-						break;
-					}
-					case '\\':
-					{
-						result ~= '\\';
-						break;
-					}
-					
 					case 'u':
 					{
 						assert( 0, "Unicode escaping is not implemented yet!");
@@ -871,24 +822,20 @@ public:
 					}
 					default:
 					{
-						result ~= strRange.front;
+						error( "Unexpected escape character: " ~ strRange.front );
 						break;
 					}
 				}
-				
-				strRange.popFront();
-				clearStrRange = strRange.save;
-				
-				clearCount = 0;
+
+				clearStrRange = strRange.save; // Previous "clear part" starts from there 
+				clearCount = 0; // Reset "clear part" counter
 				continue;
 			}
 			
 			++clearCount;
 			strRange.popFront();
 		}
-		
-		ch = strRange.front;
-		
+
 		if( strRange.front != '\"' )
 			error( "Expected \" closing quoted string literal" );
 			
@@ -899,7 +846,7 @@ public:
 		return result;
 	}
 	
-	static int[int] lexToBinaryOpMap;
+	static immutable int[int] lexToBinaryOpMap;
 	
 	shared static this()
 	{
@@ -937,6 +884,8 @@ public:
 				{
 					lexer.popFront();
 					right = parseUnaryExp();
+					assert( lex.info.typeIndex in lexToBinaryOpMap,
+						`Unexpected binary arithmetic operation lexeme: ` ~ (cast(LexemeType) lex.info.typeIndex).to!string );
 					left = new BinaryArithmeticExp!(config)(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
 					continue;
 				}
@@ -968,10 +917,12 @@ public:
 			
 			switch( lex.info.typeIndex ) with(LexemeType)
 			{
-				case Add, Sub, Tilde: 
+				case Add, Sub, Tilde:
 				{
 					lexer.popFront();
 					right = parseMulExp();
+					assert( lex.info.typeIndex in lexToBinaryOpMap,
+						`Unexpected binary arithmetic operation lexeme: ` ~ (cast(LexemeType) lex.info.typeIndex).to!string );
 					left = new BinaryArithmeticExp!(config)(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
 					continue;
 				}
@@ -1038,7 +989,7 @@ public:
 		return expr;
 	}
 	
-	static int[int] lexToCmpOpMap;
+	static immutable int[int] lexToCmpOpMap;
 	
 	shared static this()
 	{
@@ -1054,6 +1005,7 @@ public:
 	
 	IExpression parseCompareExp()
 	{
+		import std.conv: to;
 		loger.write("parseCompareExp");
 		
 		IExpression left;
@@ -1071,6 +1023,15 @@ public:
 			{
 				lexer.popFront();
 				right = parseAddExp();
+				if( lex.info.typeIndex !in lexToCmpOpMap )
+				{
+					import std.stdio;
+
+					writeln("lexToCmpOpMap: ", lexToCmpOpMap);
+
+					assert( lex.info.typeIndex in lexToCmpOpMap, 
+						`Unexpected binary comparision operation lexeme: ` ~ (cast(LexemeType) lex.info.typeIndex).to!string );
+				}
 				left = new CompareExp!(config)(loc, lexToCmpOpMap[lex.info.typeIndex], left, right);
 			}
 			default:
@@ -1128,4 +1089,6 @@ public:
 		}
 		return e;
 	}
+
+
 }

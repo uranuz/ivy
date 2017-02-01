@@ -424,6 +424,8 @@ public:
 		_moduleSymbols[mainModuleName] = _frameStack.back;
 	}
 
+	alias visit = AbstractNodeVisitor.visit;
+
 	public override {
 		// Most of these stuff is just empty implementation except directive statements parsing
 		void visit(IvyNode node) { assert(0); }
@@ -501,7 +503,6 @@ public:
 									attrsDefStmtRange.popFront();
 									continue attr_def_stmts_loop;
 								}
-
 
 								if( attrDefBlock.exprDecls.canFind!( (it, needle) => it.attrName == needle )(attrDecl.attrName) )
 									compilerError( `Named attribute "` ~ attrDecl.attrName ~ `" already defined in directive definition` );
@@ -819,7 +820,7 @@ public:
 			c: { s: 10, k: "Example2" }
 	#}
 +/
-class SetInterpreter : IDirectiveCompiler
+class SetCompiler : IDirectiveCompiler
 {
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
@@ -1008,12 +1009,60 @@ public:
 	}
 }
 
+class AtCompiler : IDirectiveCompiler
+{
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "at" )
+			compilerError( "Expected 'at' directive" );
+
+		auto stmtRange = statement[];
+
+		IvyNode aggregate = stmtRange.takeFrontAs!IvyNode(`Expected "at" aggregate argument`);
+		IvyNode indexValue = stmtRange.takeFrontAs!IvyNode(`Expected "at" index value`);
+
+		aggregate.accept(compiler); // Evaluate aggregate
+		indexValue.accept(compiler); // Evaluate index
+		compiler.addInstr(OpCode.LoadSubscr);
+
+		if( !stmtRange.empty )
+			compilerError( `Expected end of "at" directive after index expression. Maybe ';' is missing. `
+				~ `Info: multiple index expressions are not supported yet.` );
+	}
+}
+
+class SetAtCompiler : IDirectiveCompiler
+{
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "setat" )
+			compilerError( "Expected 'setat' directive" );
+
+		auto stmtRange = statement[];
+
+		IExpression aggregate = stmtRange.takeFrontAs!IExpression(`Expected expression as "at" aggregate argument`);
+		IExpression assignedValue = stmtRange.takeFrontAs!IExpression(`Expected expression as "at" value to assign`);
+		IExpression indexValue = stmtRange.takeFrontAs!IExpression(`Expected expression as "at" index value`);
+
+		compiler.addInstr(OpCode.StoreSubscr);
+		aggregate.accept(compiler); // Evaluate aggregate
+		assignedValue.accept(compiler); // Evaluate assigned value
+		indexValue.accept(compiler); // Evaluate index
+
+		if( !stmtRange.empty )
+			compilerError( `Expected end of "setat" directive after index expression. Maybe ';' is missing. `
+				~ `Info: multiple index expressions are not supported yet.` );
+	}
+}
+
 class RepeatCompiler : IDirectiveCompiler
 {
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "repeat"  )
+		if( !statement || statement.name != "repeat" )
 			compilerError( "Expected 'repeat' directive" );
 
 		auto stmtRange = statement[];
@@ -1091,6 +1140,8 @@ class ExprCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
 	{
+		debug import std.stdio: writeln;
+
 		if( !stmt || stmt.name != "expr" )
 			compilerError( `Expected "expr" directive statement!` );
 
@@ -1102,7 +1153,11 @@ class ExprCompiler: IDirectiveCompiler
 		stmtRange.popFront();
 
 		if( !stmtRange.empty )
+		{
+			debug writeln( "ExprCompiler. At end. stmtRange.front.kind: ", ( cast(INameExpression) stmtRange.front ).name );
 			compilerError( `Expected end of "expr" directive. Maybe ';' is missing` );
+		}
+			
 	}
 
 }
@@ -1329,12 +1384,14 @@ public:
 		_modulesSymbolTables = symbolTables;
 
 		_dirCompilers["var"] = new VarCompiler();
+		_dirCompilers["set"] = new SetCompiler();
 		_dirCompilers["expr"] = new ExprCompiler();
 		_dirCompilers["if"] = new IfCompiler();
 		_dirCompilers["for"] = new ForCompiler();
 		_dirCompilers["repeat"] = new RepeatCompiler();
 		_dirCompilers["def"] = new DefCompiler();
 		_dirCompilers["import"] = new ImportCompiler();
+		_dirCompilers["at"] = new AtCompiler();
 
 		_mainModuleName = mainModuleName;
 		enterModuleScope(mainModuleName);
@@ -1628,18 +1685,11 @@ public:
 			OpCode opcode;
 			switch( node.operatorIndex )
 			{
-				case Operator.UnaryPlus:
-					opcode = OpCode.UnaryPlus;
-					break;
-				case Operator.UnaryMin:
-					opcode = OpCode.UnaryMin;
-					break;
-				case Operator.Not:
-					opcode = OpCode.UnaryNot;
-					break;
+				case Operator.UnaryPlus: opcode = OpCode.UnaryPlus; break;
+				case Operator.UnaryMin: opcode = OpCode.UnaryMin; break;
+				case Operator.Not: opcode = OpCode.UnaryNot; break;
 				default:
 					assert( false, "Unexpected unary operator type!" );
-					break;
 			}
 
 			addInstr( opcode );
@@ -1655,45 +1705,23 @@ public:
 			OpCode opcode;
 			switch( node.operatorIndex )
 			{
-				case Operator.Add:
-					opcode = OpCode.Add;
-					break;
-				case Operator.Sub:
-					opcode = OpCode.Sub;
-					break;
-				case Operator.Mul:
-					opcode = OpCode.Mul;
-					break;
-				case Operator.Div:
-					opcode = OpCode.Div;
-					break;
-				case Operator.Mod:
-					opcode = OpCode.Mod;
-					break;
-				case Operator.Concat:
-					opcode = OpCode.Concat;
-					break;
-				case Operator.And:
-					opcode = OpCode.And;
-					break;
-				case Operator.Or:
-					opcode = OpCode.Or;
-					break;
-				case Operator.Xor:
-					opcode = OpCode.Xor;
-					break;
-				case Operator.Equal:
-					opcode = OpCode.Equal;
-					break;
-				case Operator.LT:
-					opcode = OpCode.LT;
-					break;
-				case Operator.GT:
-					opcode = OpCode.GT;
-					break;
+				case Operator.Add: opcode = OpCode.Add; break;
+				case Operator.Sub: opcode = OpCode.Sub; break;
+				case Operator.Mul: opcode = OpCode.Mul; break;
+				case Operator.Div: opcode = OpCode.Div; break;
+				case Operator.Mod: opcode = OpCode.Mod; break;
+				case Operator.Concat: opcode = OpCode.Concat; break;
+				case Operator.And: opcode = OpCode.And; break;
+				case Operator.Or: opcode = OpCode.Or; break;
+				//case Operator.Xor: opcode = OpCode.Xor; break;
+				case Operator.Equal: opcode = OpCode.Equal; break;
+				case Operator.NotEqual: opcode = OpCode.NotEqual; break;
+				case Operator.LT: opcode = OpCode.LT; break;
+				case Operator.GT: opcode = OpCode.GT; break;
+				case Operator.LTEqual: opcode = OpCode.LTEqual; break;
+				case Operator.GTEqual: opcode = OpCode.GTEqual; break;
 				default:
 					assert( false, "Unexpected binary operator type!" );
-					break;
 			}
 
 			addInstr( opcode );
@@ -1884,8 +1912,42 @@ public:
 
 		void visit(ICompoundStatement node)
 		{
+			assert( false, `Shouldn't fall into this!` );
+		}
+
+		void visit(ICodeBlockStatement node)
+		{
 			if( !node )
-				compilerError( "Compound statement node is null!" );
+				compilerError( "Code block statement node is null!" );
+			
+			if( node.isListBlock )
+			{
+				TDataNode emptyArray = TDataNode[].init;
+				size_t emptyArrayConstIndex = addConst(emptyArray);
+				addInstr( OpCode.LoadConst, emptyArrayConstIndex );
+			}
+			
+			auto stmtRange = node[];
+			while( !stmtRange.empty )
+			{
+				stmtRange.front.accept( this );
+				stmtRange.popFront();
+
+				if( node.isListBlock )
+				{
+					addInstr( OpCode.Append ); // Append result to result array
+				}
+				else if( !stmtRange.empty )
+				{
+					addInstr( OpCode.PopTop );
+				}
+			}
+		}
+
+		void visit(IMixedBlockStatement node)
+		{
+			if( !node )
+				compilerError( "Mixed block statement node is null!" );
 
 			TDataNode emptyArray = TDataNode[].init;
 			size_t emptyArrayConstIndex = addConst(emptyArray);
@@ -1935,12 +1997,12 @@ public:
 		// We create __render__ invocation on the result of module execution !!!
 		
 		IvyNode mainModuleAST = _moduleRepo.getModuleTree(_mainModuleName);
-		
+
 		size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
 		size_t resultNameConstIndex = addConst( TDataNode("__result__") );
 
 		// In order to make call to __render__ creating block header for one positional argument
-		// witch is currently at the TOP of the execution stack
+		// which is currently at the TOP of the execution stack
 		size_t blockHeader = ( 1 << 3 ) + 1; //TODO: Change block type magic constant to enum!
 		size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
 
@@ -2036,6 +2098,7 @@ public:
 ExecutableProgramme compileModule( string mainModuleName, string[] importPaths, string fileExtension = ".ivy" )
 {
 	import std.range: empty;
+	debug import std.stdio: writeln;
 
 	if( importPaths.empty )
 		compilerError( `List of compiler import paths must not be empty!` );
@@ -2050,6 +2113,8 @@ ExecutableProgramme compileModule( string mainModuleName, string[] importPaths, 
 	// Main compiler phase that generates bytecode for modules
 	auto compiler = new ByteCodeCompiler( moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName );
 	compiler.run(); // Run compilation itself
+
+	debug writeln( "compileModule:\r\n", compiler.toPrettyStr() );
 
 	// Creating additional object that stores all neccessary info for user
 	return new ExecutableProgramme(compiler.moduleObjects, mainModuleName);
@@ -2074,6 +2139,7 @@ class ProgrammeCache(bool useCache = true)
 {
 private:
 	string[] _importPaths;
+	string _fileExtension;
 
 	static if(useCache)
 	{
@@ -2084,31 +2150,32 @@ private:
 	}
 
 public:
-	this( string[] importPaths )
+	this( string[] importPaths, string fileExtension = ".ivy" )
 	{
 		_importPaths = importPaths;
+		_fileExtension = fileExtension;
 		static if(useCache)
 		{
 			_mutex = new Mutex();
 		}
 	}
 
-	ExecutableProgramme getProgramme(string sourceFileName)
+	ExecutableProgramme getByModuleName(string moduleName)
 	{
 		static if(useCache)
 		{
-			if( sourceFileName !in _progs )
+			if( moduleName !in _progs )
 			{
 				synchronized( _mutex )
 				{
-					_progs[sourceFileName] = compileFile(sourceFileName, _importPaths);
+					_progs[moduleName] = compileModule(moduleName, _importPaths, _fileExtension);
 				}
 			}
-			return _progs[sourceFileName];
+			return _progs[moduleName];
 		}
 		else
 		{
-			return compileFile(sourceFileName, _importPaths);
+			return compileModule(moduleName, _importPaths, _fileExtension);
 		}
 	}
 }

@@ -8,6 +8,8 @@ import ivy.interpreter, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lex
 
 void main()
 {
+	import std.path;
+	
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 	alias TDataNode = DataNode!string;
 
@@ -30,7 +32,7 @@ void main()
 	
 	stdout.writeln(toJSON(astJSON, true));
 
-	auto compilerModuleRepo = new CompilerModuleRepository("test");
+	auto compilerModuleRepo = new CompilerModuleRepository([buildNormalizedPath(getcwd())], ".html");
 	auto symbCollector = new CompilerSymbolsCollector(compilerModuleRepo, "test");
 	ast.accept(symbCollector);
 
@@ -56,7 +58,8 @@ void main()
 	ModuleObject[string] moduleObjects = compiler.moduleObjects;
 	writeln( `Module objects after compilation: `, moduleObjects );
 
-	Interpreter interp = new Interpreter(moduleObjects, mainModuleName, TDataNode());
+	TDataNode[string] dataDict;
+	Interpreter interp = new Interpreter(moduleObjects, mainModuleName, TDataNode(dataDict));
 	interp.execLoop();
 
 	import std.range: back;

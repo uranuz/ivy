@@ -1,7 +1,5 @@
 module ivy.interpreter;
 
-import std.stdio, std.conv;
-
 import ivy.node, ivy.node_visitor, ivy.common, ivy.expression;
 
 import ivy.interpreter_data;
@@ -23,6 +21,8 @@ void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
 {
 	throw new InterpretException(msg, file, line);
 }
+
+enum FrameSearchMode { get, tryGet, set, setWithParents };
 
 class ExecutionFrame
 {
@@ -57,161 +57,164 @@ public:
 
 	TDataNode getValue( string varName )
 	{
-		auto varValuePtr = findValue(varName);
-		if( varValuePtr is null )
+		TDataNode* nodePtr = findValue!(FrameSearchMode.get)(varName);
+		if( nodePtr is null )
 			interpretError( "VariableTable: Cannot find variable with name: " ~ varName );
-		return *varValuePtr;
+		return *nodePtr;
 	}
 	
 	bool canFindValue( string varName )
 	{
-		return cast(bool)( findValue(varName) );
+		return cast(bool)( findValue!(FrameSearchMode.tryGet)(varName) );
 	}
 	
 	DataNodeType getDataNodeType( string varName )
 	{
-		auto varValuePtr = findValue(varName);
-		if( varValuePtr is null )
+		TDataNode* nodePtr = findValue!(FrameSearchMode.get)(varName);
+		if( nodePtr is null )
 			interpretError( "VariableTable: Cannot find variable with name: " ~ varName );
-		return varValuePtr.type;
+		return nodePtr.type;
 	}
 
 	// Basic method used to search symbols in context
-	TDataNode* findLocalValue( string varName, bool addParentDicts )
+	TDataNode* findLocalValue(FrameSearchMode mode)( string varName )
 	{
-		debug writeln("Start findLocalValue for varName: ", varName);
+		debug import std.stdio: writeln;
+		import std.conv: text;
 		import std.range: empty, front, popFront;
 		import std.array: split;
+
+		debug writeln( `Call ExecutionFrame.findlocalValue with varName: `, varName );
+
 		if( varName.empty )
 			interpretError( "VariableTable: Variable name cannot be empty" );
 
-		TDataNode *nodePtr;
-		if( _dataDict.type == DataNodeType.AssocArray )
-			nodePtr = &_dataDict;
-		else
-			interpretError( "VariableTable: cannot find variable in execution frame, because callable doesn't have it's on scope!" );
+		TDataNode* nodePtr = &_dataDict;
+		if( _dataDict.type != DataNodeType.AssocArray )
+		{
+			static if( mode == FrameSearchMode.tryGet ) {
+				return null;
+			} else {
+				interpretError( "VariableTable: cannot find variable: " ~ varName ~ " in execution frame, because callable doesn't have it's on scope!" );
+			}
+		}
 
 		string[] nameSplitted = varName.split('.');
 		while( !nameSplitted.empty )
 		{
 			if( nodePtr.type == DataNodeType.AssocArray )
 			{
-				TDataNode* tmpNodePtr = nameSplitted.front in nodePtr.assocArray;
-				
-				// Special hack to add parent dicts when importing some modules from nested folder,
-				// but we don't add extra parent dicts into foreign module frames
-				if( !tmpNodePtr && addParentDicts )
+				debug writeln( `ExecutionFrame.findlocalValue. Search: `, nameSplitted.front, ` in assoc array` );
+				if( TDataNode* tmpNodePtr = nameSplitted.front in nodePtr.assocArray )
 				{
-					nodePtr.assocArray[nameSplitted.front] = (TDataNode[string]).init;
-					nodePtr = &nodePtr.assocArray[nameSplitted.front];
+					debug writeln( `ExecutionFrame.findlocalValue. Node: `, nameSplitted.front, ` found in assoc array` );
+					nodePtr = tmpNodePtr;
 				}
 				else
 				{
-					nodePtr = tmpNodePtr;
+					debug writeln( `ExecutionFrame.findlocalValue. Node: `, nameSplitted.front, ` NOT found in assoc array` );
+					static if( mode == FrameSearchMode.setWithParents ) {
+						nodePtr.assocArray[nameSplitted.front] = (TDataNode[string]).init;
+						nodePtr = nameSplitted.front in nodePtr.assocArray;
+					} else static if( mode == FrameSearchMode.set ) {
+						if( nameSplitted.length == 1 ) {
+							nodePtr.assocArray[nameSplitted.front] = TDataNode.init;
+							return nameSplitted.front in nodePtr.assocArray;
+						} else {
+							interpretError( `Cannot set value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!` );
+						}
+					} else static if( mode == FrameSearchMode.tryGet ) {
+						return null;
+					} else {
+						if( nameSplitted.length == 1 ) {
+							return null;
+						} else {
+							interpretError( `Cannot find value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!` );
+						}
+						
+					}
 				}
 			}
 			else if( nodePtr.type == DataNodeType.ExecutionFrame )
 			{
+				debug writeln( `ExecutionFrame.findlocalValue. Search: `, nameSplitted.front, ` in execution frame` );
 				if( !nodePtr.execFrame )
-					interpretError( `Cannot find value, because execution frame is null!!!` );
+				{
+					static if( mode == FrameSearchMode.tryGet ) {
+						return null;
+					} else {
+						interpretError( `Cannot find value, because execution frame is null!!!` );
+					}
+				}
 
 				if( nodePtr.execFrame._dataDict.type != DataNodeType.AssocArray )
-					interpretError( `Cannot find value, because execution frame data dict is not of assoc array type!!!` );
+				{
+					static if( mode == FrameSearchMode.tryGet ) {
+						return null;
+					} else {
+						interpretError( `Cannot find value, because execution frame data dict is not of assoc array type!!!` );
+					}
+				}
+					
 				nodePtr = nameSplitted.front in nodePtr.execFrame._dataDict.assocArray;
+				debug writeln( `ExecutionFrame.findlocalValue. Node: `, nameSplitted.front, (nodePtr ? ` found` : ` NOT found`) ,` in execution frame` );
 			}
 			else
 			{
+				debug writeln( `ExecutionFrame.findlocalValue. Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type` );
 				return null;
 			}
 			
 			nameSplitted.popFront();
 			if( nodePtr is null )
+			{
+				debug writeln( `ExecutionFrame.findlocalValue. Got empty node at end of iteration` );
 				return null;
+			}
 		}
 
 		return nodePtr;
 	}
 
-	TDataNode* findValue(string varName, bool addParentDicts = false)
+	TDataNode* findValue(FrameSearchMode mode)(string varName)
 	{
-		TDataNode* nodePtr = findLocalValue(varName, addParentDicts);
+		debug import std.stdio: writeln;
+		debug writeln( `Call ExecutionFrame.findLocalValue with varName: `, varName );
+
+		TDataNode* nodePtr = findLocalValue!(mode)(varName);
 		if( nodePtr )
 			return nodePtr;
 		
+		debug writeln( `Call ExecutionFrame.findLocalValue. No varName: `, varName, ` in exec frame. Try to find in module frame` );
+
 		if( _moduleFrame )
-			return _moduleFrame.findLocalValue(varName, addParentDicts);
+			return _moduleFrame.findLocalValue!(mode)(varName);
 		
 		return null;
 	}
 
-	void setValue( string varName, TDataNode value, bool addParentDicts = false )
+	void setValue( string varName, TDataNode value )
 	{
-		import std.range: empty;
-		import std.algorithm: splitter;
-		import std.string: join;
-		if( varName.empty )
-			interpretError("Variable name cannot be empty!");
+		debug import std.stdio: writeln;
+		debug writeln( `Call ExecutionFrame.setValue with varName: `, varName, ` and value: `, value );
 
-		TDataNode* valuePtr = findValue(varName, addParentDicts);
-		if( valuePtr )
-		{
-			*valuePtr = value;
-		}
-		else
-		{
-			auto splName = splitter(varName, '.');
-			string shortName = splName.back;
-			splName.popBack(); // Trim actual name
+		TDataNode* valuePtr = findValue!(FrameSearchMode.set)(varName);
+		if( valuePtr is null )
+			interpretError( `Failed to set variable: ` ~ varName );
 
-			if( splName.empty )
-			{
-				_dataDict[shortName] = value;
-			}
-			else
-			{
-				// Try to find parent
-				TDataNode* parentPtr = findValue(splName.join('.'), addParentDicts);
-				if( parentPtr is null )
-					interpretError( `Cannot create new variable "` ~ varName ~ `", because parent not exists!` );
-
-				if( parentPtr.type != DataNodeType.AssocArray )
-					interpretError( `Cannot create new value "` ~ varName ~ `", because parent is not of assoc array type!` );
-				// I think we shouldn't be able to add new variables to another module scope, only modify them
-
-				(*parentPtr)[shortName] = value;
-			}
-
-		}
+		*valuePtr = value;
 	}
-	
-	void removeValue( string varName )
+
+	void setValueWithParents( string varName, TDataNode value )
 	{
-		import std.range: empty;
-		import std.algorithm: splitter;
-		import std.string: join;
-		if( varName.empty )
-			interpretError("Variable name cannot be empty!");
+		debug import std.stdio: writeln;
+		debug writeln( `Call ExecutionFrame.setValueWithParents with varName: `, varName, ` and value: `, value );
+		
+		TDataNode* valuePtr = findValue!(FrameSearchMode.setWithParents)(varName);
+		if( valuePtr is null )
+			interpretError( `Failed to set variable: ` ~ varName );
 
-		auto splName = splitter(varName, '.');
-		string shortName = splName.back;
-		splName.popBack(); // Trim actual name
-		if( splName.empty )
-		{
-			_dataDict.assocArray.remove( shortName );
-		}
-		else
-		{
-			// Try to find parent
-			TDataNode* parentPtr = findValue(splName.join('.'));
-
-			if( parentPtr is null )
-				interpretError( `Cannot delete variable "` ~ varName ~ `", because parent not exists!` );
-
-			if( parentPtr.type != DataNodeType.AssocArray )
-				interpretError( `Cannot delete value "` ~ varName ~ `", because parent is not of assoc array type!` );
-
-			(*parentPtr)[shortName].assocArray.remove(shortName);
-		}
+		*valuePtr = value;
 	}
 
 	bool hasOwnScope() @property
@@ -260,8 +263,11 @@ public:
 
 	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict)
 	{
+		debug import std.stdio: writeln;
 		_moduleObjects = moduleObjects;
 		assert( mainModuleName in _moduleObjects, `Cannot get main module from module objects!` );
+
+		debug writeln( `Iterpreter ctor: passed dataDict: `, dataDict );
 
 		CallableObject rootCallableObj = new CallableObject;
 		rootCallableObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
@@ -269,12 +275,15 @@ public:
 		rootCallableObj._name = "__main__";
 
 		_globalFrame = new ExecutionFrame(null, null);
+		debug writeln( `Iterpreter ctor 1: _globalFrame._dataDict: `, _globalFrame._dataDict );
 
 		// Add native directive interpreter __render__ to global scope
 		CallableObject renderDirInterp = new CallableObject();
 		renderDirInterp._name = "__render__";
 		renderDirInterp._dirInterp = new RenderDirInterpreter();
 		_globalFrame.setValue( "__render__", TDataNode(renderDirInterp) );
+
+		debug writeln( `Iterpreter ctor 2: _globalFrame._dataDict: `, _globalFrame._dataDict );
 
 		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
 	}
@@ -307,61 +316,76 @@ public:
 
 	bool canFindValue( string varName )
 	{
-		import std.range: empty, back;
-
-		if( !_frameStack.empty )
-		{
-			assert( _frameStack.back, `Couldn't test variable existence, because frame stack is null!` );
-			if( _frameStack.back.canFindValue(varName) )
-				return true;
-
-			assert( _frameStack.back._moduleFrame, `Couldn't test variable existence in module frame, because it is null!` );
-			if( _frameStack.back._moduleFrame.canFindValue(varName) )
-				return true;
-		}
-
-		assert( _globalFrame, `Couldn't test variable existence in global frame, because it is null!` );
-		if( _globalFrame.canFindValue(varName) )
-			return true;
-
-		return false;
+		return cast(bool)( findValueImpl!(FrameSearchMode.tryGet)(varName, _frameStack[], _globalFrame) );
 	}
 
-	TDataNode* findValue( string varName )
+	static TDataNode* findValueImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
 	{
 		import std.range: empty, back, popBack;
 
-		if( !_frameStack.empty )
+		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
-			auto frameStackSlice = _frameStack[];
-
-			for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
-			{
-				assert( frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
-				if( !frameStackSlice.back.hasOwnScope )
-				{
-					continue; // Let's try to find in parent
-				}
-
-				if( TDataNode* valuePtr = frameStackSlice.back.findValue(varName) )
-					return valuePtr;
+			assert( frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
+			if( !frameStackSlice.back.hasOwnScope ) {
+				continue; // Let's try to find in parent
 			}
+
+			if( TDataNode* valuePtr = frameStackSlice.back.findValue!(mode)(varName) )
+				return valuePtr;
 		}
 
-		assert( _globalFrame, `Couldn't find variable value in global frame, because it is null!` );
-		if( TDataNode* valuePtr = _globalFrame.findValue(varName) )
+		assert( globalFrame, `Couldn't find variable: ` ~ varName ~ ` value in global frame, because it is null!` );
+		assert( globalFrame.hasOwnScope, `Couldn't find variable: ` ~ varName ~ ` value in global frame, because global frame doesn't have it's own scope!` );
+
+		if( TDataNode* valuePtr = globalFrame.findValue!(mode)(varName) )
 			return valuePtr;
 
 		return null;
 	}
 
+	static TDataNode* findValueLocalImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice )
+	{
+		import std.range: empty, back, popBack;
+
+		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
+		{
+			assert( frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
+			if( !frameStackSlice.back.hasOwnScope ) {
+				continue; // Let's try to find first parent that have it's own scope
+			}
+
+			if( TDataNode* valuePtr = frameStackSlice.back.findLocalValue!(mode)(varName) )
+				return valuePtr;
+			else
+				return null;
+		}
+
+		return null;
+	}
+
+	static void setValueImpl(FrameSearchMode mode)( string varName, TDataNode value, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
+		if( mode == FrameSearchMode.set || mode == FrameSearchMode.setWithParents )
+	{
+		TDataNode* valuePtr = findValueImpl!(mode)(varName, frameStackSlice[], globalFrame);
+		if( valuePtr is null )
+			interpretError( "Failed to set variable with name: " ~ varName );
+		
+		*valuePtr = value;
+	}
+
+	TDataNode* findValue(FrameSearchMode mode)( string varName )
+	{
+		return findValueImpl!(mode)(varName, _frameStack[], _globalFrame);
+	}
+
 	TDataNode getValue( string varName )
 	{
-		TDataNode* valuePtr = findValue(varName);
+		TDataNode* valuePtr = findValue!(FrameSearchMode.get)(varName);
 
 		if( valuePtr is null )
 		{
 			debug {
+				import std.stdio: writeln;
 				foreach( i, frame; _frameStack[] )
 				{
 					writeln( `Scope frame lvl `, i, `, _dataDict: `, frame._dataDict );
@@ -376,43 +400,40 @@ public:
 
 	void setValue( string varName, TDataNode value )
 	{
-		import std.range: empty;
-		TDataNode* valuePtr = findValue(varName);
+		TDataNode* valuePtr = findValue!(FrameSearchMode.set)(varName);
 		if( valuePtr is null )
 			interpretError( `Cannot set variable "` ~ varName ~ `", because cannot find it. Use setLocalValue to decare new variable!` );
 
 		*valuePtr = value;
 	}
 
+	void setValueWithParents( string varName, TDataNode value )
+	{
+		TDataNode* valuePtr = findValue!(FrameSearchMode.setWithParents)(varName);
+		if( valuePtr is null )
+			interpretError( `Cannot set variable "` ~ varName ~ `", because cannot find it. Use setLocalValueWithParents to decare new variable!` );
+
+		*valuePtr = value;
+	}
+
 	void setLocalValue( string varName, TDataNode value )
 	{
-		import std.range: empty, popBack, back;
-		import std.algorithm: splitter;
+		TDataNode* valuePtr = findValueLocalImpl!(FrameSearchMode.set)( varName, _frameStack[] );
+		
+		if( valuePtr is null )
+			interpretError( `Failed to set local variable: ` ~ varName );
 
-		if( _frameStack.empty )
-			interpretError("Cannot set local var value, because frame stack is empty!");
-
-		_frameStack.back.setValue(varName, value);
+		*valuePtr = value;
 	}
 
-	bool hasLocalValue( string varName )
+	void setLocalValueWithParents( string varName, TDataNode value )
 	{
-		import std.range: empty, back;
+		TDataNode* valuePtr = findValueLocalImpl!(FrameSearchMode.setWithParents)( varName, _frameStack[] );
+		
+		if( valuePtr is null )
+			interpretError( `Failed to set local variable: ` ~ varName );
 
-		if( _frameStack.empty )
-			return false;
-
-		return _frameStack.back.canFindValue( varName );
-	}
-
-	void removeLocalValue( string varName )
-	{
-		import std.range: empty, back;
-
-		if( _frameStack.empty )
-			interpretError("Cannot remove local value, because frame stack is empty!");
-
-		return _frameStack.back.removeValue( varName );
+		*valuePtr = value;
 	}
 
 	TDataNode getModuleConst( size_t index )
@@ -434,6 +455,7 @@ public:
 		import std.conv: to, text;
 		import std.meta: AliasSeq;
 		import std.typecons: tuple;
+		debug import std.stdio: writeln;
 
 		assert( !_frameStack.empty, `_frameStack is empty` );
 		assert( _frameStack.back, `_frameStack.back is null` );
@@ -574,7 +596,7 @@ public:
 				}
 
 				// Shallow equality comparision
-				case OpCode.Equal:
+				case OpCode.Equal, OpCode.NotEqual:
 				{
 					assert( !_stack.empty, "Cannot execute Equal instruction. Expected right operand, but exec stack is empty!" );
 					// Right value was evaluated last so it goes first in the stack
@@ -589,8 +611,11 @@ public:
 					switch( leftVal.type )
 					{
 						case DataNodeType.Undef, DataNodeType.Null:
-							// Undef and Null are not less or equal to something
-							_stack.back = TDataNode(false);
+							if( instr.opcode == OpCode.Equal ) {
+								_stack.back = TDataNode( leftVal.type == rightVal.type );
+							} else {
+								_stack.back = TDataNode( leftVal.type != rightVal.type );
+							}
 							break;
 
 						foreach( typeAndField; AliasSeq!(
@@ -600,11 +625,69 @@ public:
 							tuple(DataNodeType.String, "str")) )
 						{
 							case typeAndField[0]:
-								mixin( `_stack.back = leftVal.` ~ typeAndField[1] ~ ` == rightVal.` ~ typeAndField[1] ~ `;` );
+								if( instr.opcode == OpCode.Equal ) {
+									mixin( `_stack.back = leftVal.` ~ typeAndField[1] ~ ` == rightVal.` ~ typeAndField[1] ~ `;` );
+								} else {
+									mixin( `_stack.back = leftVal.` ~ typeAndField[1] ~ ` != rightVal.` ~ typeAndField[1] ~ `;` );
+								}
 								break cmp_type_switch;
 						}
 						default:
+							assert( false, `Equality comparision doesn't support type "` ~ leftVal.type.to!string ~ `" yet!` );
 							break;
+					}
+					break;
+				}
+
+				// Load constant from programme data table into stack
+				case OpCode.LoadSubscr:
+				{
+					import std.utf: toUTFindex, decode;
+
+					debug import std.stdio: writeln;
+					debug writeln( `OpCode.LoadSubscr. _stack: `, _stack );
+
+					assert( !_stack.empty, "Cannot execute LoadSubscr instruction. Expected index value, but exec stack is empty!" );
+					TDataNode indexValue = _stack.back;
+					_stack.popBack();
+
+					assert( !_stack.empty, "Cannot execute LoadSubscr instruction. Expected aggregate, but exec stack is empty!" );
+					TDataNode aggr = _stack.back;
+					_stack.popBack();
+					debug writeln( `OpCode.LoadSubscr. aggr: `, aggr );
+					debug	writeln( `OpCode.LoadSubscr. indexValue: `, indexValue );
+
+					assert( aggr.type == DataNodeType.String || aggr.type == DataNodeType.Array || aggr.type == DataNodeType.AssocArray,
+						"Cannot execute LoadSubscr instruction. Aggregate value must be string, array or assoc array!" );
+
+					switch( aggr.type )
+					{
+						case DataNodeType.String:
+							assert( indexValue.type == DataNodeType.Integer,
+								"Cannot execute LoadSubscr instruction. Index value for string aggregate must be integer!" );
+							
+							// Index operation for string in D is little more complicated
+							 size_t startIndex = aggr.str.toUTFindex(indexValue.integer); // Get code unit index by index of symbol
+							 size_t endIndex = startIndex;
+							 aggr.str.decode(endIndex); // decode increases passed index
+							 assert( startIndex < aggr.str.length, `String slice start index must be less than str length` );
+							 assert( endIndex <= aggr.str.length, `String slice end index must be less or equal to str length` );
+							_stack ~= TDataNode( aggr.str[startIndex..endIndex] );
+							break;
+						case DataNodeType.Array:
+							assert( indexValue.type == DataNodeType.Integer,
+								"Cannot execute LoadSubscr instruction. Index value for array aggregate must be integer!" );
+							assert( indexValue.integer < aggr.array.length, `Array index must be less than array length` );
+							_stack ~= aggr.array[indexValue.integer];
+							break;
+						case DataNodeType.AssocArray:
+							assert( indexValue.type == DataNodeType.String,
+								"Cannot execute LoadSubscr instruction. Index value for assoc array aggregate must be string!" );
+							assert( indexValue.str in aggr.assocArray, `Assoc array key must be present in assoc array` );
+							_stack ~= aggr.assocArray[indexValue.str];
+							break;
+						default:
+							assert( false, `This should never happen` );
 					}
 					break;
 				}
@@ -629,12 +712,9 @@ public:
 						`Left and right values for concatenation operation must have the same string or array type!`
 					);
 
-					if( leftVal.type == DataNodeType.String )
-					{
+					if( leftVal.type == DataNodeType.String ) {
 						_stack.back = leftVal.str ~ rightVal.str;
-					}
-					else
-					{
+					} else {
 						_stack.back = leftVal.array ~ rightVal.array;
 					}
 
@@ -649,7 +729,7 @@ public:
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute Concat instruction. Expected left operand, but exec stack is empty!" );
+					assert( !_stack.empty, "Cannot execute Append instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
 					_stack.popBack();
 					assert( leftVal.type == DataNodeType.Array, "Left operand for Append instruction expected to be array, but got: " ~ leftVal.type.to!string );
@@ -677,12 +757,9 @@ public:
 					assert( _stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
 						`Operand for unary minus operation must have integer or floating type!` );
 
-					if( _stack.back.type == DataNodeType.Integer )
-					{
+					if( _stack.back.type == DataNodeType.Integer ) {
 						_stack.back = - _stack.back.integer;
-					}
-					else
-					{
+					} else {
 						_stack.back = - _stack.back.floating;
 					}
 
@@ -755,7 +832,7 @@ public:
 					debug writeln( `ImportModule _moduleObjects: `, _moduleObjects );
 					assert( moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: " ~ moduleName );
 
-					ExecutionFrame callerFrame = _frameStack.back;
+					ExecutionFrame[] baseFrameStack = _frameStack[];
 
 					if( moduleName !in _moduleFrames )
 					{
@@ -773,19 +850,18 @@ public:
 						newFrame(callableObj, null); // Create entry point module frame
 
 						// Put module frame in frame of the caller
-						callerFrame.setValue( moduleName, TDataNode(_frameStack.back), true );
+						setValueImpl!(FrameSearchMode.setWithParents)( moduleName, TDataNode(_frameStack.back), baseFrameStack, _globalFrame );
 
 						_stack ~= TDataNode(pk+1);
 						codeRange = codeObject._instrs[];
 						pk = 0;
 
-						// TODO: Finish me ;) ... please
 						continue execution_loop;
 					}
 					else
 					{
 						// If module is already imported then just put reference to it into caller's frame
-						callerFrame.setValue( moduleName, TDataNode(_moduleFrames[moduleName]), true );
+						setValueImpl!(FrameSearchMode.setWithParents)( moduleName, TDataNode(_moduleFrames[moduleName]), baseFrameStack, _globalFrame );
 					}
 
 					break;
@@ -992,7 +1068,6 @@ public:
 						newFrame( callableObj, moduleFrame );
 					}
 
-
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{
 						for( size_t i = 0; i < (stackArgCount - 1); )
@@ -1030,13 +1105,12 @@ public:
 							}
 							else if( blockType == 2 )
 							{
-								assert( false, "Interpreting positional arguments not implemented yet!" );
+								assert( false, "Interpreting positional arguments is not implemented yet!" );
 							}
 							else
 							{
 								assert( false, "Unexpected arguments block type" );
 							}
-
 						}
 					}
 					debug writeln( "_stack after parsing all arguments: ", _stack );

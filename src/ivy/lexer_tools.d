@@ -367,7 +367,6 @@ struct TextForwardRange(S, LocationConfig c = LocationConfig.init)
 	
 	string toString() inout
 	{
-		//writeln("toString: index: ", index, ", this.sliceEndIndex: ", this.sliceEndIndex);
 		return str[index .. this.sliceEndIndex];
 	}
 }

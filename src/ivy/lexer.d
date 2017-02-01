@@ -27,8 +27,10 @@ static immutable commentBlockEnd = "#}";
 static immutable dataBlockBegin = `{"`;
 static immutable dataBlockEnd = `"}`;
 
-static immutable exprBlockBegin = `{=`;
-static immutable codeBlockBegin = `{%`;
+static immutable exprBlockBegin = `{{`;
+static immutable exprBlockEnd = `}}`;
+static immutable codeBlockBegin = `{=`;
+static immutable codeListBegin = `{%`;
 
 enum LexemeType {
 	Unknown = 0,
@@ -56,14 +58,16 @@ enum LexemeType {
 	RBracket,
 	RParen,
 	Semicolon,
-	Sub, 
+	Sub,
 	Tilde,
 	Integer,
 	Float,
 	String,
 	Name,
 	ExprBlockBegin,
+	ExprBlockEnd,
 	CodeBlockBegin,
+	CodeListBegin,
 	MixedBlockBegin,
 	MixedBlockEnd,
 	Comment,
@@ -74,7 +78,10 @@ enum LexemeType {
 	
 	
 	CoreTypesEnd,
-	ExtensionTypesStart = 100
+	ExtensionTypesStart = 100,
+
+	CodeBlockEnd = LexemeType.RBrace,
+	CodeListEnd = LexemeType.RBrace
 };
 
 
@@ -485,8 +492,9 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 public:
 	__gshared LexRule[] mixedContextRules = [
-		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RBrace ),
-		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RBrace ),
+		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
+		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
+		staticRule( codeListBegin, LexemeType.CodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
 		dynamicRule( &parseData, LexemeType.Data, LexemeFlag.Literal )
@@ -495,8 +503,10 @@ public:
 	__gshared LexRule[] codeContextRules = [
 		dynamicRule( &parseDataBlock, LexemeType.DataBlock, LexemeFlag.Literal ),
 
-		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RBrace ),
-		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RBrace ),
+		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
+		staticRule( exprBlockEnd, LexemeType.ExprBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.ExprBlockBegin ),
+		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
+		staticRule( codeListBegin, LexemeType.CodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
 		
@@ -654,7 +664,8 @@ public:
 				if( _ctx.parenStack.back.pairTypeIndex != _front.typeIndex )
 				{
 					lexerError( `Expected pair lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.pairTypeIndex).to!string
-						~ `" for lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.typeIndex).to!string ~ `"` );
+						~ `" for lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.typeIndex).to!string ~ `", but got "`
+						~ (cast(LexemeType) _front.typeIndex).to!string ~ `"!` );
 				}
 			}
 			else
@@ -666,7 +677,7 @@ public:
 		// Determining context state
 		switch( _front.info.typeIndex ) with( LexemeType )
 		{
-			case ExprBlockBegin, CodeBlockBegin:
+			case ExprBlockBegin, CodeBlockBegin, CodeListBegin:
 			{
 				if( _ctx.state == ContextState.CodeContext || _ctx.state == ContextState.MixedContext )
 				{
@@ -674,15 +685,17 @@ public:
 				}
 				break;
 			}
-			case RBrace:
+			case ExprBlockEnd, CodeBlockEnd /*, CodeListEnd*/:
 			{
 				if( _ctx.state == ContextState.CodeContext )
 				{
 					if( !_ctx.parenStack.empty && !_ctx.statesStack.empty )
 					{
 						// Single brace only "closing" code context if there is block begin on the top of paren stack
-						if( _ctx.parenStack.back.typeIndex == LexemeType.ExprBlockBegin || _ctx.parenStack.back.typeIndex == LexemeType.CodeBlockBegin )
-							_ctx.statesStack.popBack();
+						if( _front.info.typeIndex == ExprBlockEnd && _ctx.parenStack.back.typeIndex == ExprBlockBegin
+							|| _front.info.typeIndex == CodeBlockEnd && _ctx.parenStack.back.typeIndex == CodeBlockBegin
+							|| _front.info.typeIndex == CodeListEnd && _ctx.parenStack.back.typeIndex == CodeListBegin )
+								_ctx.statesStack.popBack();
 					}
 				}
 				break;
@@ -967,6 +980,7 @@ public:
 	static immutable notTextLexemes = [
 		exprBlockBegin,
 		codeBlockBegin,
+		codeListBegin,
 		mixedBlockBegin,
 		mixedBlockEnd
 	];

@@ -22,4 +22,6 @@ class AbstractNodeVisitor
 	void visit(IDirectiveStatement node) { visit( cast(IStatement) node ); }
 	void visit(IDataFragmentStatement node) { visit( cast(IStatement) node ); }
 	void visit(ICompoundStatement node) { visit( cast(IStatement) node ); }
+	void visit(ICodeBlockStatement node) { visit( cast(ICompoundStatement) node ); }
+	void visit(IMixedBlockStatement node) { visit( cast(ICompoundStatement) node ); }
 }

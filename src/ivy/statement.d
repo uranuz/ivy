@@ -316,23 +316,30 @@ public:
 class CodeBlockStatement(LocationConfig c): ICodeBlockStatement
 {
 	mixin BaseBlockStatementImpl!(c, IDirectiveStatementRange);
+	private bool _isListBlock;
 
 public:
-	this(CustLocation loc, IDirectiveStatement[] stmts)
+	this(CustLocation loc, IDirectiveStatement[] stmts, bool isList)
 	{
 		_location = loc;
 		_statements = stmts;
+		_isListBlock = isList;
 	}
 	
 	public @property override {
 		string kind()
 		{
-			return "code block statement";
+			return _isListBlock ? "code list statement" : "code block statement";
+		}
+
+		bool isListBlock()
+		{
+			return _isListBlock;
 		}
 	}
 }
 
-class MixedBlockStatement(LocationConfig c): ICompoundStatement
+class MixedBlockStatement(LocationConfig c): IMixedBlockStatement
 {
 	mixin BaseBlockStatementImpl!c;
 private:

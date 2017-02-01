@@ -1,29 +1,25 @@
-expr {
-	def test_def {
+expr {%
+	def test_def {=
 		def.kv
 			aa as int
 			bb as str
 			cc: 2 + 2 as int;
-		def.body noscope {= 2 + 2 }
+		def.body noscope {{2 + 2}}
 	};
 
 	test_def aa: 5 bb: 6 cc: 10;
 
-	repeat item in ["Vasya", "Petya", "Vova"] {= item};
+	repeat item in ["Vasya", "Petya", "Vova"] {{item}};
 
 	var isHello: false;
 	if isHello {*
 		<div>Hello!</div><div></div>
-		{% if x < 10 {= 10} else {= 20} }
-		{= "Vasya"}
-		{% if isAuthorized {= 100} else {= 1000} }
+		{% if x < 10 {{10}} else {{20}} }
+		{= expr "Vasya"}
+		{= if isAuthorized {{100}} else {{1000}} }
 	*} else {*
 		<div>Good bye!</div>
 	*};
 
-	import test.dependency;
-	test.dependency.test000;
 
-	var abcd: "ABCD", x: 15;
-	expr {= abcd ~ " "; if x < 10 {= "qwerty" } else {= "poiuyt"} }
 }

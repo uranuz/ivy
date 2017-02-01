@@ -1,3 +1,4 @@
+/// This module serves to parse JSON data directly into Ivy internal data format
 module ivy.json;
 
 import ivy.interpreter_data;
@@ -39,12 +40,7 @@ public:
 	void error(string msg, string file = __FILE__, size_t line = __LINE__)
 	{
 		import std.conv: to;
-		throw new IvyJSONException( `Error at: ...` ~ _source.str[_source.index .. _source.index + 15 ].to!string ~ `..: ` ~ msg, file, line);
-	}
-
-	TDataNode parse()
-	{
-		return parseValue();
+		throw new IvyJSONException( `Parsing error at: ` ~ _source.str[_source.index .. _source.index + 30 ].to!string ~ `..: ` ~ msg, file, line);
 	}
 
 	String parseString()
@@ -77,6 +73,8 @@ public:
 					default:
 						error( "Unexpected escape sequence..." );
 				}
+				
+				_source.popFront(); // Skip escaped character
 			}
 			else if( ch == '\"' )
 			{
@@ -91,7 +89,6 @@ public:
 
 		if( _source.empty || _source.front != '"' )
 			error( "Expected \"" );
-		
 		_source.popFront(); // Skip "
 
 		return buf.data;
@@ -103,16 +100,13 @@ public:
 		{
 			if( !isWhite(_source.front) )
 				break;
-			_source.popFront();
+			_source.popFront(); // Skip whitespace character
 		}
 	}
 
-	Char getChar
-		//(bool skipWhitespace)
-	()
+	Char getChar()
 	{
-		//static if(skipWhitespace) 
-			this.skipWhitespace();
+		this.skipWhitespace();
 		return _source.front;
 	}
 
@@ -179,7 +173,7 @@ public:
 						if( getChar() == '}' )
 							break;
 						
-						if( getChar() != ',' )
+						if( _source.empty || getChar() != ',' )
 							error( `Expected ,` );
 						_source.popFront(); // Skip ,
 					}
@@ -208,7 +202,7 @@ public:
 
 					if( _source.empty || _source.front != ']' )
 						error("Expected ]");
-					_source.popFront();
+					_source.popFront(); // Skip ]
 
 					return TDataNode(nodeArray);
 					break;
@@ -249,5 +243,11 @@ public:
 
 		return TDataNode();
 	}
+}
 
+/// Interface method to parse JSON string into ivy internal data format
+auto parseIvyJSON(S)(S src)
+{
+	auto parser = JSONParser!(S)(src);
+	return parser.parseValue();
 }
