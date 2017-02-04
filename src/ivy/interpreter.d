@@ -449,6 +449,11 @@ public:
 		return _frameStack.back._callableObj._codeObj._moduleObj.getConst(index);
 	}
 
+	TDataNode getModuleConstCopy( size_t index )
+	{
+		return deeperCopy( getModuleConst(index) );
+	}
+
 	void execLoop()
 	{
 		import std.range: empty, back, popBack;
@@ -790,7 +795,7 @@ public:
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
-					TDataNode varNameNode = getModuleConst( instr.arg );
+					TDataNode varNameNode = getModuleConstCopy( instr.arg );
 					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreName instruction. Variable name const must have string type!` );
 
 					setValue( varNameNode.str, varValue );
@@ -805,7 +810,7 @@ public:
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
-					TDataNode varNameNode = getModuleConst( instr.arg );
+					TDataNode varNameNode = getModuleConstCopy( instr.arg );
 					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreLocalName instruction. Variable name const must have string type!` );
 
 					setLocalValue( varNameNode.str, varValue );
@@ -815,7 +820,7 @@ public:
 				// Loads data from local context frame variable by index of var name in module constants
 				case OpCode.LoadName:
 				{
-					TDataNode varNameNode = getModuleConst( instr.arg );
+					TDataNode varNameNode = getModuleConstCopy( instr.arg );
 					assert( varNameNode.type == DataNodeType.String, `Cannot execute LoadName instruction. Variable name operand must have string type!` );
 
 					_stack ~= getValue( varNameNode.str );

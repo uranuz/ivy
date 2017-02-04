@@ -724,3 +724,44 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 	}
 	
 }
+
+TDataNode deeperCopy(TDataNode)(auto ref TDataNode node)
+{
+	final switch( node.type ) with( DataNodeType )
+	{
+		case Undef, Null, Boolean, Integer, Floating:
+			// These types of nodes are value types, so make plain copy
+			return node;
+		case String:
+			// String is not a value type, but they are immutable in D implementation,
+			// so we only get new slice of existing string
+			return node;
+		case Array:
+		{
+			TDataNode[] newArray;
+			newArray.length = node.array.length; // Preallocating
+			foreach( i, ref el; node.array ) {
+				newArray[i] = deeperCopy(el);
+			}
+			return TDataNode(newArray);
+		}
+		case AssocArray:
+		{
+			TDataNode[string] newAA;
+			foreach( ref key, ref val; node.assocArray ) {
+				newAA[key] = deeperCopy(val);
+			}
+			return TDataNode(newAA);
+		}
+		case CodeObject:
+			// We don't do deeper copy of code object, because it should always be used as constant
+			return node;
+		case Callable:
+			// These types of nodes shouldn't appear in module constants table so leave these not implemented for now
+			assert( false, `Getting of deeper copy for callable is not implemented for now` );
+		case ExecutionFrame:
+			assert( false, `Getting of deeper copy for execution frame is not implemented for now` );
+		case DataNodeRange:
+			assert( false, `Getting of deeper copy for data node range is not implemented for now` );
+	}
+}
