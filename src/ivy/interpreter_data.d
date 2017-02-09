@@ -75,6 +75,200 @@ public:
 	}
 }
 
+
+struct DirValueAttr(bool isForCompiler = false)
+{
+	string name;
+	string typeName;
+
+	static if( isForCompiler )
+	{
+		import ivy.node: IExpression;
+		
+		IExpression defaultValueExpr;
+		this( string name, string typeName, IExpression defValue )
+		{
+			this.name = name;
+			this.typeName = typeName;
+			this.defaultValueExpr = defValue;
+		}
+	}
+	else
+	{
+		this( string name, string typeName )
+		{
+			this.name = name;
+			this.typeName = typeName;
+		}
+	}
+
+	DirValueAttr!(false) toInterpreterValue() {
+		return DirValueAttr!(false)(name, typeName);
+	}
+}
+
+enum DirAttrKind { NamedAttr, ExprAttr, IdentAttr, KwdAttr, NoscopeAttr, BodyAttr };
+
+struct DirAttrsBlock(bool isForCompiler = false)
+{
+	alias TValueAttr = DirValueAttr!(isForCompiler);
+
+	static if( isForCompiler ) {
+		import ivy.node: ICompoundStatement;
+	}
+
+	static struct Storage {
+		union {
+			TValueAttr[string] namedAttrs;
+			TValueAttr[] exprAttrs;
+			string[] names;
+			string keyword;
+
+			static if( isForCompiler ) {
+				ICompoundStatement bodyAST;
+			}
+		}
+	}
+
+	private DirAttrKind _kind;
+	private Storage _storage;
+
+	this( DirAttrKind attrKind, TValueAttr[string] attrs )
+	{
+		assert( attrKind == DirAttrKind.NamedAttr, `Expected NamedAttr kind for attr block` );
+		
+		_kind = attrKind;
+		_storage.namedAttrs = attrs;
+	}
+
+	this( DirAttrKind attrKind, TValueAttr[] attrs )
+	{
+		assert( attrKind == DirAttrKind.ExprAttr, `Expected ExprAttr kind for attr block` );
+		
+		_kind = attrKind;
+		_storage.exprAttrs = attrs;
+	}
+
+	this( DirAttrKind attrKind, string[] names )
+	{
+		assert( attrKind == DirAttrKind.IdentAttr, `Expected IdentAttr kind for attr block` );
+		
+		_kind = attrKind;
+		_storage.names = names;
+	}
+
+	this( DirAttrKind attrKind, string kwd )
+	{
+		assert( attrKind == DirAttrKind.KwdAttr, `Expected Keyword kind for attr block` );
+		
+		_kind = attrKind;
+		_storage.keyword = kwd;
+	}
+
+	static if( isForCompiler )
+	{
+		this( DirAttrKind attrKind, ICompoundStatement bodyAST )
+		{
+			assert( attrKind == DirAttrKind.BodyAttr, `Expected BodyAttr kind for attr block` );
+			
+			_kind = attrKind;
+			_storage.bodyAST = bodyAST;
+		}
+	}
+
+	this( DirAttrKind attrKind )
+	{
+		_kind = attrKind;
+	}
+
+	DirAttrKind kind() @property {
+		return _kind;
+	}
+
+	void kind(DirAttrKind value) @property {
+		_kind = value;
+	}
+
+	void namedAttrs( TValueAttr[string] attrs ) @property {
+		_storage.namedAttrs = attrs;
+		_kind = DirAttrKind.NamedAttr;
+	}
+
+	TValueAttr[string] namedAttrs() @property {
+		assert( _kind == DirAttrKind.NamedAttr, `Directive attrs block is not of NamedAttr kind` );
+		return _storage.namedAttrs;
+	}
+
+	void exprAttrs( TValueAttr[] attrs ) @property {
+		_storage.exprAttrs = attrs;
+		_kind = DirAttrKind.ExprAttr;
+	}
+
+	TValueAttr[] exprAttrs() @property {
+		assert( _kind == DirAttrKind.ExprAttr, `Directive attrs block is not of ExprAttr kind` );
+		return _storage.exprAttrs;
+	}
+
+	void names(string[] names) @property {
+		_storage.names = names;
+		_kind = DirAttrKind.IdentAttr;
+	}
+
+	string[] names() @property {
+		assert( _kind == DirAttrKind.IdentAttr, `Directive attrs block is not of IdentAttr kind` );
+		return _storage.names;
+	}
+
+	void keyword(string value) @property {
+		_storage.keyword = value;
+		_kind = DirAttrKind.KwdAttr;
+	}
+
+	string keyword() @property {
+		assert( _kind == DirAttrKind.KwdAttr, `Directive attrs block is not of KwdAttr kind` );
+		return _storage.keyword;
+	}
+
+	static if( isForCompiler )
+	{
+		void bodyAST(ICompoundStatement stmt) @property {
+			_storage.bodyAST = stmt;
+			_kind = DirAttrKind.BodyAttr;
+		}
+
+		ICompoundStatement bodyAST() @property {
+			assert( _kind == DirAttrKind.BodyAttr, `Directive attrs block is not of BodyAttr kind` );
+			return _storage.bodyAST;
+		}
+	}
+
+	DirAttrsBlock!(false) toInterpreterBlock()
+	{
+		import std.algorithm: map;
+		import std.array: array;
+
+		final switch( _kind )
+		{
+			case DirAttrKind.NamedAttr: {
+				DirValueAttr!(false)[string] attrs;
+				foreach( key, ref currAttr; _storage.namedAttrs ) {
+					attrs[key] = currAttr.toInterpreterValue();
+				}
+				return DirAttrsBlock!(false)( _kind, attrs );
+			}
+			case DirAttrKind.ExprAttr:
+				return DirAttrsBlock!(false)( _kind, _storage.exprAttrs.map!( a => a.toInterpreterValue() ).array );
+			case DirAttrKind.IdentAttr:
+				return DirAttrsBlock!(false)( _kind, _storage.names );
+			case DirAttrKind.KwdAttr:
+				return DirAttrsBlock!(false)( _kind, _storage.keyword );
+			case DirAttrKind.NoscopeAttr, DirAttrKind.BodyAttr:
+				return DirAttrsBlock!(false)( _kind );
+		}
+		assert( false, `This should never happen` );
+	}
+}
+
 /**
 	Code object is inner runtime representation of chunk of source file.
 	Usually it's representation of directive or module.
@@ -86,6 +280,8 @@ class CodeObject
 
 	Instruction[] _instrs; // Plain list of instructions
 	ModuleObject _moduleObj; // Module object which contains this code object
+	DirAttrsBlock!(false)[] _attrBlocks;
+
 
 public:
 	this( ModuleObject moduleObj )

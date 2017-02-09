@@ -171,99 +171,6 @@ public:
 	}
 }
 
-
-class AttributeDeclaration
-{
-	string attrName;
-	string attrType;
-	IExpression defaultValueExpr;
-
-	this( string name, string type, IExpression defValue )
-	{
-		attrName = name;
-		attrType = type;
-		defaultValueExpr = defValue;
-	}
-}
-
-enum DirDefAttrType { NamedAttr, ExprAttr, IdentAttr, KwdAttr, NoscopeAttr, BodyAttr }
-
-class DirectiveDefinitionBlock
-{
-	DirDefAttrType type;
-
-	this( DirDefAttrType type )
-	{
-		this.type = type;
-	}
-}
-
-class NamedAttrsDefBlock: DirectiveDefinitionBlock
-{
-	AttributeDeclaration[string] namedDecls;
-
-	this() { super( DirDefAttrType.NamedAttr ); }
-
-	this( AttributeDeclaration[string] namedDecls )
-	{
-		super( DirDefAttrType.NamedAttr );
-		this.namedDecls = namedDecls;
-	}
-
-}
-
-class ExprAttrsDefBlock: DirectiveDefinitionBlock
-{
-	AttributeDeclaration[] exprDecls;
-
-	this() { super( DirDefAttrType.ExprAttr ); }
-
-	this( AttributeDeclaration[] exprDecls )
-	{
-		super( DirDefAttrType.ExprAttr );
-		this.exprDecls = exprDecls;
-	}
-}
-
-class IdentAttrsDefBlock: DirectiveDefinitionBlock
-{
-	string[] names;
-
-	this() { super( DirDefAttrType.IdentAttr ); }
-
-	this( string[] names )
-	{
-		super( DirDefAttrType.IdentAttr );
-		this.names = names;
-	}
-}
-
-class KwdAttrDef: DirectiveDefinitionBlock
-{
-	string keyword;
-
-	this() { super( DirDefAttrType.KwdAttr ); }
-
-	this( string keyword )
-	{
-		super( DirDefAttrType.KwdAttr );
-		this.keyword = keyword;
-	}
-}
-
-class BodyAttrDef: DirectiveDefinitionBlock
-{
-	ICompoundStatement bodyAST;
-
-	this() { super( DirDefAttrType.BodyAttr ); }
-
-	this( ICompoundStatement bodyAST )
-	{
-		super( DirDefAttrType.BodyAttr );
-		this.bodyAST = bodyAST;
-	}
-}
-
 enum SymbolKind { DirectiveDefinition, Module };
 
 class Symbol
@@ -274,14 +181,14 @@ class Symbol
 
 class DirectiveDefinitionSymbol: Symbol
 {
-	DirectiveDefinitionBlock[] dirDefBlocks;
+	DirAttrsBlock!(true)[] dirAttrBlocks;
 
 public:
-	this( string name, DirectiveDefinitionBlock[] dirDefBlocks )
+	this( string name, DirAttrsBlock!(true)[] dirAttrBlocks )
 	{
 		this.name = name;
 		this.kind = SymbolKind.DirectiveDefinition;
-		this.dirDefBlocks = dirDefBlocks;
+		this.dirAttrBlocks = dirAttrBlocks;
 	}
 }
 
@@ -462,7 +369,9 @@ public:
 				bool isNoscope = false;
 				ICompoundStatement bodyStmt;
 
-				DirectiveDefinitionBlock[] dirDefBlocks;
+				DirAttrsBlock!(true)[] attrBlocks;
+
+				alias TValueAttr = DirValueAttr!(true);
 
 				attr_def_stmts_loop:
 				while( !attrsDefStmtRange.empty )
@@ -472,45 +381,50 @@ public:
 
 					switch( attrsDefStmt.name )
 					{
-						case "def.kv": {
-							NamedAttrsDefBlock attrDefBlock = new NamedAttrsDefBlock();
+						case "def.kv":
+						{
+							TValueAttr[string] namedAttrs;
 							while( !attrsDefStmtAttrRange.empty )
 							{
-								AttributeDeclaration attrDecl = analyzeValueAttr(attrsDefStmtAttrRange);
-								if( !attrDecl )
+								auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
+								if( parsed.empty )
 								{
 									attrsDefStmtRange.popFront();
 									continue attr_def_stmts_loop;
 								}
 
-								if( attrDecl.attrName in attrDefBlock.namedDecls )
-									compilerError( `Named attribute "` ~ attrDecl.attrName ~ `" already defined in directive definition` );
+								TValueAttr attrDecl = parsed.attr;
 
-								attrDefBlock.namedDecls[attrDecl.attrName] = attrDecl;
+								if( attrDecl.name in namedAttrs )
+									compilerError( `Named attribute "` ~ attrDecl.name ~ `" already defined in directive definition` );
+
+								namedAttrs[attrDecl.name] = attrDecl;
 							}
 
-							dirDefBlocks ~= attrDefBlock;
+							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.NamedAttr, namedAttrs );
 							break;
 						}
 						case "def.pos":
 						{
-							ExprAttrsDefBlock attrDefBlock = new ExprAttrsDefBlock();
+							TValueAttr[] exprAttrs;
 							while( !attrsDefStmtAttrRange.empty )
 							{
-								AttributeDeclaration attrDecl = analyzeValueAttr(attrsDefStmtAttrRange);
-								if( !attrDecl )
+								auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
+								if( parsed.empty )
 								{
 									attrsDefStmtRange.popFront();
 									continue attr_def_stmts_loop;
 								}
 
-								if( attrDefBlock.exprDecls.canFind!( (it, needle) => it.attrName == needle )(attrDecl.attrName) )
-									compilerError( `Named attribute "` ~ attrDecl.attrName ~ `" already defined in directive definition` );
+								TValueAttr attrDecl = parsed.attr;
 
-								attrDefBlock.exprDecls ~= attrDecl;
+								if( exprAttrs.canFind!( (it, needle) => it.name == needle )(attrDecl.name) )
+									compilerError( `Named attribute "` ~ attrDecl.name ~ `" already defined in directive definition` );
+
+								exprAttrs ~= attrDecl;
 							}
 
-							dirDefBlocks ~= attrDefBlock;
+							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.ExprAttr, exprAttrs );
 							break;
 						}
 						case "def.names":
@@ -553,7 +467,7 @@ public:
 				if( !_frameStack.back )
 					compilerError( `Cannot store symbol, because symbol table frame is null` );
 				// Add directive definition into existing frame
-				_frameStack.back.add( new DirectiveDefinitionSymbol(dirNameExpr.name, dirDefBlocks) );
+				_frameStack.back.add( new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks) );
 
 				if( bodyStmt && !isNoscope )
 				{
@@ -637,8 +551,12 @@ public:
 		}
 	}
 
-	AttributeDeclaration analyzeValueAttr(IAttributeRange attrRange)
+
+	auto analyzeValueAttr(IAttributeRange attrRange)
 	{
+		import std.typecons: Tuple;
+		alias Result = Tuple!( DirValueAttr!(true), `attr`, bool, `empty` );
+		
 		string attrName;
 		string attrType;
 		IExpression defaultValueExpr;
@@ -660,7 +578,7 @@ public:
 		else
 		{
 			// Just get out of there if nothing matched
-			return null;
+			return Result( DirValueAttr!(true).init, true );
 		}
 
 		if( !attrRange.empty )
@@ -688,7 +606,7 @@ public:
 			}
 		}
 
-		return new AttributeDeclaration(attrName, attrType, defaultValueExpr);
+		return Result( DirValueAttr!(true)(attrName, attrType, defaultValueExpr), false );
 	}
 
 	string currentModuleName() @property
@@ -1211,13 +1129,10 @@ public:
 /// Compiles module into module object and saves it into dictionary
 class ImportCompiler: IDirectiveCompiler
 {
-private:
-	string _importPath = "test/";
-
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "import"  )
+		if( !statement || statement.name != "import" )
 			compilerError( "Expected 'import' directive" );
 
 		auto stmtRange = statement[];
@@ -1236,7 +1151,7 @@ public:
 
 }
 
-import std.stdio;
+debug import std.stdio;
 /// Defines directive using ivy language
 class DefCompiler: IDirectiveCompiler
 {
@@ -1327,6 +1242,18 @@ class DefCompiler: IDirectiveCompiler
 
 			// Generating code for def.body
 			bodyStatement.accept(compiler);
+
+			Symbol symb = compiler.symbolLookup( defNameExpr.name );
+			if( symb.kind != SymbolKind.DirectiveDefinition )
+				compilerError(`Expected directive definition symbol kind`);
+
+			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
+			assert( dirSymbol, `Directive definition symbol is null` );
+
+			import std.algorithm: map;
+			import std.array: array;
+
+			compiler.currentCodeObject._attrBlocks = dirSymbol.dirAttrBlocks.map!( b => b.toInterpreterBlock() ).array;
 
 			scope(exit) {
 				compiler.exitCodeObject();
@@ -1643,34 +1570,6 @@ public:
 
 		void visit(INameExpression node)
 		{
-			/*
-			import std.range: empty, back;
-
-			if( !node )
-				compilerError( "Expected name expression!" );
-			if( _symbolTableStack.empty )
-				compilerError( "Compiler symbol table stack is empty!" );
-			if( !_symbolTableStack.back )
-				compilerError( "Compiler current symbol table frame is null!" );
-
-			size_t constIndex = addConst( TDataNode( node.name ) );
-			if( _symbolTableStack.back.lookup(node.name) )
-			{
-				// Regular name
-
-				// TODO: Maybe set index of constant with name to load instead of LoadConst
-				// Load name constant instruction
-				addInstr( OpCode.LoadConst, constIndex );
-
-				// Add name load instruction
-				addInstr( OpCode.LoadName );
-			}
-			else
-			{
-				// Seems that it's built-in name or data context name
-				assert( false, `Cannot find variable with name "` ~ node.name ~ `"!` );
-			}
-			*/
 			size_t constIndex = addConst( TDataNode( node.name ) );
 			// Load name constant instruction
 			addInstr( OpCode.LoadName, constIndex );
@@ -1752,12 +1651,12 @@ public:
 				DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
 				assert( dirSymbol, `Directive definition symbol is null` );
 
-				DirectiveDefinitionBlock[] dirDefBlocks = dirSymbol.dirDefBlocks[]; // Getting slice of list
+				DirAttrsBlock!(true)[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
 				bool isNoscope = false;
-				foreach( dirDef; dirDefBlocks )
+				foreach( dirDef; dirAttrBlocks )
 				{
 					// Quick workaround to find if directive is noscope
-					if( dirDef.type == DirDefAttrType.NoscopeAttr )
+					if( dirDef.kind == DirAttrKind.NoscopeAttr )
 					{
 						isNoscope = true;
 						break;
@@ -1773,19 +1672,16 @@ public:
 
 				while( !attrRange.empty )
 				{
-					while( !dirDefBlocks.empty )
+					while( !dirAttrBlocks.empty )
 					{
-						assert( dirDefBlocks.front, `dirDefBlocks.front is null` );
-
-						switch( dirDefBlocks.front.type )
+						switch( dirAttrBlocks.front.kind )
 						{
-							case DirDefAttrType.NamedAttr:
+							case DirAttrKind.NamedAttr:
 							{
 								size_t argCount = 0;
 								bool[string] argsSet;
 
-								NamedAttrsDefBlock namedAttrsDef = cast(NamedAttrsDefBlock) dirDefBlocks.front;
-								assert( namedAttrsDef, `namedAttrsDef is null` );
+								DirAttrsBlock!(true) namedAttrsDef = dirAttrBlocks.front;
 								while( !attrRange.empty )
 								{
 									IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
@@ -1794,7 +1690,7 @@ public:
 										break; // We finished with key-value attributes
 									}
 
-									if( keyValueAttr.name !in namedAttrsDef.namedDecls )
+									if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
 										compilerError( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
 
 									// Add name of named argument into stack
@@ -1811,11 +1707,11 @@ public:
 									attrRange.popFront();
 								}
 
-								foreach( name, attrDecl; namedAttrsDef.namedDecls )
+								foreach( name, attrDecl; namedAttrsDef.namedAttrs )
 								{
 									if( name !in argsSet )
 									{
-										IExpression defVal = namedAttrsDef.namedDecls[name].defaultValueExpr;
+										IExpression defVal = namedAttrsDef.namedAttrs[name].defaultValueExpr;
 
 										if( defVal )
 										{
@@ -1839,18 +1735,17 @@ public:
 								++stackItemsCount; // We should count args block header
 								break;
 							}
-							case DirDefAttrType.ExprAttr:
+							case DirAttrKind.ExprAttr:
 							{
 								size_t argCount = 0;
 
-								ExprAttrsDefBlock exprAttrsDef = cast(ExprAttrsDefBlock) dirDefBlocks.front;
-								assert( exprAttrsDef, `exprAttrsDef is null` );
+								DirAttrsBlock!(true) exprAttrsDef = dirAttrBlocks.front;
 								while( !attrRange.empty )
 								{
 									IExpression exprAttr = cast(IExpression) attrRange.front;
 									if( !exprAttr )
 									{
-										break; // We finished with key-value attributes
+										break; // We finished with value attributes
 									}
 									exprAttr.accept(this);
 									++stackItemsCount;
@@ -1865,19 +1760,22 @@ public:
 								++stackItemsCount; // We should count args block header
 								break;
 							}
-							case DirDefAttrType.IdentAttr:
+							case DirAttrKind.IdentAttr:
 							{
-								while( !attrRange.empty )
-								{
+								// TODO: We should take number of identifiers passed in directive definition
+								while( !attrRange.empty ) {
+									IExpression identAttr = cast(INameExpression) attrRange.front;
+									if( !identAttr ) {
+										break;
+									}
 
 									attrRange.popFront();
 								}
 								break;
 							}
-							case DirDefAttrType.KwdAttr:
+							case DirAttrKind.KwdAttr:
 							{
-								KwdAttrDef kwdDef = cast(KwdAttrDef) dirDefBlocks.front;
-								assert( kwdDef, `kwdDef is null` );
+								DirAttrsBlock!(true) kwdDef = dirAttrBlocks.front;
 								INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression( `Expected keyword attribute` );
 								if( kwdDef.keyword != kwdAttr.name )
 									compilerError( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
@@ -1886,7 +1784,7 @@ public:
 							default:
 								assert( false, `Unexpected type of directive definition attr block!` );
 						}
-						dirDefBlocks.popFront();
+						dirAttrBlocks.popFront();
 					}
 				}
 
