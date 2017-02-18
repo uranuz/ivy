@@ -158,14 +158,14 @@ public:
 				{
 					_source.popFront(); // Skip {
 					TDataNode[String] assocArray;
-					while( !_source.empty )
+					while( !_source.empty && getChar() != '}' )
 					{
 						string key = parseString();
 
 						if( !_source.empty && getChar() != ':' )
 							error( "Expected :" );
 						
-						_source.popFront();
+						_source.popFront(); // Skip :
 
 						TDataNode value = parseValue();
 						assocArray[key] = value;
@@ -180,7 +180,7 @@ public:
 
 					if( _source.empty || _source.front != '}' )
 						error("Expected }");
-					_source.popFront();
+					_source.popFront(); // Skip }
 
 					return TDataNode(assocArray);
 					break;
@@ -189,7 +189,7 @@ public:
 				{
 					_source.popFront(); // Skip [
 					TDataNode[] nodeArray;
-					while( !_source.empty )
+					while( !_source.empty && getChar() != ']' )
 					{
 						nodeArray ~= parseValue();
 						if( getChar() == ']' )
@@ -237,7 +237,7 @@ public:
 					return TDataNode(null);
 				}
 				default:
-					error( "Unexpected character" );
+					error( "Unexpected escaped character" );
 			}
 		}
 

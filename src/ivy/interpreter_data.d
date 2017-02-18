@@ -107,7 +107,23 @@ struct DirValueAttr(bool isForCompiler = false)
 	}
 }
 
+// We pass callable attributes by blocks. Every attribute block has size an type
+// Size and type stored in single integer argument in stack preceding the block
+// Size is major binary part of this integer denoted by bit offset:
+enum size_t _stackBlockHeaderSizeOffset = 4;
+// To have some validity check bit between size and block type must always be zero
+// The following mask is used to check for validity:
+enum size_t _stackBlockHeaderCheckMask = 0b1000;
+// And there is mask to extract type of block
+enum size_t _stackBlockHeaderTypeMask = 0b111;
+
+
 enum DirAttrKind { NamedAttr, ExprAttr, IdentAttr, KwdAttr, NoscopeAttr, BodyAttr };
+
+static this()
+{
+	static assert( DirAttrKind.max <= _stackBlockHeaderTypeMask, `DirAttrKind set of values exeeded of defined limit` );
+}
 
 struct DirAttrsBlock(bool isForCompiler = false)
 {
@@ -267,6 +283,21 @@ struct DirAttrsBlock(bool isForCompiler = false)
 		}
 		assert( false, `This should never happen` );
 	}
+
+	string toString()
+	{
+		import std.conv: to;
+		final switch( _kind ) with( DirAttrKind )
+		{
+			case NamedAttr:
+			case ExprAttr:
+			case IdentAttr:
+			case KwdAttr:
+			case NoscopeAttr: 
+			case BodyAttr:
+				return `<` ~ _kind.to!string ~ ` attrs block>`;
+		}
+	}
 }
 
 /**
@@ -279,9 +310,8 @@ class CodeObject
 	import ivy.bytecode: Instruction;
 
 	Instruction[] _instrs; // Plain list of instructions
-	ModuleObject _moduleObj; // Module object which contains this code object
 	DirAttrsBlock!(false)[] _attrBlocks;
-
+	ModuleObject _moduleObj; // Module object which contains this code object
 
 public:
 	this( ModuleObject moduleObj )
@@ -312,6 +342,8 @@ interface INativeDirectiveInterpreter
 {
 	import ivy.interpreter: Interpreter;
 	void interpret( Interpreter interp );
+
+	DirAttrsBlock!(false)[] attrBlocks() @property;
 }
 
 enum CallableKind { ScopedDirective, NoscopeDirective, Module, Package }
@@ -330,6 +362,16 @@ class CallableObject
 	INativeDirectiveInterpreter _dirInterp;
 
 	this() {}
+
+	DirAttrsBlock!(false)[] attrBlocks() @property
+	{
+		if( _codeObj ) {
+			return _codeObj._attrBlocks;
+		} else if( _dirInterp ) {
+			return _dirInterp.attrBlocks;
+		}
+		assert( false, `Cannot get attr blocks for callable, because code object and and native interpreter are null` );
+	}
 }
 
 interface IDataNodeRange

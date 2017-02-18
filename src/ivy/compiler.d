@@ -353,6 +353,7 @@ public:
 		{
 			import std.range: popBack, empty, back;
 			import std.algorithm: canFind;
+			debug import std.stdio: writeln;
 
 			if( node.name == "def" )
 			{
@@ -360,6 +361,13 @@ public:
 				//	compilerError( "Current symbol table frame is null" );
 
 				IAttributeRange defAttrsRange = node[];
+
+				debug {
+					writeln( `CompilerSymbolsCollector. Attr kinds for IDirectiveStatement children:` );
+					foreach( childNode; node[] ) {
+						writeln( `		` ~ childNode.kind);
+					}
+				}
 
 				INameExpression dirNameExpr = defAttrsRange.takeFrontAs!INameExpression("Expected directive name");
 				ICodeBlockStatement attrsDefBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
@@ -477,8 +485,7 @@ public:
 
 				scope(exit)
 				{
-					if( bodyStmt && !isNoscope )
-					{
+					if( bodyStmt && !isNoscope ) {
 						_frameStack.popBack();
 					}
 				}
@@ -503,16 +510,8 @@ public:
 				if( !attrRange.empty )
 					compilerError( `Expected end of import directive, maybe ; is missing` );
 
-				// Try to open, parse and load symbols info from another module
-				IvyNode moduleTree = _moduleRepo.getModuleTree( moduleNameExpr.name );
-
-				if( !moduleTree )
-					compilerError( `Couldn't load module: ` ~ moduleNameExpr.name );
-
 				{
 					_moduleStack ~= moduleNameExpr.name;
-					_frameStack ~= new SymbolTableFrame(null);
-					_moduleSymbols[moduleNameExpr.name] = _frameStack.back;
 					scope(exit)
 					{
 						assert( !_moduleStack.empty, `Compiler directive collector module stack is empty!` );
@@ -521,19 +520,34 @@ public:
 						_frameStack.popBack();
 					}
 
-					// Go to find directive definitions in this imported module
-					moduleTree.accept(this);
+					if( auto modFramePtr = moduleNameExpr.name in _moduleSymbols ) {
+						_frameStack ~= *modFramePtr; // Module is analyzed already...
+					} else {
+						// Try to open, parse and load symbols info from another module
+						IvyNode moduleTree = _moduleRepo.getModuleTree( moduleNameExpr.name );
+
+						if( !moduleTree )
+							compilerError( `Couldn't load module: ` ~ moduleNameExpr.name );
+
+						_frameStack ~= new SymbolTableFrame(null);
+						
+						_moduleSymbols[moduleNameExpr.name] = _frameStack.back;
+
+						// Go to find directive definitions in this imported module
+						moduleTree.accept(this);
+					}
 				}
 
 				assert( !_frameStack.empty, "Cannot store imported symbols, because symbol table frame stack is empty!" );
 				assert( _frameStack.back, "Cannot store imported symbols, because symbol table stack is null!" );
+				// Add imported module symbol table as local symbol
 				_frameStack.back.add( new ModuleSymbol(moduleNameExpr.name, _moduleSymbols[moduleNameExpr.name] ) );
-
 			}
 			else
 			{
-				foreach( childNode; node )
+				foreach( childNode; node[] )
 				{
+					debug writeln( `Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name );
 					childNode.accept(this);
 				}
 			}
@@ -543,8 +557,10 @@ public:
 		void visit(IDataFragmentStatement node) {  }
 		void visit(ICompoundStatement node)
 		{
-			foreach( childNode; node )
+			debug import std.stdio: writeln;
+			foreach( childNode; node[] )
 			{
+				debug writeln( `Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind );
 				childNode.accept(this);
 			}
 
@@ -876,7 +892,7 @@ class ForCompiler : IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "for"  )
+		if( !statement || statement.name != "for" )
 			compilerError( "Expected 'for' directive" );
 
 		auto stmtRange = statement[];
@@ -1232,6 +1248,16 @@ class DefCompiler: IDirectiveCompiler
 
 		size_t codeObjIndex;
 		{
+			import std.algorithm: map;
+			import std.array: array;
+
+			Symbol symb = compiler.symbolLookup( defNameExpr.name );
+			if( symb.kind != SymbolKind.DirectiveDefinition )
+				compilerError(`Expected directive definition symbol kind`);
+
+			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
+			assert( dirSymbol, `Directive definition symbol is null` );
+
 			if( !isNoscope )
 			{
 				// Compiler should enter frame of directive body, identified by index in source code
@@ -1242,16 +1268,6 @@ class DefCompiler: IDirectiveCompiler
 
 			// Generating code for def.body
 			bodyStatement.accept(compiler);
-
-			Symbol symb = compiler.symbolLookup( defNameExpr.name );
-			if( symb.kind != SymbolKind.DirectiveDefinition )
-				compilerError(`Expected directive definition symbol kind`);
-
-			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-			assert( dirSymbol, `Directive definition symbol is null` );
-
-			import std.algorithm: map;
-			import std.array: array;
 
 			compiler.currentCodeObject._attrBlocks = dirSymbol.dirAttrBlocks.map!( b => b.toInterpreterBlock() ).array;
 
@@ -1465,12 +1481,22 @@ public:
 	Symbol symbolLookup(string name)
 	{
 		import std.range: empty, back;
+		debug import std.stdio: writeln;
 		assert( !_symbolTableStack.empty, `Cannot look for symbol, because symbol table stack is empty` );
 		assert( _symbolTableStack.back, `Cannot look for symbol, current symbol table frame is null` );
 
 		Symbol symb = _symbolTableStack.back.lookup(name);
-		if( !symb )
+
+		debug {
+			writeln( `symbolLookup, _symbolTableStack symbols:` );
+			foreach( lvl, table; _symbolTableStack[] ) {
+				writeln( `	symbols lvl`, lvl, `: `, table._symbols );
+			}
+		}
+
+		if( !symb ) {
 			compilerError( `Cannot find symbol "` ~ name ~ `"` );
+		}
 
 		return symb;
 	}
@@ -1729,7 +1755,7 @@ public:
 								}
 
 								// Add instruction to load value that consists of number of pairs in block and type of block
-								size_t blockHeader = ( argCount << 3 ) + 1; // TODO: Change magic const to enum
+								size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
 								size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
 								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
 								++stackItemsCount; // We should count args block header
@@ -1749,12 +1775,13 @@ public:
 									}
 									exprAttr.accept(this);
 									++stackItemsCount;
+									++argCount;
 
 									attrRange.popFront();
 								}
 
 								// Add instruction to load value that consists of number of positional arguments in block and type of block
-								size_t blockHeader = ( argCount << 3 ) + 2; // TODO: Change magic const to enum
+								size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr; // TODO: Change magic const to enum
 								size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
 								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
 								++stackItemsCount; // We should count args block header
@@ -1762,6 +1789,7 @@ public:
 							}
 							case DirAttrKind.IdentAttr:
 							{
+								assert( false );
 								// TODO: We should take number of identifiers passed in directive definition
 								while( !attrRange.empty ) {
 									IExpression identAttr = cast(INameExpression) attrRange.front;
@@ -1775,6 +1803,7 @@ public:
 							}
 							case DirAttrKind.KwdAttr:
 							{
+								assert( false );
 								DirAttrsBlock!(true) kwdDef = dirAttrBlocks.front;
 								INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression( `Expected keyword attribute` );
 								if( kwdDef.keyword != kwdAttr.name )
@@ -1791,7 +1820,7 @@ public:
 				if( isNoscope )
 				{
 					// For now interpreter expects noscope flag to be the top of the stack "block header"
-					size_t noscopeFlagConstIndex = addConst( TDataNode(3) ); // TODO: Change magic const to enum
+					size_t noscopeFlagConstIndex = addConst( TDataNode(DirAttrKind.NoscopeAttr) ); // TODO: Change magic const to enum
 					addInstr( OpCode.LoadConst, noscopeFlagConstIndex );
 					++stackItemsCount; // We should count flag
 				}
@@ -1856,7 +1885,7 @@ public:
 
 			// In order to make call to __render__ creating block header for one positional argument
 			// witch is currently at the TOP of the execution stack
-			size_t blockHeader = ( 1 << 3 ) + 1; //TODO: Change block type magic constant to enum!
+			size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr; //TODO: Change block type magic constant to enum!
 			size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
 
 			auto stmtRange = node[];
@@ -1901,7 +1930,7 @@ public:
 
 		// In order to make call to __render__ creating block header for one positional argument
 		// which is currently at the TOP of the execution stack
-		size_t blockHeader = ( 1 << 3 ) + 1; //TODO: Change block type magic constant to enum!
+		size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr; //TODO: Change block type magic constant to enum!
 		size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
 
 		addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive

@@ -84,7 +84,7 @@ public:
 		import std.range: empty, front, popFront;
 		import std.array: split;
 
-		debug writeln( `Call ExecutionFrame.findlocalValue with varName: `, varName );
+		debug writeln( `Call ExecutionFrame.findLocalValue with varName: `, varName );
 
 		if( varName.empty )
 			interpretError( "VariableTable: Variable name cannot be empty" );
@@ -104,21 +104,23 @@ public:
 		{
 			if( nodePtr.type == DataNodeType.AssocArray )
 			{
-				debug writeln( `ExecutionFrame.findlocalValue. Search: `, nameSplitted.front, ` in assoc array` );
+				debug writeln( `ExecutionFrame.findLocalValue. Search: `, nameSplitted.front, ` in assoc array` );
 				if( TDataNode* tmpNodePtr = nameSplitted.front in nodePtr.assocArray )
 				{
-					debug writeln( `ExecutionFrame.findlocalValue. Node: `, nameSplitted.front, ` found in assoc array` );
+					debug writeln( `ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, ` found in assoc array` );
 					nodePtr = tmpNodePtr;
 				}
 				else
 				{
-					debug writeln( `ExecutionFrame.findlocalValue. Node: `, nameSplitted.front, ` NOT found in assoc array` );
+					debug writeln( `ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, ` NOT found in assoc array` );
 					static if( mode == FrameSearchMode.setWithParents ) {
 						nodePtr.assocArray[nameSplitted.front] = (TDataNode[string]).init;
 						nodePtr = nameSplitted.front in nodePtr.assocArray;
+						debug writeln( `ExecutionFrame.findLocalValue(withParents=true). Creating node: `, nameSplitted.front );
 					} else static if( mode == FrameSearchMode.set ) {
 						if( nameSplitted.length == 1 ) {
 							nodePtr.assocArray[nameSplitted.front] = TDataNode.init;
+							debug writeln( `ExecutionFrame.findLocalValue. Creating node: `, nameSplitted.front );
 							return nameSplitted.front in nodePtr.assocArray;
 						} else {
 							interpretError( `Cannot set value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!` );
@@ -137,7 +139,7 @@ public:
 			}
 			else if( nodePtr.type == DataNodeType.ExecutionFrame )
 			{
-				debug writeln( `ExecutionFrame.findlocalValue. Search: `, nameSplitted.front, ` in execution frame` );
+				debug writeln( `ExecutionFrame.findLocalValue. Search: `, nameSplitted.front, ` in execution frame` );
 				if( !nodePtr.execFrame )
 				{
 					static if( mode == FrameSearchMode.tryGet ) {
@@ -157,11 +159,11 @@ public:
 				}
 					
 				nodePtr = nameSplitted.front in nodePtr.execFrame._dataDict.assocArray;
-				debug writeln( `ExecutionFrame.findlocalValue. Node: `, nameSplitted.front, (nodePtr ? ` found` : ` NOT found`) ,` in execution frame` );
+				debug writeln( `ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, (nodePtr ? ` found` : ` NOT found`) ,` in execution frame` );
 			}
 			else
 			{
-				debug writeln( `ExecutionFrame.findlocalValue. Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type` );
+				debug writeln( `ExecutionFrame.findLocalValue. Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type` );
 				return null;
 			}
 			
@@ -236,7 +238,7 @@ public:
 
 class RenderDirInterpreter: INativeDirectiveInterpreter
 {
-	void interpret( Interpreter interp )
+	override void interpret( Interpreter interp )
 	{
 		import std.array: appender;
 		TDataNode result = interp.getValue("__result__");
@@ -244,6 +246,21 @@ class RenderDirInterpreter: INativeDirectiveInterpreter
 		auto renderedResult = appender!string();
 		result.writeDataNodeLines(renderedResult);
 		interp._stack ~= TDataNode(renderedResult.data);
+	}
+
+	private __gshared DirAttrsBlock!(false)[] _attrBlocks;
+	
+	shared static this()
+	{
+		_attrBlocks = [
+			DirAttrsBlock!false( DirAttrKind.NamedAttr, [
+				"__result__": DirValueAttr!(false)( "__result__", "any" )
+			])
+		];
+	}
+
+	override DirAttrsBlock!(false)[] attrBlocks() @property {
+		return _attrBlocks;
 	}
 }
 
@@ -950,7 +967,6 @@ public:
 					dataRange.popFront();
 
 					debug writeln( "RunLoop. Iteration init finished. _stack is: ", _stack );
-
 					break;
 				}
 
@@ -1044,9 +1060,11 @@ public:
 
 					CallableObject callableObj = _stack[ _stack.length - stackArgCount ].callable;
 					assert( callableObj, `Callable object is null!` );
+					
+					DirAttrsBlock!(false)[] attrBlocks = callableObj.attrBlocks;
 
 					bool isNoscope = false;
-					if( _stack.back.type == DataNodeType.Integer && _stack.back.integer == 3 )
+					if( _stack.back.type == DataNodeType.Integer && _stack.back.integer == DirAttrKind.NoscopeAttr )
 					{
 						// There could be noscope attribute as first "block header"
 						isNoscope = true;
@@ -1054,12 +1072,9 @@ public:
 					}
 
 					ExecutionFrame moduleFrame;
-					if( callableObj._codeObj )
-					{
+					if( callableObj._codeObj ) {
 						moduleFrame = getModuleFrame( callableObj._codeObj._moduleObj._name );
-					}
-					else
-					{
+					} else {
 						moduleFrame = getModuleFrame( "__main__" );
 					}
 
@@ -1075,54 +1090,89 @@ public:
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{
+						size_t blockCounter = 0;
+						
 						for( size_t i = 0; i < (stackArgCount - 1); )
 						{
 							assert( !_stack.empty, `Expected integer as arguments block header, but got empty exec stack!` );
 							assert( _stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!` );
-							size_t blockArgCount = _stack.back.integer >> 3;
+							size_t blockArgCount = _stack.back.integer >> _stackBlockHeaderSizeOffset;
 							debug writeln( "blockArgCount: ", blockArgCount );
-							int blockType = _stack.back.integer & 7;
-							assert( (_stack.back.integer & 4 ) == 0, `Seeems that stack is corrupted` );
+							DirAttrKind blockType = cast(DirAttrKind)( _stack.back.integer & _stackBlockHeaderTypeMask );
+							// Bit between block size part and block type must always be zero
+							assert( (_stack.back.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
 							debug writeln( "blockType: ", blockType );
 
 							_stack.popBack();
 							++i; // Block header was eaten, so increase counter
 
-							if( blockType == 1 )
+							switch( blockType )
 							{
-								size_t j = 0;
-								while( j < 2 * blockArgCount )
+								case DirAttrKind.NamedAttr:
 								{
-									assert( !_stack.empty, "Execution stack is empty!" );
-									TDataNode attrValue = _stack.back;
-									_stack.popBack(); ++j; // Parallel bookkeeping ;)
+									size_t j = 0;
+									while( j < 2 * blockArgCount )
+									{
+										assert( !_stack.empty, "Execution stack is empty!" );
+										TDataNode attrValue = _stack.back;
+										_stack.popBack(); ++j; // Parallel bookkeeping ;)
 
-									assert( !_stack.empty, "Execution stack is empty!" );
-									debug writeln( `RunCallable debug, _stack is: `, _stack );
-									assert( _stack.back.type == DataNodeType.String, "Named attribute name must be string!" );
-									string attrName = _stack.back.str;
-									_stack.popBack(); ++j;
+										assert( !_stack.empty, "Execution stack is empty!" );
+										debug writeln( `RunCallable debug, _stack is: `, _stack );
+										assert( _stack.back.type == DataNodeType.String, "Named attribute name must be string!" );
+										string attrName = _stack.back.str;
+										_stack.popBack(); ++j;
 
-									setLocalValue( attrName, attrValue );
+										setLocalValue( attrName, attrValue );
+									}
+									i += j; // Increase overall processed stack arguments count (2 items per iteration)
+									debug writeln( "_stack after parsing named arguments: ", _stack );
+									break;
 								}
-								i += j; // Increase overall processed stack arguments count (2 items per iteration)
-								debug writeln( "_stack after parsing named arguments: ", _stack );
+								case DirAttrKind.ExprAttr:
+								{
+									size_t currBlockIndex = attrBlocks.length - blockCounter - 1;
+
+									debug writeln( `Interpret pos arg, currBlockIndex: `, currBlockIndex );
+									
+									if( currBlockIndex >= attrBlocks.length ) {
+										interpretError( `Current attr block index is out of current bounds of declared blocks!` );
+									}
+
+									DirAttrsBlock!(false) currBlock = attrBlocks[currBlockIndex];
+
+									debug writeln( `Interpret pos arg, attrBlocks: `, attrBlocks );
+									debug writeln( `Interpret pos arg, currBlock.kind: `, currBlock.kind.to!string );
+									if( currBlock.kind != DirAttrKind.ExprAttr ) {
+										interpretError( `Expected positional arguments block in block metainfo` );
+									}
+
+
+									for( size_t j = 0; j < blockArgCount; ++j, ++i /* Inc overall processed arg count*/ )
+									{
+										assert( !_stack.empty, "Execution stack is empty!" );
+										TDataNode attrValue = _stack.back;
+										_stack.popBack();
+
+										assert( j < currBlock.exprAttrs.length, `Unexpected number of attibutes in positional arguments block` );
+
+										setLocalValue( currBlock.exprAttrs[j].name, attrValue );
+									}
+									debug writeln( "_stack after parsing positional arguments: ", _stack );
+									break;
+								}
+								default:
+									assert( false, "Unexpected arguments block type" );
 							}
-							else if( blockType == 2 )
-							{
-								assert( false, "Interpreting positional arguments is not implemented yet!" );
-							}
-							else
-							{
-								assert( false, "Unexpected arguments block type" );
-							}
+
+							blockCounter += 1;
 						}
 					}
 					debug writeln( "_stack after parsing all arguments: ", _stack );
 
-					assert( !_stack.empty, "Expected directive object to call, but found end of execution stack!" );
-					assert( _stack.back.type == DataNodeType.Callable, `Expected directive object operand in directive call operation` );
-					_stack.popBack(); // Drop directive object from stack
+					assert( !_stack.empty, "Expected callable object to call, but found end of execution stack!" );
+					assert( _stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation` );
+					_stack.popBack(); // Drop callable object from stack
 
 					if( callableObj._codeObj )
 					{
@@ -1136,8 +1186,7 @@ public:
 						assert( callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!` );
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
 						
-						if( !isNoscope )
-						{
+						if( !isNoscope ) {
 							_frameStack.popBack(); // Drop context from stack after end of execution
 						}
 					}
