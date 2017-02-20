@@ -183,7 +183,6 @@ public:
 					_source.popFront(); // Skip }
 
 					return TDataNode(assocArray);
-					break;
 				}
 				case '[':
 				{
@@ -208,34 +207,22 @@ public:
 					break;
 				}
 				case '"':
-				{
 					return TDataNode(parseString());
-					break;
-				}
 				case '0': .. case '9':
 				case '-':
-				{
 					return parseNumber();
-					break;
-				}
 				case 't':
-				{
 					if( !_source.match("true") )
 						error( "Expected true" );
 					return TDataNode(true);
-				}
 				case 'f':
-				{
 					if( !_source.match("false") )
 						error( "Expected false" );
 					return TDataNode(false);
-				}
 				case 'n':
-				{
 					if( !_source.match("null") )
 						error( "Expected null" );
 					return TDataNode(null);
-				}
 				default:
 					error( "Unexpected escaped character" );
 			}
@@ -250,4 +237,46 @@ auto parseIvyJSON(S)(S src)
 {
 	auto parser = JSONParser!(S)(src);
 	return parser.parseValue();
+}
+
+import std.json;
+auto toIvyJSON(ref JSONValue src)
+{
+	alias TDataNode = DataNode!string;
+
+	final switch( src.type )
+	{
+		case JSON_TYPE.NULL:
+			return TDataNode(null);
+		case JSON_TYPE.TRUE:
+			return TDataNode(true);
+		case JSON_TYPE.FALSE:
+			return TDataNode(false);
+		case JSON_TYPE.INTEGER:
+			return TDataNode(src.integer);
+		case JSON_TYPE.UINTEGER:
+			return TDataNode(src.uinteger);
+		case JSON_TYPE.FLOAT:
+			return TDataNode(src.floating);
+		case JSON_TYPE.STRING:
+			return TDataNode(src.str);
+		case JSON_TYPE.ARRAY:
+		{
+			TDataNode[] nodeArray;
+			nodeArray.length = src.array.length;
+			foreach( size_t i, val; src.array ) {
+				nodeArray[i] = val.toIvyJSON;
+			}
+			return TDataNode(nodeArray);
+		}
+		case JSON_TYPE.OBJECT:
+		{
+			TDataNode[string] nodeAA;
+			foreach( string key, val; src.object ) {
+				nodeAA[key] = val.toIvyJSON;
+			}
+			return TDataNode(nodeAA);
+		}
+	}
+	assert(false, `Shouldn't be reached!`);
 }
