@@ -204,7 +204,6 @@ public:
 					_source.popFront(); // Skip ]
 
 					return TDataNode(nodeArray);
-					break;
 				}
 				case '"':
 					return TDataNode(parseString());

@@ -139,7 +139,7 @@ public:
 	
 	override @property LiteralType literalType()
 	{
-		return LiteralType.Undef;
+		return LiteralType.Null;
 	}
 
 /+

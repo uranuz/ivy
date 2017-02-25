@@ -627,7 +627,12 @@ public:
 
 					assert( !_stack.empty, "Cannot execute Equal instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
-					assert( leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type` );
+
+					if( leftVal.type != rightVal.type )
+					{
+						_stack.back = TDataNode(instr.opcode == OpCode.NotEqual);
+						break;
+					}
 
 					cmp_type_switch:
 					switch( leftVal.type )
@@ -638,7 +643,7 @@ public:
 							} else {
 								_stack.back = TDataNode( leftVal.type != rightVal.type );
 							}
-							break;
+							break cmp_type_switch;
 
 						foreach( typeAndField; AliasSeq!(
 							tuple(DataNodeType.Boolean, "boolean"),
