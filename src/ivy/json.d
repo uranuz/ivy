@@ -54,8 +54,7 @@ public:
 
 		while( !_source.empty )
 		{
-			Char ch = getChar();
-			if( ch == '\\' )
+			if( _source.front == '\\' )
 			{
 				_source.popFront();
 				switch( _source.front )
@@ -76,13 +75,13 @@ public:
 				
 				_source.popFront(); // Skip escaped character
 			}
-			else if( ch == '\"' )
+			else if( _source.front == '\"' )
 			{
 				break; // Found end of string
 			}
 			else
 			{
-				buf.put(ch);
+				buf.put(_source.front);
 				_source.popFront();
 			}
 		}
