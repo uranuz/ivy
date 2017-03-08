@@ -765,11 +765,11 @@ struct DataNode(S)
 		return storage.assocArray[key];
 	}
 	
-	auto opBinaryRight(string op: "in")()
+	auto opBinaryRight(string op: "in")(String key)
 	{
-		enforceEx!DataNodeException( type == DataNodeType.AssocArray || type == DataNodeType.Null, "DataNode is not a dict or null");
+		enforceEx!DataNodeException( type == DataNodeType.AssocArray || type == DataNodeType.Null, "DataNode is not a dict, null or undef");
 		
-		if( type == DataNodeType.Null )
+		if( type == DataNodeType.Undef || type == DataNodeType.Null )
 			return null;
 		
 		return key in storage.assocArray;
@@ -790,141 +790,126 @@ struct DataNode(S)
 	{
 		import std.array: appender;
 		auto result = appender!string();
-		writeDataNodeAsString(this, result);		
+		renderDataNode!(DataRenderType.Text)(this, result);		
+		return result.data;
+	}
+
+	string toJSONString()
+	{
+		import std.array: appender;
+		auto result = appender!string();
+		renderDataNode!(DataRenderType.JSON)(this, result);		
 		return result.data;
 	}
 }
 
-void writeDataNodeLines(TDataNode, OutRange)(
-	TDataNode node, ref OutRange outRange, size_t linesRecursion = 1 , size_t maxRecursion = size_t.max)
+/// Варианты типов отрисовки узла данных в буфер:
+/// Text - для вывода пользователю в виде текста (не включает отображение значений внутренних типов данных)
+/// TextDebug - для вывода данных в виде текста в отладочном режиме (выводятся некоторые данные для узлов внутренних типов)
+/// JSON - вывод узлов, которые соответствуют типам в JSON в формате собственно JSON (остальные типы узлов выводим как null)
+/// JSONFull - выводим всё максимально в JSON, сериализуя узлы внутренних типов в JSON
+enum DataRenderType { Text, TextDebug, JSON, JSONFull };
+/// Думаю, нужен ещё флаг isPrettyPrint 
+
+private void _writeEscapedString(OutRange)(string str, ref OutRange outRange)
+{
+	import std.range: put;
+	foreach( char symb; str )
+	{
+		if( symb != '\"') {
+			outRange.put(symb);
+		} else {
+			outRange.put("\\\"");
+		}
+	}
+}
+
+void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
+	ref TDataNode node, ref OutRange outRange, size_t maxRecursion = size_t.max)
 {	
 	import std.range: put;
 	import std.conv: to;
 	
 	assert( maxRecursion, "Recursion is too deep!" );
 	
-	final switch( node.type ) with( DataNodeType )
+	final switch(node.type) with(DataNodeType)
 	{
 		case Undef:
-			outRange.put( "" );
-			break;
-		case Null:
-			outRange.put( "" );
-			break;
-		case Boolean:
-			outRange.put( node.boolean ? "true" : "false" );
-			break;
-		case Integer:
-			outRange.put( node.integer.to!string );
-			break;
-		case Floating:
-			outRange.put( node.floating.to!string );
-			break;
-		case String:
-			outRange.put( node.str );
-			break;
-		case Array:
-			foreach( i, ref el; node.array )
-			{
-				//if( linesRecursion == 0 )
-				//{
-					//writeDataNodeAsString(el, outRange, maxRecursion - 1);
-				//}
-				//else
-				//{			
-					//if( i != 0 )
-						//outRange.put( "\r\n" );
-						
-					writeDataNodeLines(el, outRange, linesRecursion - 1, maxRecursion - 1);
-				//}
+			static if( renderType == DataRenderType.Text ) {
+				outRange.put("");
+			} else static if( renderType == DataRenderType.TextDebug ) {
+				outRange.put("undef");
+			} else {
+				outRange.put("null");
 			}
 			break;
-		case AssocArray:
-			writeDataNodeAsString(node, outRange, maxRecursion - 1);
+		case Null:
+			static if( renderType == DataRenderType.Text ) {
+				outRange.put("");
+			} else {
+				outRange.put("null");
+			}
 			break;
-		case CodeObject:
-			import std.conv: text;
-			if( node.codeObject )
-			{
-				outRange.put( "<code object, size: " ~ node.codeObject._instrs.length.text ~ ">" );
+		case Boolean:
+			outRange.put(node.boolean ? "true" : "false");
+			break;
+		case Integer:
+			outRange.put(node.integer.to!string);
+			break;
+		case Floating:
+			outRange.put(node.floating.to!string);
+			break;
+		case String:
+			static if( renderType == DataRenderType.Text ) {
+				outRange.put(node.str);
 			}
 			else
 			{
-				outRange.put( "<code object (null)>" );
+				outRange.put("\"");
+				_writeEscapedString(node.str, outRange);
+				outRange.put("\"");
 			}
-			break;
-		case Callable:
-			outRange.put( "<callable object, " ~ node.callable._kind.to!string ~ ">" );
-			break;
-		case ExecutionFrame:
-			outRange.put( "<execution frame>" );
-			break;
-		case DataNodeRange:
-			outRange.put( "<data node range>" );
-			break;
-	}
-}
-
-void writeDataNodeAsString(TDataNode, OutRange)(
-	TDataNode node, ref OutRange outRange, size_t maxRecursion = size_t.max)
-{
-	import std.range: put;
-	import std.conv: to;
-	
-	assert( maxRecursion, "Recursion is too deep!" );
-	
-	final switch( node.type ) with( DataNodeType )
-	{
-		case Undef:
-			outRange.put( "undef" );
-			break;
-		case Null:
-			outRange.put( "null" );
-			break;
-		case Boolean:
-			outRange.put( node.boolean ? "true" : "false"  );
-			break;
-		case Integer:
-			outRange.put( node.integer.to!string );
-			break;
-		case Floating:
-			outRange.put( node.floating.to!string );
-			break;
-		case String:
-			outRange.put( "\"" );
-			outRange.put(  node.str );
-			outRange.put( "\"" );
 			break;
 		case Array:
-			outRange.put( "[" );
-			foreach( i, ref el; node.array )
-			{
-				if( i != 0 )
-					outRange.put( ", " );
+			static if( renderType == DataRenderType.Text ) {
+				foreach( i, ref el; node.array ) {
+					renderDataNode!(renderType)(el, outRange, maxRecursion - 1);
+				}
+			} else {
+				outRange.put("[");
+				foreach( i, ref el; node.array )
+				{
+					if( i != 0 )
+						outRange.put(", ");
 
-				writeDataNodeAsString(el, outRange, maxRecursion - 1);	
+					renderDataNode!(renderType)(el, outRange, maxRecursion - 1);
+				}
+				outRange.put("]");
 			}
-			outRange.put( "]");
 			break;
 		case AssocArray:
-		{
-			outRange.put( "{");
+			outRange.put("{");
 			size_t i = 0;
 			foreach( ref key, ref val; node.assocArray )
 			{
 				if( i != 0 )
-					outRange.put( ", ");
+					outRange.put(", ");
 				
-				outRange.put( key);
-				outRange.put( ": ");
+				outRange.put("\"");
+				_writeEscapedString(key, outRange);
+				outRange.put("\"");
+				outRange.put(": ");
 
-				writeDataNodeAsString(val, outRange, maxRecursion - 1);	
+				renderDataNode!(renderType)(val, outRange, maxRecursion - 1);
 				++i;
 			}
-			outRange.put( "}");
+			outRange.put("}");
 			break;
-		}
 		case CodeObject:
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
+			}
+
 			import std.conv: text;
 			if( node.codeObject )
 			{
@@ -934,33 +919,39 @@ void writeDataNodeAsString(TDataNode, OutRange)(
 			{
 				outRange.put( "<code object (null)>" );
 			}
+
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
+			}
 			break;
 		case Callable:
-			import std.conv: text;
-			if( node.callable )
-			{
-				outRange.put( "<callable object, " ~ node.callable._kind.to!string ~ ">" );
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
 			}
-			else
-			{
-				outRange.put( "<directive object (null)>" );
+			outRange.put( "<callable object, " ~ node.callable._kind.to!string ~ ">" );
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
 			}
 			break;
 		case ExecutionFrame:
-			debug {
-				outRange.put( "<execution frame: " );
-				writeDataNodeAsString( node.execFrame._dataDict, outRange, maxRecursion - 1);
-				outRange.put( ">" );
-			} else {
-				outRange.put( "<execution frame>" );
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
 			}
-
+			outRange.put( "<execution frame>" );
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
+			}
 			break;
 		case DataNodeRange:
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
+			}
 			outRange.put( "<data node range>" );
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
+			}
 			break;
 	}
-	
 }
 
 TDataNode deeperCopy(TDataNode)(auto ref TDataNode node)

@@ -27,8 +27,7 @@ void main()
 	import std.array: appender;
 	auto buf = appender!string;
 
-	writeDataNodeAsString(parsedJSON, buf);
-
+	renderDataNode!(DataRenderType.Text)(parsedJSON, buf);
 	import std.stdio;
 	writeln(buf.data);
 }

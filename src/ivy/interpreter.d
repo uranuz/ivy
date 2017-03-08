@@ -244,7 +244,7 @@ class RenderDirInterpreter: INativeDirectiveInterpreter
 		TDataNode result = interp.getValue("__result__");
 
 		auto renderedResult = appender!string();
-		result.writeDataNodeLines(renderedResult);
+		renderDataNode!(DataRenderType.Text)(result, renderedResult);
 		interp._stack ~= TDataNode(renderedResult.data);
 	}
 
