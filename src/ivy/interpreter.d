@@ -191,6 +191,8 @@ public:
 
 		if( _moduleFrame )
 			return _moduleFrame.findLocalValue!(mode)(varName);
+
+		debug writeln( `Call ExecutionFrame.findLocalValue. Cannot find: `, varName, ` in module exec frame. Module frame is null!` );
 		
 		return null;
 	}
@@ -255,7 +257,8 @@ class RenderDirInterpreter: INativeDirectiveInterpreter
 		_attrBlocks = [
 			DirAttrsBlock!false( DirAttrKind.NamedAttr, [
 				"__result__": DirValueAttr!(false)( "__result__", "any" )
-			])
+			]),
+			DirAttrsBlock!false( DirAttrKind.BodyAttr )
 		];
 	}
 
@@ -307,18 +310,25 @@ public:
 
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame)
 	{
+		debug import std.stdio: writeln;
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame);
+		debug writeln(`Enter new execution frame for callable: `, callableObj._name, ` without dataDict`);
 	}
 
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
 	{
+		debug import std.stdio: writeln;
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict);
+		debug writeln(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict);
 	}
 
 	void removeFrame()
 	{
-		import std.range: popBack;
+		debug import std.stdio: writeln;
+		import std.range: back, popBack;
+		debug writeln(`Exit execution frame for callable: `, _frameStack.back._callableObj._name, ` with dataDict: `, _frameStack.back._dataDict);
 		_frameStack.popBack();
+		
 	}
 
 	ExecutionFrame getModuleFrame(string modName)
@@ -338,24 +348,44 @@ public:
 
 	static TDataNode* findValueImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
 	{
+		debug import std.stdio: writeln;
+		
 		import std.range: empty, back, popBack;
+
+		debug writeln(`Interpreter.findValueImpl: Starting to search for varName: `, varName);
+
+		assert( !frameStackSlice.empty, `findValueImpl: frameStackSlice is empty` );
 
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
 			assert( frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
 			if( !frameStackSlice.back.hasOwnScope ) {
+				debug writeln(`Interpreter.findValueImpl: Current level exec frame is noscope. Try find: `, varName, ` in parent`);
 				continue; // Let's try to find in parent
 			}
 
-			if( TDataNode* valuePtr = frameStackSlice.back.findValue!(mode)(varName) )
+			debug writeln(`Interpreter.findValueImpl: Trying to search in current execution frame for varName: `, varName);
+			if( TDataNode* valuePtr = frameStackSlice.back.findValue!(mode)(varName) ) {
+				debug writeln(`Interpreter.findValueImpl: varName: `, varName, ` found in current execution frame`);
 				return valuePtr;
+			} else {
+				debug writeln(`Interpreter.findValueImpl: varName: `, varName, ` NOT found in current execution frame`);
+				break;
+			}
 		}
 
 		assert( globalFrame, `Couldn't find variable: ` ~ varName ~ ` value in global frame, because it is null!` );
 		assert( globalFrame.hasOwnScope, `Couldn't find variable: ` ~ varName ~ ` value in global frame, because global frame doesn't have it's own scope!` );
 
-		if( TDataNode* valuePtr = globalFrame.findValue!(mode)(varName) )
-			return valuePtr;
+		static if( mode == FrameSearchMode.get || mode == FrameSearchMode.tryGet ) {
+			debug writeln(`Interpreter.findValueImpl: Trying to search in global frame for varName: `, varName);
+			if( TDataNode* valuePtr = globalFrame.findValue!(mode)(varName) ) {
+				debug writeln(`Interpreter.findValueImpl: varName: `, varName, ` found in global execution frame`);
+				return valuePtr;
+			}
+
+			debug writeln(`Interpreter.findValueImpl: varName: `, varName, ` NOT found in global execution frame`);
+		}
 
 		return null;
 	}
@@ -406,6 +436,11 @@ public:
 				foreach( i, frame; _frameStack[] )
 				{
 					writeln( `Scope frame lvl `, i, `, _dataDict: `, frame._dataDict );
+					if( frame._moduleFrame ) {
+						writeln( `Scope frame lvl `, i, `, _moduleFrame._dataDict: `, frame._moduleFrame._dataDict );
+					} else {
+						writeln( `Scope frame lvl `, i, `, _moduleFrame is null` );
+					}
 				}
 			}
 
@@ -875,6 +910,7 @@ public:
 						callableObj._codeObj = codeObject;
 
 						newFrame(callableObj, null); // Create entry point module frame
+						_moduleFrames[moduleName] = _frameStack.back; // We need to store module frame into storage
 
 						// Put module frame in frame of the caller
 						setValueImpl!(FrameSearchMode.setWithParents)( moduleName, TDataNode(_frameStack.back), baseFrameStack, _globalFrame );
@@ -1046,6 +1082,18 @@ public:
 					setLocalValue( varName, TDataNode(dirObj) ); // Put this directive in context
 					_stack ~= TDataNode(); // We should return something
 
+					debug {
+						foreach( lvl, frame; _frameStack )
+						{
+							writeln(`LoadDirective, frameStack lvl `, lvl, ` dataDict: `, frame._dataDict);
+							if( frame._moduleFrame ) {
+								writeln(`LoadDirective, frameStack lvl `, lvl, ` moduleFrame.dataDict: `, frame._dataDict);
+							} else {
+								writeln(`LoadDirective, frameStack lvl `, lvl, ` moduleFrame is null`);
+							}
+						}
+					}
+
 					break;
 				}
 
@@ -1067,14 +1115,9 @@ public:
 					assert( callableObj, `Callable object is null!` );
 					
 					DirAttrsBlock!(false)[] attrBlocks = callableObj.attrBlocks;
-
-					bool isNoscope = false;
-					if( _stack.back.type == DataNodeType.Integer && _stack.back.integer == DirAttrKind.NoscopeAttr )
-					{
-						// There could be noscope attribute as first "block header"
-						isNoscope = true;
-						_stack.popBack();
-					}
+					debug writeln( "RunCallable callableObj.attrBlocks: ", attrBlocks );
+					assert( attrBlocks[$-1].kind == DirAttrKind.BodyAttr, `Last attr block definition expected to be BodyAttr, but got: ` ~ attrBlocks[$-1].kind.to!string );
+					bool isNoscope = attrBlocks[$-1].bodyAttr.isNoscope;
 
 					ExecutionFrame moduleFrame;
 					if( callableObj._codeObj ) {
@@ -1085,11 +1128,13 @@ public:
 
 					if( isNoscope )
 					{
+						debug writeln( "RunCallable creating noscope execution frame..." );
 						// If directive is noscope we create frame with _dataDict that is Undef
 						newFrame( callableObj, moduleFrame, TDataNode() );
 					}
 					else
 					{
+						debug writeln( "RunCallable creating scoped execution frame..." );
 						newFrame( callableObj, moduleFrame );
 					}
 
@@ -1136,7 +1181,7 @@ public:
 								}
 								case DirAttrKind.ExprAttr:
 								{
-									size_t currBlockIndex = attrBlocks.length - blockCounter - 1;
+									size_t currBlockIndex = attrBlocks.length - blockCounter - 2; // 2 is: 1, because of length PLUS 1 for body attr in the end
 
 									debug writeln( `Interpret pos arg, currBlockIndex: `, currBlockIndex );
 									
@@ -1192,7 +1237,7 @@ public:
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
 						
 						if( !isNoscope ) {
-							_frameStack.popBack(); // Drop context from stack after end of execution
+							this.removeFrame(); // Drop context from stack after end of execution
 						}
 					}
 
@@ -1253,7 +1298,7 @@ public:
 				debug writeln( "_frameStack on code object end: ", _frameStack );
 				assert( !_frameStack.empty, "Frame stack shouldn't be empty yet'" );
 				// TODO: Consider case with noscope directive
-				_frameStack.popBack(); // Exit out of this frame
+				this.removeFrame(); // Exit out of this frame
 
 				// If frame stack happens to be empty - it means that we nave done with programme
 				if( _frameStack.empty )

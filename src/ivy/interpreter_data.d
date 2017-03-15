@@ -118,7 +118,7 @@ enum size_t _stackBlockHeaderCheckMask = 0b1000;
 enum size_t _stackBlockHeaderTypeMask = 0b111;
 
 
-enum DirAttrKind { NamedAttr, ExprAttr, IdentAttr, KwdAttr, NoscopeAttr, BodyAttr };
+enum DirAttrKind { NamedAttr, ExprAttr, IdentAttr, KwdAttr, BodyAttr };
 
 static this()
 {
@@ -127,10 +127,15 @@ static this()
 
 struct DirAttrsBlock(bool isForCompiler = false)
 {
+	import std.typecons: Tuple, tuple;
 	alias TValueAttr = DirValueAttr!(isForCompiler);
 
 	static if( isForCompiler ) {
 		import ivy.node: ICompoundStatement;
+		alias TBodyTuple = Tuple!(ICompoundStatement, "ast", bool, "isNoscope");
+	}
+	else {
+		alias TBodyTuple = Tuple!(bool, "isNoscope");
 	}
 
 	static struct Storage {
@@ -139,10 +144,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 			TValueAttr[] exprAttrs;
 			string[] names;
 			string keyword;
-
-			static if( isForCompiler ) {
-				ICompoundStatement bodyAST;
-			}
+			TBodyTuple bodyAttr;
 		}
 	}
 
@@ -181,15 +183,12 @@ struct DirAttrsBlock(bool isForCompiler = false)
 		_storage.keyword = kwd;
 	}
 
-	static if( isForCompiler )
+	this( DirAttrKind attrKind, TBodyTuple value )
 	{
-		this( DirAttrKind attrKind, ICompoundStatement bodyAST )
-		{
-			assert( attrKind == DirAttrKind.BodyAttr, `Expected BodyAttr kind for attr block` );
-			
-			_kind = attrKind;
-			_storage.bodyAST = bodyAST;
-		}
+		assert( attrKind == DirAttrKind.BodyAttr, `Expected BodyAttr kind for attr block` );
+		
+		_kind = attrKind;
+		_storage.bodyAttr = value;
 	}
 
 	this( DirAttrKind attrKind )
@@ -245,17 +244,14 @@ struct DirAttrsBlock(bool isForCompiler = false)
 		return _storage.keyword;
 	}
 
-	static if( isForCompiler )
-	{
-		void bodyAST(ICompoundStatement stmt) @property {
-			_storage.bodyAST = stmt;
-			_kind = DirAttrKind.BodyAttr;
-		}
+	void bodyAttr(TBodyTuple value) @property {
+		_storage.bodyAttr = value;
+		_kind = DirAttrKind.BodyAttr;
+	}
 
-		ICompoundStatement bodyAST() @property {
-			assert( _kind == DirAttrKind.BodyAttr, `Directive attrs block is not of BodyAttr kind` );
-			return _storage.bodyAST;
-		}
+	TBodyTuple bodyAttr() @property {
+		assert( _kind == DirAttrKind.BodyAttr, `Directive attrs block is not of BodyAttr kind` );
+		return _storage.bodyAttr;
 	}
 
 	DirAttrsBlock!(false) toInterpreterBlock()
@@ -278,8 +274,8 @@ struct DirAttrsBlock(bool isForCompiler = false)
 				return DirAttrsBlock!(false)( _kind, _storage.names );
 			case DirAttrKind.KwdAttr:
 				return DirAttrsBlock!(false)( _kind, _storage.keyword );
-			case DirAttrKind.NoscopeAttr, DirAttrKind.BodyAttr:
-				return DirAttrsBlock!(false)( _kind );
+			case DirAttrKind.BodyAttr:
+				return DirAttrsBlock!(false)( _kind, tuple!("isNoscope")(_storage.bodyAttr.isNoscope) );
 		}
 		assert( false, `This should never happen` );
 	}
@@ -293,7 +289,6 @@ struct DirAttrsBlock(bool isForCompiler = false)
 			case ExprAttr:
 			case IdentAttr:
 			case KwdAttr:
-			case NoscopeAttr: 
 			case BodyAttr:
 				return `<` ~ _kind.to!string ~ ` attrs block>`;
 		}

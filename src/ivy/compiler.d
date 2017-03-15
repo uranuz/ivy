@@ -224,25 +224,44 @@ public:
 
 	Symbol lookup(string name)
 	{
-		if( Symbol* symb = name in _symbols )
+		debug import std.stdio;
+		
+		debug writeln(`SymbolTableFrame: Starting compiler symbol lookup: `, name);
+
+		if( Symbol* symb = name in _symbols ) {
+			debug writeln(`SymbolTableFrame: Symbol: `, name, ` found in frame`);
 			return *symb;
+		}
+
+		debug writeln(`SymbolTableFrame: Couldn't find symbol in frame: `, name);
 
 		// We need to try to look in module symbol table
-		if( Symbol symb = moduleLookup(name) )
+		if( Symbol symb = moduleLookup(name) ) {
+			debug writeln(`SymbolTableFrame: Symbol found in imported modules: `, name);
 			return symb;
+		}
 
-		if( !_moduleFrame )
+		debug writeln(`SymbolTableFrame: Couldn't find symbol in imported modules: `, name);
+
+		if( !_moduleFrame ) {
+			debug writeln(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope failed, because _moduleFrame is null`);
 			return null;
+		}
 
+		debug writeln(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope!`);
 		return _moduleFrame.lookup(name);
 	}
 
 	Symbol moduleLookup(string name)
 	{
+		debug import std.stdio;
+		
 		import std.algorithm: splitter;
 		import std.string: join;
 		import std.range: take, drop;
 		import std.array: array;
+
+		debug writeln(`SymbolTableFrame: Attempt to perform imported modules lookup for symbol: `, name);
 
 		auto splittedName = splitter(name, ".").array;
 		for( size_t i = 1; i <= splittedName.length; ++i )
@@ -278,7 +297,8 @@ public:
 		if( sourceIndex in _childFrames )
 			compilerError( `Child frame already exists!` );
 
-		SymbolTableFrame child = new SymbolTableFrame(_moduleFrame);
+		// For now consider if this frame has no module frame - so it is module frame itself
+		SymbolTableFrame child = new SymbolTableFrame(_moduleFrame? _moduleFrame: this);
 		_childFrames[sourceIndex] = child;
 		return child;
 	}
@@ -461,6 +481,8 @@ public:
 							bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
 							if( !bodyStmt )
 								compilerError( "Expected compound statement as directive body statement" );
+
+							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope) );
 
 							break;
 						default:
@@ -1678,16 +1700,6 @@ public:
 				assert( dirSymbol, `Directive definition symbol is null` );
 
 				DirAttrsBlock!(true)[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
-				bool isNoscope = false;
-				foreach( dirDef; dirAttrBlocks )
-				{
-					// Quick workaround to find if directive is noscope
-					if( dirDef.kind == DirAttrKind.NoscopeAttr )
-					{
-						isNoscope = true;
-						break;
-					}
-				}
 
 				// Add instruction to load directive object from context by name
 				size_t dirNameConstIndex = addConst( TDataNode(node.name) );
@@ -1700,7 +1712,7 @@ public:
 				{
 					while( !dirAttrBlocks.empty )
 					{
-						switch( dirAttrBlocks.front.kind )
+						final switch( dirAttrBlocks.front.kind )
 						{
 							case DirAttrKind.NamedAttr:
 							{
@@ -1810,19 +1822,11 @@ public:
 									compilerError( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
 								break;
 							}
-							default:
-								assert( false, `Unexpected type of directive definition attr block!` );
+							case DirAttrKind.BodyAttr:
+								break;
 						}
 						dirAttrBlocks.popFront();
 					}
-				}
-
-				if( isNoscope )
-				{
-					// For now interpreter expects noscope flag to be the top of the stack "block header"
-					size_t noscopeFlagConstIndex = addConst( TDataNode(DirAttrKind.NoscopeAttr) ); // TODO: Change magic const to enum
-					addInstr( OpCode.LoadConst, noscopeFlagConstIndex );
-					++stackItemsCount; // We should count flag
 				}
 
 				// After all preparations add instruction to call directive
@@ -2012,6 +2016,7 @@ public:
 	/// Run programme main module with arguments passed as mainModuleScope parameter
 	TDataNode run( TDataNode mainModuleScope = TDataNode() )
 	{
+		mainModuleScope["__mentalModuleMagic_0451__"] = 451;
 		import std.range: back;
 
 		import ivy.interpreter: Interpreter;
