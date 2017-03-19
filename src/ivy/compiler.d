@@ -5,8 +5,12 @@ import ivy.node;
 import ivy.node_visitor;
 import ivy.bytecode;
 import ivy.interpreter_data;
+import ivy.common;
 
-class ASTNodeTypeException: Exception
+// If IvyTotalDebug is defined then enable compiler debug
+version(IvyTotalDebug) version = IvyCompilerDebug;
+
+class ASTNodeTypeException: IvyException
 {
 public:
 	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
@@ -67,7 +71,7 @@ T testFrontIs(T)( IAttributeRange range, string errorMsg = null, string file = _
 }
 
 
-class CompilerException: Exception
+class IvyCompilerException: IvyException
 {
 public:
 	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
@@ -79,7 +83,7 @@ public:
 
 void compilerError(string msg, string file = __FILE__, size_t line = __LINE__)
 {
-	throw new CompilerException(msg, file, line);
+	throw new IvyCompilerException(msg, file, line);
 }
 
 alias TDataNode = DataNode!string;
@@ -97,15 +101,33 @@ class CompilerModuleRepository
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 
 private:
-	string[] _importPaths;
-	string _fileExtension;
+	IvyConfig _config;
 	IvyNode[string] _moduleTrees;
 
 public:
-	this( string[] importPaths, string fileExtension = ".ivy" )
-	{
-		_importPaths = importPaths;
-		_fileExtension = fileExtension;
+	this(IvyConfig ivyConfig) {
+		_config = ivyConfig;
+	}
+
+	version(IvyCompilerDebug)
+		enum isDebugMode = true;
+	else
+		enum isDebugMode = false;
+
+	static struct LogerProxy {
+		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
+		CompilerModuleRepository moduleRepo;
+
+		void sendLogInfo(LogInfoType logInfoType, string msg) {
+			if( moduleRepo._config.compilerLoger is null ) {
+				return; // There is no loger method, so get out of here
+			}
+			moduleRepo._config.compilerLoger(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+		}
+	}
+
+	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+		return LogerProxy(func, file, line, this);
 	}
 
 	void loadModuleFromFile(string moduleName)
@@ -116,39 +138,39 @@ public:
 		import std.path: buildNormalizedPath, isAbsolute;
 		import std.file: read, exists, isFile;
 
-		debug writeln( "loadModuleFromFile attempt to load module: ", moduleName );
+		loger.write("loadModuleFromFile attempt to load module: ", moduleName);
 
 		string fileName;
 		string[] existingFiles;
-		foreach( importPath; _importPaths )
+		foreach( importPath; _config.importPaths )
 		{
 			if( !isAbsolute(importPath) )
 				continue;
 			
 			// The module name is given. Try to build path to it
-			fileName = buildNormalizedPath( only(importPath).chain( moduleName.splitter('.') ).array ) ~ _fileExtension;
+			fileName = buildNormalizedPath( only(importPath).chain( moduleName.splitter('.') ).array ) ~ _config.fileExtension;
 
 			// Check if file name is not empty and located in root path
 			if( fileName.empty || !fileName.startsWith( buildNormalizedPath(importPath) ) )
-				compilerError( `Incorrect path to module: ` ~ fileName );
+				loger.error(`Incorrect path to module: `, fileName);
 
 			if( std.file.exists(fileName) && std.file.isFile(fileName) )
 				existingFiles ~= fileName;
 		}
 
 		if( existingFiles.length == 0 )
-			compilerError( `Cannot load module ` ~ moduleName ~ `. Searching in import paths: ` ~ _importPaths.join(", ") );
+			loger.error(`Cannot load module `, moduleName, `. Searching in import paths: `, _config.importPaths.join(", ") );
 		else if( existingFiles.length == 1 )
 			fileName = existingFiles.front; // Success
 		else
-			compilerError( `Found multiple source files in import paths matching module name `
-				~ moduleName ~ `. Following files matched: ` ~ existingFiles.join(", ") );
+			loger.error(`Found multiple source files in import paths matching module name `, moduleName,
+				`. Following files matched: `, existingFiles.join(", ") );
 
-		debug writeln( "loadModuleFromFile loading module from file: ", fileName );
+		loger.write("loadModuleFromFile loading module from file: ", fileName);
 		string fileContent = cast(string) std.file.read(fileName);
 
 		import ivy.parser;
-		auto parser = new Parser!(TextRange)(fileContent, fileName);
+		auto parser = new Parser!(TextRange)(fileContent, fileName, _config.parserLoger);
 
 		_moduleTrees[moduleName] = parser.parse();
 	}
@@ -335,20 +357,44 @@ public:
 
 class CompilerSymbolsCollector: AbstractNodeVisitor
 {
+	alias LogerMethod = void delegate(LogInfo);
 private:
 	CompilerModuleRepository _moduleRepo;
 	SymbolTableFrame[string] _moduleSymbols;
 	string[] _moduleStack;
 	SymbolTableFrame[] _frameStack;
+	LogerMethod _logerMethod;
 
 public:
-	this( CompilerModuleRepository moduleRepo, string mainModuleName )
+	this( CompilerModuleRepository moduleRepo, string mainModuleName, LogerMethod logerMethod )
 	{
 		import std.range: back;
 		_moduleRepo = moduleRepo;
+		_logerMethod = logerMethod;
 		_moduleStack ~= mainModuleName;
 		_frameStack ~= new SymbolTableFrame(null);
 		_moduleSymbols[mainModuleName] = _frameStack.back;
+	}
+
+	version(IvyCompilerDebug)
+		enum isDebugMode = true;
+	else
+		enum isDebugMode = false;
+
+	static struct LogerProxy {
+		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
+		CompilerSymbolsCollector collector;
+
+		void sendLogInfo(LogInfoType logInfoType, string msg) {
+			if( collector._logerMethod is null ) {
+				return; // There is no loger method, so get out of here
+			}
+			collector._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+		}
+	}
+
+	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+		return LogerProxy(func, file, line, this);
 	}
 
 	alias visit = AbstractNodeVisitor.visit;
@@ -383,9 +429,9 @@ public:
 				IAttributeRange defAttrsRange = node[];
 
 				debug {
-					writeln( `CompilerSymbolsCollector. Attr kinds for IDirectiveStatement children:` );
+					loger.write(`CompilerSymbolsCollector. Attr kinds for IDirectiveStatement children:`);
 					foreach( childNode; node[] ) {
-						writeln( `		` ~ childNode.kind);
+						loger.write(`		` ~ childNode.kind);
 					}
 				}
 
@@ -424,7 +470,7 @@ public:
 								TValueAttr attrDecl = parsed.attr;
 
 								if( attrDecl.name in namedAttrs )
-									compilerError( `Named attribute "` ~ attrDecl.name ~ `" already defined in directive definition` );
+									loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
 
 								namedAttrs[attrDecl.name] = attrDecl;
 							}
@@ -447,7 +493,7 @@ public:
 								TValueAttr attrDecl = parsed.attr;
 
 								if( exprAttrs.canFind!( (it, needle) => it.name == needle )(attrDecl.name) )
-									compilerError( `Named attribute "` ~ attrDecl.name ~ `" already defined in directive definition` );
+									loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
 
 								exprAttrs ~= attrDecl;
 							}
@@ -463,10 +509,10 @@ public:
 							break;
 						case "def.body":
 							if( bodyStmt )
-								compilerError( `Multiple body statements are not allowed!` );
+								loger.error(`Multiple body statements are not allowed!`);
 
 							if( attrsDefStmtAttrRange.empty )
-								compilerError( "Unexpected end of def.body directive!" );
+								loger.error("Unexpected end of def.body directive!");
 							
 							// Try to parse noscope flag
 							INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
@@ -474,13 +520,13 @@ public:
 							{
 								isNoscope = true;
 								if( attrsDefStmtAttrRange.empty )
-									compilerError( "Expected directive body, but end of def.body directive found!" );
+									loger.error("Expected directive body, but end of def.body directive found!");
 								attrsDefStmtAttrRange.popFront();
 							}
 
 							bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
 							if( !bodyStmt )
-								compilerError( "Expected compound statement as directive body statement" );
+								loger.error("Expected compound statement as directive body statement");
 
 							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope) );
 
@@ -493,9 +539,9 @@ public:
 				}
 
 				if( _frameStack.empty )
-					compilerError( `Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty` );
+					loger.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
 				if( !_frameStack.back )
-					compilerError( `Cannot store symbol, because symbol table frame is null` );
+					loger.error(`Cannot store symbol, because symbol table frame is null`);
 				// Add directive definition into existing frame
 				_frameStack.back.add( new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks) );
 
@@ -519,26 +565,26 @@ public:
 				}
 
 				if( !defAttrsRange.empty )
-					compilerError( `Expected end of directive definition statement. Maybe ; is missing` );
+					loger.error(`Expected end of directive definition statement. Maybe ; is missing`);
 			}
 			else if( node.name == "import" )
 			{
 				IAttributeRange attrRange = node[];
 				if( attrRange.empty )
-					compilerError( `Expected module name in import statement, but got end of directive` );
+					loger.error(`Expected module name in import statement, but got end of directive`);
 
 				INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
 
 				if( !attrRange.empty )
-					compilerError( `Expected end of import directive, maybe ; is missing` );
+					loger.error(`Expected end of import directive, maybe ; is missing`);
 
 				{
 					_moduleStack ~= moduleNameExpr.name;
 					scope(exit)
 					{
-						assert( !_moduleStack.empty, `Compiler directive collector module stack is empty!` );
+						loger.internalAssert(!_moduleStack.empty, `Compiler directive collector module stack is empty!`);
 						_moduleStack.popBack(); // We will exit module when finish with it
-						assert( !_frameStack.empty, `Compiler directive collector frame stack is empty!` );
+						loger.internalAssert(!_frameStack.empty, `Compiler directive collector frame stack is empty!`);
 						_frameStack.popBack();
 					}
 
@@ -549,7 +595,7 @@ public:
 						IvyNode moduleTree = _moduleRepo.getModuleTree( moduleNameExpr.name );
 
 						if( !moduleTree )
-							compilerError( `Couldn't load module: ` ~ moduleNameExpr.name );
+							loger.error(`Couldn't load module: `, moduleNameExpr.name);
 
 						_frameStack ~= new SymbolTableFrame(null);
 						
@@ -560,8 +606,8 @@ public:
 					}
 				}
 
-				assert( !_frameStack.empty, "Cannot store imported symbols, because symbol table frame stack is empty!" );
-				assert( _frameStack.back, "Cannot store imported symbols, because symbol table stack is null!" );
+				loger.internalAssert(!_frameStack.empty, "Cannot store imported symbols, because symbol table frame stack is empty!");
+				loger.internalAssert(_frameStack.back, "Cannot store imported symbols, because symbol table stack is null!");
 				// Add imported module symbol table as local symbol
 				_frameStack.back.add( new ModuleSymbol(moduleNameExpr.name, _moduleSymbols[moduleNameExpr.name] ) );
 			}
@@ -569,7 +615,7 @@ public:
 			{
 				foreach( childNode; node[] )
 				{
-					debug writeln( `Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name );
+					loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
 					childNode.accept(this);
 				}
 			}
@@ -579,10 +625,9 @@ public:
 		void visit(IDataFragmentStatement node) {  }
 		void visit(ICompoundStatement node)
 		{
-			debug import std.stdio: writeln;
 			foreach( childNode; node[] )
 			{
-				debug writeln( `Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind );
+				loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind);
 				childNode.accept(this);
 			}
 
@@ -604,7 +649,7 @@ public:
 			attrName = kwPair.name;
 			defaultValueExpr = cast(IExpression) kwPair.value;
 			if( !defaultValueExpr )
-				compilerError( `Expected attribute default value expression!` );
+				loger.error(`Expected attribute default value expression!`);
 
 			attrRange.popFront(); // Skip named attribute
 		}
@@ -631,11 +676,11 @@ public:
 					attrRange.popFront(); // Skip `as` keyword
 
 					if( attrRange.empty )
-						compilerError( `Expected attr type definition, but got end of attrs range!` );
+						loger.error(`Expected attr type definition, but got end of attrs range!`);
 
 					auto attrTypeExpr = cast(INameExpression) attrRange.front;
 					if( !attrTypeExpr )
-						compilerError( `Expected attr type definition!` );
+						loger.error(`Expected attr type definition!`);
 
 					attrType = attrTypeExpr.name; // Getting type of attribute as string (for now)
 
@@ -813,6 +858,7 @@ class IfCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
+		debug import std.stdio: writeln;
 		if( !statement || statement.name != "if" )
 			compilerError( `Expected "if" directive statement!` );
 
@@ -832,6 +878,7 @@ class IfCompiler: IDirectiveCompiler
 
 		while( !stmtRange.empty )
 		{
+			debug writeln(`IfCompiler, stmtRange.front: `, stmtRange.front);
 			INameExpression keywordExpr = stmtRange.takeFrontAs!INameExpression("'elif' or 'else' keyword expected");
 			if( keywordExpr.name == "elif" )
 			{
@@ -1320,6 +1367,7 @@ class DefCompiler: IDirectiveCompiler
 
 class ByteCodeCompiler: AbstractNodeVisitor
 {
+	alias LogerMethod = void delegate(LogInfo);
 private:
 
 	// Dictionary of native compilers for directives
@@ -1342,11 +1390,15 @@ private:
 
 	string _mainModuleName;
 
+	LogerMethod _logerMethod;
+
+
 public:
-	this( CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName )
+	this( CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName, LogerMethod logerMethod = null )
 	{
 		_moduleRepo = moduleRepo;
 		_modulesSymbolTables = symbolTables;
+		_logerMethod = logerMethod;
 
 		_dirCompilers["var"] = new VarCompiler();
 		_dirCompilers["set"] = new SetCompiler();
@@ -1363,27 +1415,48 @@ public:
 		enterNewCodeObject( newModuleObject(mainModuleName) );
 	}
 
+	version(IvyCompilerDebug)
+		enum isDebugMode = true;
+	else
+		enum isDebugMode = false;
+
+	static struct LogerProxy {
+		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
+		ByteCodeCompiler compiler;
+
+		void sendLogInfo(LogInfoType logInfoType, string msg) {
+			if( compiler._logerMethod is null ) {
+				return; // There is no loger method, so get out of here
+			}
+			compiler._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+		}
+	}
+
+	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+		return LogerProxy(func, file, line, this);
+	}
+
 	void enterModuleScope( string moduleName )
 	{
-		debug writeln( `_modulesSymbolTables: `, _modulesSymbolTables );
+		loger.write( `_modulesSymbolTables: `, _modulesSymbolTables );
 		if( auto table = moduleName in _modulesSymbolTables )
 		{
-			assert( *table, `Cannot enter module sybol table frame, because it is null` );
+			loger.internalAssert( *table, `Cannot enter module sybol table frame, because it is null` );
 			_symbolTableStack ~= *table;
 		}
 		else
 		{
-			compilerError( `Cannot enter module symbol table, because module "` ~ moduleName ~ `" not found!` );
+			loger.error( `Cannot enter module symbol table, because module "` ~ moduleName ~ `" not found!` );
 		}
 	}
 
 	void enterScope( size_t sourceIndex )
 	{
 		import std.range: empty, back;
-		assert( !_symbolTableStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty` );
+		loger.internalAssert( !_symbolTableStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty` );
 
 		SymbolTableFrame childFrame = _symbolTableStack.back.getChildFrame(sourceIndex);
-		assert( childFrame, `Cannot enter child symbol table frame, because it's null` );
+		loger.internalAssert( childFrame, `Cannot enter child symbol table frame, because it's null` );
 
 		_symbolTableStack ~= childFrame;
 	}
@@ -1391,7 +1464,7 @@ public:
 	void exitScope()
 	{
 		import std.range: empty, popBack;
-		assert( !_symbolTableStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!" );
+		loger.internalAssert( !_symbolTableStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!" );
 
 		_symbolTableStack.popBack();
 	}
@@ -1399,7 +1472,7 @@ public:
 	ModuleObject newModuleObject( string moduleName )
 	{
 		if( moduleName in _moduleObjects )
-			compilerError( `Cannot create new module object "` ~ moduleName ~ `", because it already exists!` );
+			loger.error( `Cannot create new module object "` ~ moduleName ~ `", because it already exists!` );
 
 		ModuleObject newModObj = new ModuleObject(moduleName, null);
 		_moduleObjects[moduleName] = newModObj;
@@ -1423,7 +1496,7 @@ public:
 	void exitCodeObject()
 	{
 		import std.range: empty, popBack;
-		assert( !_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!" );
 
 		_codeObjStack.popBack();
 	}
@@ -1431,8 +1504,8 @@ public:
 	size_t addInstr( Instruction instr )
 	{
 		import std.range: empty, back;
-		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
-		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
+		loger.internalAssert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
 
 		return _codeObjStack.back.addInstr(instr);
 	}
@@ -1440,8 +1513,8 @@ public:
 	size_t addInstr( OpCode opcode )
 	{
 		import std.range: empty, back;
-		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
-		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
+		loger.internalAssert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
 
 		return _codeObjStack.back.addInstr( Instruction(opcode) );
 	}
@@ -1449,8 +1522,8 @@ public:
 	size_t addInstr( OpCode opcode, size_t arg )
 	{
 		import std.range: empty, back;
-		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
-		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
+		loger.internalAssert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
 
 		return _codeObjStack.back.addInstr( Instruction(opcode, arg) );
 	}
@@ -1458,8 +1531,8 @@ public:
 	void setInstrArg( size_t index, size_t arg )
 	{
 		import std.range: empty, back;
-		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
-		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
+		loger.internalAssert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
 
 		return _codeObjStack.back.setInstrArg( index, arg );
 	}
@@ -1467,8 +1540,8 @@ public:
 	size_t getInstrCount()
 	{
 		import std.range: empty, back;
-		assert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
-		assert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!" );
+		loger.internalAssert( _codeObjStack.back, "Cannot add instruction, because current compiler code object is null!" );
 
 		return _codeObjStack.back.getInstrCount();
 	}
@@ -1476,9 +1549,9 @@ public:
 	size_t addConst( TDataNode value )
 	{
 		import std.range: empty, back;
-		assert( !_codeObjStack.empty, "Cannot add constant, because compiler code object stack is empty!" );
-		assert( _codeObjStack.back, "Cannot add constant, because current compiler code object is null!" );
-		assert( _codeObjStack.back._moduleObj, "Cannot add constant, because current module object is null!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot add constant, because compiler code object stack is empty!" );
+		loger.internalAssert( _codeObjStack.back, "Cannot add constant, because current compiler code object is null!" );
+		loger.internalAssert( _codeObjStack.back._moduleObj, "Cannot add constant, because current module object is null!" );
 
 		return _codeObjStack.back._moduleObj.addConst(value);
 	}
@@ -1486,8 +1559,8 @@ public:
 	ModuleObject currentModule() @property
 	{
 		import std.range: empty, back;
-		assert( !_codeObjStack.empty, "Cannot get current module object, because compiler code object stack is empty!" );
-		assert( _codeObjStack.back, "Cannot get current module object, because current compiler code object is null!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot get current module object, because compiler code object stack is empty!" );
+		loger.internalAssert( _codeObjStack.back, "Cannot get current module object, because current compiler code object is null!" );
 
 		return _codeObjStack.back._moduleObj;
 	}
@@ -1495,7 +1568,7 @@ public:
 	CodeObject currentCodeObject() @property
 	{
 		import std.range: empty, back;
-		assert( !_codeObjStack.empty, "Cannot get current code object, because compiler code object stack is empty!" );
+		loger.internalAssert( !_codeObjStack.empty, "Cannot get current code object, because compiler code object stack is empty!" );
 
 		return _codeObjStack.back;
 	}
@@ -1504,8 +1577,8 @@ public:
 	{
 		import std.range: empty, back;
 		debug import std.stdio: writeln;
-		assert( !_symbolTableStack.empty, `Cannot look for symbol, because symbol table stack is empty` );
-		assert( _symbolTableStack.back, `Cannot look for symbol, current symbol table frame is null` );
+		loger.internalAssert( !_symbolTableStack.empty, `Cannot look for symbol, because symbol table stack is empty` );
+		loger.internalAssert( _symbolTableStack.back, `Cannot look for symbol, current symbol table frame is null` );
 
 		Symbol symb = _symbolTableStack.back.lookup(name);
 
@@ -1517,7 +1590,7 @@ public:
 		}
 
 		if( !symb ) {
-			compilerError( `Cannot find symbol "` ~ name ~ `"` );
+			loger.error( `Cannot find symbol "` ~ name ~ `"` );
 		}
 
 		return symb;
@@ -1525,7 +1598,7 @@ public:
 
 	ModuleObject mainModule() @property
 	{
-		assert( _mainModuleName in _moduleObjects, `Cannot get main module object` );
+		loger.internalAssert( _mainModuleName in _moduleObjects, `Cannot get main module object` );
 		return _moduleObjects[_mainModuleName];
 	}
 
@@ -1595,13 +1668,13 @@ public:
 					{
 						IAssocArrayPair aaPair = cast(IAssocArrayPair) elem;
 						if( !aaPair )
-							compilerError( "Expected assoc array pair!" );
+							loger.error( "Expected assoc array pair!" );
 
 						size_t aaKeyConstIndex = addConst( TDataNode(aaPair.key) );
 						addInstr( OpCode.LoadConst, aaKeyConstIndex );
 
 						if( !aaPair.value )
-							compilerError( "Expected assoc array value!" );
+							loger.error( "Expected assoc array value!" );
 						aaPair.value.accept(this);
 
 						++aaLen;
@@ -1609,7 +1682,7 @@ public:
 					addInstr( OpCode.MakeAssocArray, aaLen );
 					return;
 				default:
-					assert( false, "Expected literal expression node!" );
+					loger.internalAssert( false, "Expected literal expression node!" );
 					break;
 			}
 
@@ -1626,7 +1699,7 @@ public:
 		void visit(IOperatorExpression node) { visit( cast(IExpression) node ); }
 		void visit(IUnaryExpression node)
 		{
-			assert( node.expr, "Expression expected!" );
+			loger.internalAssert( node.expr, "Expression expected!" );
 			node.expr.accept(this);
 
 			OpCode opcode;
@@ -1636,7 +1709,7 @@ public:
 				case Operator.UnaryMin: opcode = OpCode.UnaryMin; break;
 				case Operator.Not: opcode = OpCode.UnaryNot; break;
 				default:
-					assert( false, "Unexpected unary operator type!" );
+					loger.internalAssert( false, "Unexpected unary operator type!" );
 			}
 
 			addInstr( opcode );
@@ -1644,9 +1717,9 @@ public:
 		void visit(IBinaryExpression node)
 		{
 			// Generate code that evaluates left and right parts of binary expression and get result on the stack
-			assert( node.leftExpr, "Left expr expected!" );
+			loger.internalAssert( node.leftExpr, "Left expr expected!" );
 			node.leftExpr.accept(this);
-			assert( node.rightExpr, "Right expr expected!" );
+			loger.internalAssert( node.rightExpr, "Right expr expected!" );
 			node.rightExpr.accept(this);
 
 			OpCode opcode;
@@ -1668,7 +1741,7 @@ public:
 				case Operator.LTEqual: opcode = OpCode.LTEqual; break;
 				case Operator.GTEqual: opcode = OpCode.GTEqual; break;
 				default:
-					assert( false, "Unexpected binary operator type!" );
+					loger.internalAssert( false, "Unexpected binary operator type!" );
 			}
 
 			addInstr( opcode );
@@ -1694,10 +1767,10 @@ public:
 
 				Symbol symb = this.symbolLookup( node.name );
 				if( symb.kind != SymbolKind.DirectiveDefinition )
-					compilerError(`Expected directive definition symbol kind`);
+					loger.error(`Expected directive definition symbol kind`);
 
 				DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-				assert( dirSymbol, `Directive definition symbol is null` );
+				loger.internalAssert( dirSymbol, `Directive definition symbol is null` );
 
 				DirAttrsBlock!(true)[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
 
@@ -1729,7 +1802,7 @@ public:
 									}
 
 									if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
-										compilerError( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
+										loger.error( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
 
 									// Add name of named argument into stack
 									size_t nameConstIndex = addConst( TDataNode(keyValueAttr.name) );
@@ -1801,7 +1874,7 @@ public:
 							}
 							case DirAttrKind.IdentAttr:
 							{
-								assert( false );
+								loger.internalAssert( false );
 								// TODO: We should take number of identifiers passed in directive definition
 								while( !attrRange.empty ) {
 									IExpression identAttr = cast(INameExpression) attrRange.front;
@@ -1815,11 +1888,11 @@ public:
 							}
 							case DirAttrKind.KwdAttr:
 							{
-								assert( false );
+								loger.internalAssert( false );
 								DirAttrsBlock!(true) kwdDef = dirAttrBlocks.front;
 								INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression( `Expected keyword attribute` );
 								if( kwdDef.keyword != kwdAttr.name )
-									compilerError( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
+									loger.error( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
 								break;
 							}
 							case DirAttrKind.BodyAttr:
@@ -1843,13 +1916,13 @@ public:
 
 		void visit(ICompoundStatement node)
 		{
-			assert( false, `Shouldn't fall into this!` );
+			loger.internalAssert( false, `Shouldn't fall into this!` );
 		}
 
 		void visit(ICodeBlockStatement node)
 		{
 			if( !node )
-				compilerError( "Code block statement node is null!" );
+				loger.error( "Code block statement node is null!" );
 			
 			if( node.isListBlock )
 			{
@@ -1878,7 +1951,7 @@ public:
 		void visit(IMixedBlockStatement node)
 		{
 			if( !node )
-				compilerError( "Mixed block statement node is null!" );
+				loger.error( "Mixed block statement node is null!" );
 
 			TDataNode emptyArray = TDataNode[].init;
 			size_t emptyArrayConstIndex = addConst(emptyArray);
@@ -2002,15 +2075,19 @@ public:
 // Representation of programme ready for execution
 class ExecutableProgramme
 {
+	alias LogerMethod = void delegate(LogInfo);
 private:
 	ModuleObject[string] _moduleObjects;
 	string _mainModuleName;
+	LogerMethod _logerMethod;
+
 
 public:
-	this( ModuleObject[string] moduleObjects, string mainModuleName )
+	this( ModuleObject[string] moduleObjects, string mainModuleName, LogerMethod logerMethod = null )
 	{
 		_moduleObjects = moduleObjects;
 		_mainModuleName = mainModuleName;
+		_logerMethod = logerMethod;
 	}
 
 	/// Run programme main module with arguments passed as mainModuleScope parameter
@@ -2020,40 +2097,40 @@ public:
 		import std.range: back;
 
 		import ivy.interpreter: Interpreter;
-		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope );
+		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
 		interp.execLoop();
 
 		return interp._stack.back;
 	}
 }
 
-ExecutableProgramme compileModule( string mainModuleName, string[] importPaths, string fileExtension = ".ivy" )
+ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 {
 	import std.range: empty;
 	debug import std.stdio: writeln;
 
-	if( importPaths.empty )
+	if( config.importPaths.empty )
 		compilerError( `List of compiler import paths must not be empty!` );
 	
 	// Creating object that manages reading source files, parse and store them as AST
-	auto moduleRepo = new CompilerModuleRepository(importPaths, fileExtension);
+	auto moduleRepo = new CompilerModuleRepository(config);
 
 	// Preliminary compiler phase that analyse imported modules and stores neccessary info about directives
-	auto symbolsCollector = new CompilerSymbolsCollector(moduleRepo, mainModuleName);
+	auto symbolsCollector = new CompilerSymbolsCollector(moduleRepo, mainModuleName, config.compilerLoger);
 	symbolsCollector.run(); // Run analyse
 
 	// Main compiler phase that generates bytecode for modules
-	auto compiler = new ByteCodeCompiler( moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName );
+	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config.compilerLoger);
 	compiler.run(); // Run compilation itself
 
 	debug writeln( "compileModule:\r\n", compiler.toPrettyStr() );
 
 	// Creating additional object that stores all neccessary info for user
-	return new ExecutableProgramme(compiler.moduleObjects, mainModuleName);
+	return new ExecutableProgramme(compiler.moduleObjects, mainModuleName, config.interpreterLoger);
 }
 
 /// Simple method that can be used to compile source file and get executable
-ExecutableProgramme compileFile(string sourceFileName, string[] importPaths = null)
+ExecutableProgramme compileFile(string sourceFileName, IvyConfig config)
 {
 	import std.path: extension, stripExtension, relativePath, dirSeparator, dirName;
 	import std.array: split, join, empty, front;
@@ -2061,17 +2138,26 @@ ExecutableProgramme compileFile(string sourceFileName, string[] importPaths = nu
 	//importPaths = sourceFileName.dirName() ~ importPaths; // For now let main source file path be in import paths
 
 	// Calculating main module name
-	string mainModuleName = sourceFileName.relativePath(importPaths.front).stripExtension().split(dirSeparator).join('.');
+	string mainModuleName = sourceFileName.relativePath(config.importPaths.front).stripExtension().split(dirSeparator).join('.');
 
-	return compileModule( mainModuleName, importPaths, extension(sourceFileName) );
+	return compileModule(mainModuleName, config);
+}
+
+struct IvyConfig
+{
+	alias LogerMethod = void delegate(LogInfo);
+	string[] importPaths;
+	string fileExtension = `.ivy`;
+	LogerMethod interpreterLoger;
+	LogerMethod compilerLoger;
+	LogerMethod parserLoger;
 }
 
 /// Dump-simple in-memory cache for compiled programmes
 class ProgrammeCache(bool useCache = true)
 {
 private:
-	string[] _importPaths;
-	string _fileExtension;
+	IvyConfig _config;
 
 	static if(useCache)
 	{
@@ -2082,10 +2168,9 @@ private:
 	}
 
 public:
-	this( string[] importPaths, string fileExtension = ".ivy" )
+	this(IvyConfig config)
 	{
-		_importPaths = importPaths;
-		_fileExtension = fileExtension;
+		_config = config;
 		static if(useCache)
 		{
 			_mutex = new Mutex();
@@ -2100,14 +2185,14 @@ public:
 			{
 				synchronized( _mutex )
 				{
-					_progs[moduleName] = compileModule(moduleName, _importPaths, _fileExtension);
+					_progs[moduleName] = compileModule(moduleName, _config);
 				}
 			}
 			return _progs[moduleName];
 		}
 		else
 		{
-			return compileModule(moduleName, _importPaths, _fileExtension);
+			return compileModule(moduleName, _config);
 		}
 	}
 }

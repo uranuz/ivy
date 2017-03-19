@@ -1,22 +1,20 @@
 module ivy.parser;
 
-import std.stdio;
 import std.range;
 
-import ivy.lexer, ivy.lexer_tools, ivy.node, ivy.expression,
-	ivy.statement, ivy.common;
+import ivy.lexer, ivy.lexer_tools, ivy.node, ivy.expression, ivy.statement, ivy.common;
 
-class ParserException : Exception
+// If IvyTotalDebug is defined then enable parser debug
+version(IvyTotalDebug) version = IvyParserDebug;
+
+class IvyParserException: IvyException
 {
 public:
-	
-	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
-	{
+	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow {
 		super(msg, file, line, next);
 	}
 }
-	
-	
+
 class Parser(R)
 {
 public:
@@ -30,15 +28,18 @@ public:
 	alias LexerType = Lexer!(String, config);
 	alias CustLocation = CustomizedLocation!(config);
 	alias ParserT = Parser!R;
+	alias LogerMethod = void delegate(LogInfo);
 
 	LexerType lexer;
 	string fileName;
 	size_t spacesPerTab = 4;
+	LogerMethod logerMethod;
 
-	this(String source, string fileName)
+	this(String source, string fileName, LogerMethod logerMethod = null)
 	{
 		this.lexer = LexerType(source);
 		this.fileName = fileName;
+		this.logerMethod = logerMethod;
 	}
 	
 	IvyNode parse()
@@ -56,37 +57,41 @@ public:
 		
 		return loc;
 	}
-	
-	void error( string msg, string func = __FUNCTION__, int line = __LINE__ )
+
+	version(IvyParserDebug)
+		enum isDebugMode = true;
+	else
+		enum isDebugMode = false;
+
+	static struct LogerProxy
 	{
-		throw new ParserException("Parser error in  " ~ func ~ ":\r\n" ~ msg, __FILE__, line);
-	}
-	
-	static struct LogerInfo
-	{
+		mixin LogerProxyImpl!(IvyParserException, isDebugMode);
 		ParserT parser;
-		string func;
-		int line;
-		
-		void write(T...)(T data)
+
+		void sendLogInfo(LogInfoType logInfoType, string msg)
 		{
-			debug {
-				import std.stdio;
-				import std.algorithm: splitter;
-				import std.range: retro;
-				import std.range: take;
-				import std.array: array;
-				import std.conv: to;
-	
-				string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
-				debug writeln( shortFuncName, "[", line, "]: ", data, ", frontValue is: ", parser.lexer.frontValue.array.to!string );
+			import std.array: array;
+			import std.conv: to;
+
+			if( parser.logerMethod is null ) {
+				return; // There is no loger method, so get out of here
 			}
+
+			parser.logerMethod(LogInfo(
+				msg,
+				logInfoType,
+				func.splitter('.').retro.take(2).array.retro.join("."),
+				file,
+				line,
+				parser.fileName,
+				parser.lexer.front.loc.lineIndex,
+				parser.lexer.frontValue.array.to!string
+			));
 		}
 	}
 
-	LogerInfo loger(string func = __FUNCTION__, int line = __LINE__)
-	{
-		return LogerInfo(this, func, line);
+	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+		return LogerProxy(func, file, line, this);
 	}
 
 	string parseQualifiedIdentifier(bool justTry = false)
@@ -103,7 +108,7 @@ public:
 			if( justTry )
 				return null;
 		
-			error( "Expected Name" );
+			loger.error("Expected Name");
 		}
 
 		nameParts ~= lexer.frontValue.array.to!string;
@@ -121,7 +126,7 @@ public:
 				if( justTry )
 					return null;
 					
-				error( "Expected Name" );
+				loger.error( "Expected Name" );
 			}
 			
 			nameParts ~= lexer.frontValue.array.to!string;
@@ -178,13 +183,13 @@ public:
 		loger.write( "Starting to parse directive statement" );
 		
 		if( !lexer.front.test( LexemeType.Name ) )
-			error( "Expected statement name" );
+			loger.error("Expected statement name");
 		
 		string statementName = parseQualifiedIdentifier();
 		loger.write("directive statement identifier: ", statementName);
 		
 		if( statementName.empty )
-			error( "Directive statement name cannot be empty!" );
+			loger.error("Directive statement name cannot be empty!");
 
 		IvyNode[] attrs;
 		while( !lexer.empty && !lexer.front.test( [LexemeType.Semicolon, LexemeType.CodeBlockEnd, LexemeType.CodeListEnd] ) )
@@ -192,8 +197,8 @@ public:
 			//Try parse named attribute
 			IvyNode attr = parseNamedAttribute();
 			
-			loger.write( "Attempt to parse named attribute finished" );
-			loger.write( " attr is", ( attr is null ? null : " not" ) ~ " null" );
+			loger.write("Attempt to parse named attribute finished" );
+			loger.write(" attr is", ( attr is null ? null : " not" ) ~ " null" );
 			
 			//If no named attrs detected yet then we try parse unnamed attrs
 			if( attr )
@@ -270,7 +275,7 @@ public:
 			}
 			case DataBlock:
 			{
-				error( "Parsing raw data block is unimplemented for now!");
+				loger.error("Parsing raw data block is unimplemented for now!");
 				break;
 			}
 			default:
@@ -285,13 +290,12 @@ public:
 	
 	ICodeBlockStatement parseExpressionBlock()
 	{
-		// This method doesn't parse whole block, but just creates "=" directive from expressions before ";"
 		loger.write( "Start parsing expression block" );
 
 		CustLocation blockLocation = this.currentLocation;
 		
 		if( !lexer.front.test(LexemeType.ExprBlockBegin) )
-			error( `Expected ExprBlockBegin` );
+			loger.error(`Expected ExprBlockBegin`);
 	
 		lexer.popFront(); // Skip ExprBlockBegin
 
@@ -302,7 +306,7 @@ public:
 		{
 			IExpression attr = parseExpression();
 			if( !attr )
-				error( `Expression is null` );
+				loger.error(`Expression is null`);
 
 			if( lexer.front.test(LexemeType.Comma) )
 			{
@@ -313,7 +317,7 @@ public:
 		}
 
 		if( !lexer.front.test(LexemeType.ExprBlockEnd) )
-			error( "Expected semicolon as directive statements delimiter" );
+			loger.error("Expected semicolon as directive statements delimiter");
 		lexer.popFront(); // Skip ExprBlockEnd
 
 		IDirectiveStatement dirStmt = new DirectiveStatement!(config)(blockLocation, "expr", attrs);
@@ -333,26 +337,26 @@ public:
 		CustLocation blockLocation = this.currentLocation;
 		
 		if( !lexer.front.test([LexemeType.CodeBlockBegin, LexemeType.CodeListBegin, LexemeType.LBrace]) )
-			error( "Expected CodeBlockBegin, CodeListBegin or LBrace" );
+			loger.error( "Expected CodeBlockBegin, CodeListBegin or LBrace" );
 		
 		auto beginLexemeType = lexer.front.typeIndex;
 		auto endLexemeType = lexer.front.info.pairTypeIndex;
 		lexer.popFront(); // Skip CodeBlockBegin, CodeListBegin or LBrace
 			
 		if( lexer.empty || lexer.front.test(endLexemeType) )
-			error( "Unexpected end of code block" );
+			loger.error("Unexpected end of code block");
 
 		while( !lexer.empty && !lexer.front.test(endLexemeType) )
 		{
 			IDirectiveStatement stmt;
 
 			if( !lexer.front.test(LexemeType.Name) )
-				error( "Expected directive statement name" );
+				loger.error("Expected directive statement name");
 
 			stmt = parseDirectiveStatement();
 
 			if( stmt is null )
-				error( "Directive statement is null" );
+				loger.error("Directive statement is null");
 
 			if( lexer.front.test(LexemeType.Semicolon) )
 			{
@@ -360,14 +364,14 @@ public:
 			}
 			else if( !lexer.front.test(endLexemeType) )
 			{
-				error( "Expected semicolon as directive statements delimiter" );
+				loger.error("Expected semicolon as directive statements delimiter");
 			}
 
 			statements ~= stmt;
 		}
 		
 		if( !lexer.front.test(endLexemeType) )
-			error( "Expected CodeBlockEnd, CodeListEnd or RBrace" );
+			loger.error("Expected CodeBlockEnd, CodeListEnd or RBrace");
 		lexer.popFront(); //Skip RBrace
 
 		statement = new CodeBlockStatement!(config)( blockLocation, statements, beginLexemeType != LexemeType.CodeBlockBegin );
@@ -388,7 +392,7 @@ public:
 		CustLocation loc = this.currentLocation;
 		
 		if( !lexer.front.test( LexemeType.MixedBlockBegin ) )
-			error( "Expected MixedBlockBegin" );
+			loger.error("Expected MixedBlockBegin");
 		lexer.popFront(); //Skip MixedBlockBegin
 
 		while( !lexer.empty && !lexer.front.test(LexemeType.MixedBlockEnd) )
@@ -415,12 +419,12 @@ public:
 					break;
 				}
 				default:
-					error( "Expected code block or data as mixed block content, but found: " ~ ( cast(LexemeType) lexer.front.typeIndex ).to!string );
+					loger.error("Expected code block or data as mixed block content, but found: ", cast(LexemeType) lexer.front.typeIndex );
 			}
 		}
 		
 		if( !lexer.front.test( LexemeType.MixedBlockEnd ) )
-			error( "Expected MixedBlockEnd" );
+			loger.error("Expected MixedBlockEnd");
 		lexer.popFront(); //Skip MixedBlockEnd
 
 		statement = new MixedBlockStatement!(config)(loc, statements);
@@ -455,7 +459,7 @@ public:
 		CustLocation loc = this.currentLocation;
 		
 		if( !lexer.front.test(LexemeType.LBrace) )
-			error( "Expected LBrace as beginning of assoc array literal!" );
+			loger.error("Expected LBrace as beginning of assoc array literal!");
 
 		lexer.popFront(); // Skip LBrace
 
@@ -477,17 +481,17 @@ public:
 			}
 			else
 			{
-				error( "Expected assoc array key!" );
+				loger.error("Expected assoc array key!");
 			}
 
 			if( !lexer.front.test(LexemeType.Colon) )
-				error( "Expected colon as assoc array key: value delimiter!" );
+				loger.error("Expected colon as assoc array key: value delimiter!");
 			lexer.popFront();
 
 			auto valueExpr = parseExpression();
 
 			if( !valueExpr )
-				error( "Expected assoc array value expression but got null" );
+				loger.error("Expected assoc array value expression but got null");
 
 			assocPairs ~= new AssocArrayPair!(config)(loc, aaKey, valueExpr);
 
@@ -495,13 +499,13 @@ public:
 				break;
 
 			if( !lexer.front.test(LexemeType.Comma) )
-				error( "Expected comma as assoc array pairs delimiter!");
+				loger.error("Expected comma as assoc array pairs delimiter!");
 
 			lexer.popFront(); // Skip comma
 		}
 		
 		if( !lexer.front.test(LexemeType.RBrace) )
-			error( "Expected right brace, closing assoc array literal!" );
+			loger.error("Expected right brace, closing assoc array literal!");
 		lexer.popFront(); // Skip right curly brace
 		
 		expr = new AssocArrayLiteralExp!(config)(loc, assocPairs);
@@ -562,7 +566,7 @@ public:
 						lexer.popFront();
 							
 						if( !lexer.front.test(LexemeType.Name) )
-							error( "Expected identifier expression" );
+							loger.error("Expected identifier expression");
 						
 						identName ~= "." ~ lexer.frontValue.save.array.idup;
 						lexer.popFront();
@@ -608,7 +612,7 @@ public:
 				expr = parseExpression();
 				
 				if( !lexer.front.test(LexemeType.RParen) )
-					error( "Expected right paren, closing expression!" );
+					loger.error("Expected right paren, closing expression!");
 				lexer.popFront(); // Skip RParent
 				
 				break;
@@ -625,7 +629,7 @@ public:
 					expr = parseExpression();
 					
 					if( !expr )
-						error( "Null array element expression found!!!" );
+						loger.error("Null array element expression found!!!");
 					
 					loger.write("Array item expression parsed");
 					
@@ -637,13 +641,13 @@ public:
 					}
 
 					if( !lexer.front.test(LexemeType.Comma) )
-						error( "Expected Comma as array items delimiter!" );
+						loger.error("Expected Comma as array items delimiter!");
 					
 					lexer.popFront();
 				}
 				
 				if( !lexer.front.test(LexemeType.RBracket) )
-					error( "Expected right bracket, closing array literal!" );
+					loger.error("Expected right bracket, closing array literal!");
 				lexer.popFront(); // Skip RBracket
 				
 				expr = new ArrayLiteralExp!(config)(loc, values);
@@ -693,7 +697,7 @@ public:
 			case Dot:
 			{
 				// Parse member access expression
-				assert( false, `Member access expression is not implemented yet!!!`);
+				loger.internalAssert( false, `Member access expression is not implemented yet!!!`);
 				break;
 			}
 			case LParen:
@@ -718,7 +722,7 @@ public:
 						arg = parseBlockOrExpression();
 
 					if( !arg )
-						error( "Null call argument expression found!!!" );
+						loger.error("Null call argument expression found!!!");
 
 					argList ~= arg;
 
@@ -726,13 +730,13 @@ public:
 						break;
 
 					if( !lexer.front.test(LexemeType.Comma) )
-						error( "Expected Comma as call arguments delimeter" );
+						loger.error("Expected Comma as call arguments delimeter");
 
 					lexer.popFront();
 				}
 
 				if( !lexer.front.test( LexemeType.RParen ) )
-					error( "Expected right paren" );
+					loger.error("Expected right paren");
 				lexer.popFront();
 
 				expr = new CallExp!(config)(loc, preExpr, argList);
@@ -750,11 +754,11 @@ public:
 				IExpression indexExpr = parseExpression();
 
 				if( !indexExpr )
-					error( "Null index expression found!!!" );
+					loger.error("Null index expression found!!!");
 
 				if( !lexer.front.test(LexemeType.RBracket) )
 				{
-					error( "Expected right bracket, closing array index expression!!! " );
+					loger.error("Expected right bracket, closing array index expression!!!");
 				}
 				lexer.popFront(); // Skip RBracket
 
@@ -782,12 +786,12 @@ public:
 		loger.write( "Parsing quoted string expression" );
 		
 		if( !lexer.front.test(LexemeType.String) )
-			error( "Expected quoted string literal" );
+			loger.error("Expected quoted string literal");
 		
 		auto strRange = lexer.frontValue.save;
 
 		if( strRange.front != '\"' )
-			error( "Expected \"" );
+			loger.error("Expected \"");
 		strRange.popFront();
 		
 		auto clearStrRange = strRange.save;
@@ -812,17 +816,17 @@ public:
 					}
 					case 'u':
 					{
-						assert( 0, "Unicode escaping is not implemented yet!");
+						loger.internalAssert( 0, "Unicode escaping is not implemented yet!");
 						break;
 					}
 					case 'x':
 					{
-						assert( 0, "Hex escaping is not implemented yet!");
+						loger.internalAssert( 0, "Hex escaping is not implemented yet!");
 						break;
 					}
 					default:
 					{
-						error( "Unexpected escape character: " ~ strRange.front );
+						loger.error("Unexpected escape character: " ~ strRange.front);
 						break;
 					}
 				}
@@ -837,7 +841,7 @@ public:
 		}
 
 		if( strRange.front != '\"' )
-			error( "Expected \" closing quoted string literal" );
+			loger.error("Expected \" closing quoted string literal");
 			
 		result ~= clearStrRange[0..clearCount].array; //Appending last part of string except last quote
 			
@@ -884,8 +888,11 @@ public:
 				{
 					lexer.popFront();
 					right = parseUnaryExp();
-					assert( lex.info.typeIndex in lexToBinaryOpMap,
-						`Unexpected binary arithmetic operation lexeme: ` ~ (cast(LexemeType) lex.info.typeIndex).to!string );
+					loger.internalAssert(
+						lex.info.typeIndex in lexToBinaryOpMap,
+						`Unexpected binary arithmetic operation lexeme: `,
+						cast(LexemeType) lex.info.typeIndex
+					);
 					left = new BinaryArithmeticExp!(config)(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
 					continue;
 				}
@@ -921,14 +928,17 @@ public:
 				{
 					lexer.popFront();
 					right = parseMulExp();
-					assert( lex.info.typeIndex in lexToBinaryOpMap,
-						`Unexpected binary arithmetic operation lexeme: ` ~ (cast(LexemeType) lex.info.typeIndex).to!string );
+					loger.internalAssert(
+						lex.info.typeIndex in lexToBinaryOpMap,
+						`Unexpected binary arithmetic operation lexeme: `,
+						cast(LexemeType) lex.info.typeIndex
+					);
 					left = new BinaryArithmeticExp!(config)(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
 					continue;
 				}
 				default:
 				{
-					//assert( 0, "Expected add, sub or tilde!!" );
+					//loger.internalAssert( 0, "Expected add, sub or tilde!!" );
 					break lexerRangeLoop;
 				}
 			}
@@ -1025,12 +1035,11 @@ public:
 				right = parseAddExp();
 				if( lex.info.typeIndex !in lexToCmpOpMap )
 				{
-					import std.stdio;
-
-					writeln("lexToCmpOpMap: ", lexToCmpOpMap);
-
-					assert( lex.info.typeIndex in lexToCmpOpMap, 
-						`Unexpected binary comparision operation lexeme: ` ~ (cast(LexemeType) lex.info.typeIndex).to!string );
+					loger.internalAssert(
+						lex.info.typeIndex in lexToCmpOpMap, 
+						`Unexpected binary comparision operation lexeme: `, 
+						cast(LexemeType) lex.info.typeIndex
+					);
 				}
 				left = new CompareExp!(config)(loc, lexToCmpOpMap[lex.info.typeIndex], left, right);
 			}

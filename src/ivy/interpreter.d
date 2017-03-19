@@ -4,10 +4,12 @@ import ivy.node, ivy.node_visitor, ivy.common, ivy.expression;
 
 import ivy.interpreter_data;
 
+// If IvyTotalDebug is defined then enable parser debug
+version(IvyTotalDebug) version = IvyInterpreterDebug;
+
 alias TDataNode = DataNode!string;
 
-
-class InterpretException: Exception
+class IvyInterpretException: IvyException
 {
 public:
 	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
@@ -19,7 +21,7 @@ public:
 
 void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
 {
-	throw new InterpretException(msg, file, line);
+	throw new IvyInterpretException(msg, file, line);
 }
 
 enum FrameSearchMode { get, tryGet, set, setWithParents };
@@ -274,20 +276,22 @@ class Interpreter
 public:
 	alias String = string;
 	alias TDataNode = DataNode!String;
+	alias LogerMethod = void delegate(LogInfo);
 
 	TDataNode[] _stack;
 	ExecutionFrame[] _frameStack;
 	ExecutionFrame _globalFrame;
 	ExecutionFrame[string] _moduleFrames;
 	ModuleObject[string] _moduleObjects;
+	LogerMethod _logerMethod;
 
-	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict)
+	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, LogerMethod logerMethod)
 	{
-		debug import std.stdio: writeln;
 		_moduleObjects = moduleObjects;
-		assert( mainModuleName in _moduleObjects, `Cannot get main module from module objects!` );
+		_logerMethod = logerMethod;
+		loger.internalAssert(mainModuleName in _moduleObjects, `Cannot get main module from module objects!`);
 
-		debug writeln( `Iterpreter ctor: passed dataDict: `, dataDict );
+		loger.write(`Iterpreter ctor: passed dataDict: `, dataDict);
 
 		CallableObject rootCallableObj = new CallableObject;
 		rootCallableObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
@@ -295,7 +299,7 @@ public:
 		rootCallableObj._name = "__main__";
 
 		_globalFrame = new ExecutionFrame(null, null);
-		debug writeln( `Iterpreter ctor 1: _globalFrame._dataDict: `, _globalFrame._dataDict );
+		loger.write(`Iterpreter ctor 1: _globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		// Add native directive interpreter __render__ to global scope
 		CallableObject renderDirInterp = new CallableObject();
@@ -303,30 +307,49 @@ public:
 		renderDirInterp._dirInterp = new RenderDirInterpreter();
 		_globalFrame.setValue( "__render__", TDataNode(renderDirInterp) );
 
-		debug writeln( `Iterpreter ctor 2: _globalFrame._dataDict: `, _globalFrame._dataDict );
+		loger.write(`Iterpreter ctor 2: _globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
 	}
 
+	version(IvyInterpreterDebug)
+		enum isDebugMode = true;
+	else
+		enum isDebugMode = false;
+
+	static struct LogerProxy {
+		mixin LogerProxyImpl!(IvyInterpretException, isDebugMode);
+		Interpreter interp;
+
+		void sendLogInfo(LogInfoType logInfoType, string msg) {
+			if( interp._logerMethod is null ) {
+				return; // There is no loger method, so get out of here
+			}
+
+			interp._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+		}
+	}
+
+	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+		return LogerProxy(func, file, line, this);
+	}
+
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame)
 	{
-		debug import std.stdio: writeln;
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame);
-		debug writeln(`Enter new execution frame for callable: `, callableObj._name, ` without dataDict`);
+		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` without dataDict`);
 	}
 
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
 	{
-		debug import std.stdio: writeln;
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict);
-		debug writeln(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict);
+		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict);
 	}
 
 	void removeFrame()
 	{
-		debug import std.stdio: writeln;
 		import std.range: back, popBack;
-		debug writeln(`Exit execution frame for callable: `, _frameStack.back._callableObj._name, ` with dataDict: `, _frameStack.back._dataDict);
+		loger.write(`Exit execution frame for callable: `, _frameStack.back._callableObj._name, ` with dataDict: `, _frameStack.back._dataDict);
 		_frameStack.popBack();
 		
 	}
@@ -346,57 +369,54 @@ public:
 		return cast(bool)( findValueImpl!(FrameSearchMode.tryGet)(varName, _frameStack[], _globalFrame) );
 	}
 
-	static TDataNode* findValueImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
+	TDataNode* findValueImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
 	{
-		debug import std.stdio: writeln;
-		
 		import std.range: empty, back, popBack;
 
-		debug writeln(`Interpreter.findValueImpl: Starting to search for varName: `, varName);
-
-		assert( !frameStackSlice.empty, `findValueImpl: frameStackSlice is empty` );
+		loger.write(`Interpreter.findValueImpl: Starting to search for varName: `, varName);
+		loger.internalAssert( !frameStackSlice.empty, `findValueImpl: frameStackSlice is empty` );
 
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
-			assert( frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
+			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
 			if( !frameStackSlice.back.hasOwnScope ) {
-				debug writeln(`Interpreter.findValueImpl: Current level exec frame is noscope. Try find: `, varName, ` in parent`);
+				loger.write(`Interpreter.findValueImpl: Current level exec frame is noscope. Try find: `, varName, ` in parent`);
 				continue; // Let's try to find in parent
 			}
 
-			debug writeln(`Interpreter.findValueImpl: Trying to search in current execution frame for varName: `, varName);
+			loger.write(`Interpreter.findValueImpl: Trying to search in current execution frame for varName: `, varName);
 			if( TDataNode* valuePtr = frameStackSlice.back.findValue!(mode)(varName) ) {
-				debug writeln(`Interpreter.findValueImpl: varName: `, varName, ` found in current execution frame`);
+				loger.write(`Interpreter.findValueImpl: varName: `, varName, ` found in current execution frame`);
 				return valuePtr;
 			} else {
-				debug writeln(`Interpreter.findValueImpl: varName: `, varName, ` NOT found in current execution frame`);
+				loger.write(`Interpreter.findValueImpl: varName: `, varName, ` NOT found in current execution frame`);
 				break;
 			}
 		}
 
-		assert( globalFrame, `Couldn't find variable: ` ~ varName ~ ` value in global frame, because it is null!` );
-		assert( globalFrame.hasOwnScope, `Couldn't find variable: ` ~ varName ~ ` value in global frame, because global frame doesn't have it's own scope!` );
+		loger.internalAssert(globalFrame, `Couldn't find variable: `, varName, ` value in global frame, because it is null!` );
+		loger.internalAssert(globalFrame.hasOwnScope, `Couldn't find variable: `, varName, ` value in global frame, because global frame doesn't have it's own scope!` );
 
 		static if( mode == FrameSearchMode.get || mode == FrameSearchMode.tryGet ) {
-			debug writeln(`Interpreter.findValueImpl: Trying to search in global frame for varName: `, varName);
+			loger.write(`Interpreter.findValueImpl: Trying to search in global frame for varName: `, varName);
 			if( TDataNode* valuePtr = globalFrame.findValue!(mode)(varName) ) {
-				debug writeln(`Interpreter.findValueImpl: varName: `, varName, ` found in global execution frame`);
+				loger.write(`Interpreter.findValueImpl: varName: `, varName, ` found in global execution frame`);
 				return valuePtr;
 			}
 
-			debug writeln(`Interpreter.findValueImpl: varName: `, varName, ` NOT found in global execution frame`);
+			loger.write(`Interpreter.findValueImpl: varName: `, varName, ` NOT found in global execution frame`);
 		}
 
 		return null;
 	}
 
-	static TDataNode* findValueLocalImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice )
+	TDataNode* findValueLocalImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice )
 	{
 		import std.range: empty, back, popBack;
 
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
-			assert( frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
+			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!`);
 			if( !frameStackSlice.back.hasOwnScope ) {
 				continue; // Let's try to find first parent that have it's own scope
 			}
@@ -410,12 +430,12 @@ public:
 		return null;
 	}
 
-	static void setValueImpl(FrameSearchMode mode)( string varName, TDataNode value, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
+	void setValueImpl(FrameSearchMode mode)( string varName, TDataNode value, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
 		if( mode == FrameSearchMode.set || mode == FrameSearchMode.setWithParents )
 	{
 		TDataNode* valuePtr = findValueImpl!(mode)(varName, frameStackSlice[], globalFrame);
 		if( valuePtr is null )
-			interpretError( "Failed to set variable with name: " ~ varName );
+			loger.error("Failed to set variable with name: ", varName);
 		
 		*valuePtr = value;
 	}
@@ -444,7 +464,7 @@ public:
 				}
 			}
 
-			interpretError( "Undefined variable with name '" ~ varName ~ "'" );
+			loger.error("Undefined variable with name '", varName, "'");
 		}
 
 		return *valuePtr;
@@ -454,7 +474,7 @@ public:
 	{
 		TDataNode* valuePtr = findValue!(FrameSearchMode.set)(varName);
 		if( valuePtr is null )
-			interpretError( `Cannot set variable "` ~ varName ~ `", because cannot find it. Use setLocalValue to decare new variable!` );
+			loger.error(`Cannot set variable "`, varName, `", because cannot find it. Use setLocalValue to decare new variable!`);
 
 		*valuePtr = value;
 	}
@@ -463,7 +483,7 @@ public:
 	{
 		TDataNode* valuePtr = findValue!(FrameSearchMode.setWithParents)(varName);
 		if( valuePtr is null )
-			interpretError( `Cannot set variable "` ~ varName ~ `", because cannot find it. Use setLocalValueWithParents to decare new variable!` );
+			loger.error(`Cannot set variable "`, varName, `", because cannot find it. Use setLocalValueWithParents to decare new variable!`);
 
 		*valuePtr = value;
 	}
@@ -473,7 +493,7 @@ public:
 		TDataNode* valuePtr = findValueLocalImpl!(FrameSearchMode.set)( varName, _frameStack[] );
 		
 		if( valuePtr is null )
-			interpretError( `Failed to set local variable: ` ~ varName );
+			loger.error(`Failed to set local variable: `, varName);
 
 		*valuePtr = value;
 	}
@@ -483,7 +503,7 @@ public:
 		TDataNode* valuePtr = findValueLocalImpl!(FrameSearchMode.setWithParents)( varName, _frameStack[] );
 		
 		if( valuePtr is null )
-			interpretError( `Failed to set local variable: ` ~ varName );
+			loger.error(`Failed to set local variable: `, varName);
 
 		*valuePtr = value;
 	}
@@ -492,11 +512,11 @@ public:
 	{
 		import std.range: back, empty;
 		import std.conv: text;
-		assert( !_frameStack.empty, `_frameStack is empty` );
-		assert( _frameStack.back, `_frameStack.back is null` );
-		assert( _frameStack.back._callableObj, `_frameStack.back._callableObj is null` );
-		assert( _frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null` );
-		assert( _frameStack.back._callableObj._codeObj._moduleObj, `_frameStack.back._callableObj._codeObj._moduleObj is null` );
+		loger.internalAssert(!_frameStack.empty, `_frameStack is empty`);
+		loger.internalAssert(_frameStack.back, `_frameStack.back is null`);
+		loger.internalAssert(_frameStack.back._callableObj, `_frameStack.back._callableObj is null`);
+		loger.internalAssert(_frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null`);
+		loger.internalAssert(_frameStack.back._callableObj._codeObj._moduleObj, `_frameStack.back._callableObj._codeObj._moduleObj is null`);
 
 		return _frameStack.back._callableObj._codeObj._moduleObj.getConst(index);
 	}
@@ -512,12 +532,11 @@ public:
 		import std.conv: to, text;
 		import std.meta: AliasSeq;
 		import std.typecons: tuple;
-		debug import std.stdio: writeln;
 
-		assert( !_frameStack.empty, `_frameStack is empty` );
-		assert( _frameStack.back, `_frameStack.back is null` );
-		assert( _frameStack.back._callableObj, `_frameStack.back._callableObj is null` );
-		assert( _frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null` );
+		loger.internalAssert(!_frameStack.empty, `_frameStack is empty`);
+		loger.internalAssert(_frameStack.back, `_frameStack.back is null`);
+		loger.internalAssert(_frameStack.back._callableObj, `_frameStack.back._callableObj is null`);
+		loger.internalAssert(_frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null`);
 
 		auto codeRange = _frameStack.back._callableObj._codeObj._instrs[];
 		size_t pk = 0;
@@ -531,15 +550,14 @@ public:
 				// Base arithmetic operations execution
 				case OpCode.Add, OpCode.Sub, OpCode.Mul, OpCode.Div, OpCode.Mod:
 				{
-					import std.conv: to;
-					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected right operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected right operand, but exec stack is empty!");
 					// Right value was evaluated last so it goes first in the stack
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
-					assert( ( leftVal.type == DataNodeType.Integer || leftVal.type == DataNodeType.Floating ) && leftVal.type == rightVal.type,
+					loger.internalAssert( ( leftVal.type == DataNodeType.Integer || leftVal.type == DataNodeType.Floating ) && leftVal.type == rightVal.type,
 						`Left and right values of arithmetic operation must have the same integer or floating type!` );
 
 					arithm_op_switch:
@@ -565,7 +583,7 @@ public:
 							}
 						}
 						default:
-							assert( false, `This should never happen!` );
+							loger.internalAssert(false, `This should never happen!`);
 					}
 					break;
 				}
@@ -573,14 +591,13 @@ public:
 				// Logical binary operations
 				case OpCode.And, OpCode.Or, OpCode.Xor:
 				{
-					import std.conv: to;
-					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected right operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected right operand, but exec stack is empty!" );
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode.to!string, " instruction. Expected left operand, but exec stack is empty!");
 					TDataNode leftVal = _stack.back;
-					assert( leftVal.type == DataNodeType.Boolean && leftVal.type == rightVal.type,
+					loger.internalAssert(leftVal.type == DataNodeType.Boolean && leftVal.type == rightVal.type,
 						`Left and right values of arithmetic operation must have boolean type!` );
 
 					logical_op_switch:
@@ -597,7 +614,7 @@ public:
 							}
 						}
 						default:
-							assert( false, `This should never happen!` );
+							loger.internalAssert(false, `This should never happen!`);
 					}
 					break;
 				}
@@ -606,14 +623,14 @@ public:
 				case OpCode.LT, OpCode.GT, OpCode.LTEqual, OpCode.GTEqual:
 				{
 					import std.conv: to;
-					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected right operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected right operand, but exec stack is empty!");
 					// Right value was evaluated last so it goes first in the stack
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected left operand, but exec stack is empty!");
 					TDataNode leftVal = _stack.back;
-					assert( leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type` );
+					loger.internalAssert(leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type`);
 
 					compare_op_switch:
 					switch( instr.opcode )
@@ -641,13 +658,13 @@ public:
 										mixin( `_stack.back = leftVal.str ` ~ compareOp[1] ~ ` rightVal.str;` );
 										break;
 									default:
-										assert( false, `Less or greater comparision doesn't support type "` ~ leftVal.type.to!string ~ `" yet!` );
+										loger.internalAssert(false, `Less or greater comparision doesn't support type "`, leftVal.type, `" yet!`);
 								}
 								break compare_op_switch;
 							}
 						}
 						default:
-							assert(false, `This should never happen!` );
+							loger.internalAssert(false, `This should never happen!`);
 					}
 					break;
 				}
@@ -655,12 +672,12 @@ public:
 				// Shallow equality comparision
 				case OpCode.Equal, OpCode.NotEqual:
 				{
-					assert( !_stack.empty, "Cannot execute Equal instruction. Expected right operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute Equal instruction. Expected right operand, but exec stack is empty!");
 					// Right value was evaluated last so it goes first in the stack
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute Equal instruction. Expected left operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute Equal instruction. Expected left operand, but exec stack is empty!");
 					TDataNode leftVal = _stack.back;
 
 					if( leftVal.type != rightVal.type )
@@ -695,7 +712,7 @@ public:
 								break cmp_type_switch;
 						}
 						default:
-							assert( false, `Equality comparision doesn't support type "` ~ leftVal.type.to!string ~ `" yet!` );
+							loger.internalAssert(false, `Equality comparision doesn't support type "`, leftVal.type, `" yet!`);
 							break;
 					}
 					break;
@@ -706,50 +723,49 @@ public:
 				{
 					import std.utf: toUTFindex, decode;
 
-					debug import std.stdio: writeln;
-					debug writeln( `OpCode.LoadSubscr. _stack: `, _stack );
+					loger.write(`OpCode.LoadSubscr. _stack: `, _stack);
 
-					assert( !_stack.empty, "Cannot execute LoadSubscr instruction. Expected index value, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute LoadSubscr instruction. Expected index value, but exec stack is empty!");
 					TDataNode indexValue = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute LoadSubscr instruction. Expected aggregate, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute LoadSubscr instruction. Expected aggregate, but exec stack is empty!");
 					TDataNode aggr = _stack.back;
 					_stack.popBack();
-					debug writeln( `OpCode.LoadSubscr. aggr: `, aggr );
-					debug	writeln( `OpCode.LoadSubscr. indexValue: `, indexValue );
+					loger.write(`OpCode.LoadSubscr. aggr: `, aggr);
+					loger.write(`OpCode.LoadSubscr. indexValue: `, indexValue);
 
-					assert( aggr.type == DataNodeType.String || aggr.type == DataNodeType.Array || aggr.type == DataNodeType.AssocArray,
-						"Cannot execute LoadSubscr instruction. Aggregate value must be string, array or assoc array!" );
+					loger.internalAssert(aggr.type == DataNodeType.String || aggr.type == DataNodeType.Array || aggr.type == DataNodeType.AssocArray,
+						"Cannot execute LoadSubscr instruction. Aggregate value must be string, array or assoc array!");
 
 					switch( aggr.type )
 					{
 						case DataNodeType.String:
-							assert( indexValue.type == DataNodeType.Integer,
-								"Cannot execute LoadSubscr instruction. Index value for string aggregate must be integer!" );
+							loger.internalAssert(indexValue.type == DataNodeType.Integer,
+								"Cannot execute LoadSubscr instruction. Index value for string aggregate must be integer!");
 							
 							// Index operation for string in D is little more complicated
 							 size_t startIndex = aggr.str.toUTFindex(indexValue.integer); // Get code unit index by index of symbol
 							 size_t endIndex = startIndex;
 							 aggr.str.decode(endIndex); // decode increases passed index
-							 assert( startIndex < aggr.str.length, `String slice start index must be less than str length` );
-							 assert( endIndex <= aggr.str.length, `String slice end index must be less or equal to str length` );
+							 loger.internalAssert(startIndex < aggr.str.length, `String slice start index must be less than str length`);
+							 loger.internalAssert(endIndex <= aggr.str.length, `String slice end index must be less or equal to str length`);
 							_stack ~= TDataNode( aggr.str[startIndex..endIndex] );
 							break;
 						case DataNodeType.Array:
-							assert( indexValue.type == DataNodeType.Integer,
-								"Cannot execute LoadSubscr instruction. Index value for array aggregate must be integer!" );
-							assert( indexValue.integer < aggr.array.length, `Array index must be less than array length` );
+							loger.internalAssert(indexValue.type == DataNodeType.Integer,
+								"Cannot execute LoadSubscr instruction. Index value for array aggregate must be integer!");
+							loger.internalAssert(indexValue.integer < aggr.array.length, `Array index must be less than array length`);
 							_stack ~= aggr.array[indexValue.integer];
 							break;
 						case DataNodeType.AssocArray:
-							assert( indexValue.type == DataNodeType.String,
-								"Cannot execute LoadSubscr instruction. Index value for assoc array aggregate must be string!" );
-							assert( indexValue.str in aggr.assocArray, `Assoc array key must be present in assoc array` );
+							loger.internalAssert(indexValue.type == DataNodeType.String,
+								"Cannot execute LoadSubscr instruction. Index value for assoc array aggregate must be string!");
+							loger.internalAssert(indexValue.str in aggr.assocArray, `Assoc array key must be present in assoc array`);
 							_stack ~= aggr.assocArray[indexValue.str];
 							break;
 						default:
-							assert( false, `This should never happen` );
+							loger.internalAssert(false, `This should never happen`);
 					}
 					break;
 				}
@@ -764,13 +780,13 @@ public:
 				// Concatenates two arrays or strings and puts result onto stack
 				case OpCode.Concat:
 				{
-					assert( !_stack.empty, "Cannot execute Concat instruction. Expected right operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute Concat instruction. Expected right operand, but exec stack is empty!");
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute Concat instruction. Expected left operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute Concat instruction. Expected left operand, but exec stack is empty!");
 					TDataNode leftVal = _stack.back;
-					assert( ( leftVal.type == DataNodeType.String || leftVal.type == DataNodeType.Array ) && leftVal.type == rightVal.type,
+					loger.internalAssert( ( leftVal.type == DataNodeType.String || leftVal.type == DataNodeType.Array ) && leftVal.type == rightVal.type,
 						`Left and right values for concatenation operation must have the same string or array type!`
 					);
 
@@ -785,16 +801,15 @@ public:
 
 				case OpCode.Append:
 				{
-					debug writeln( "OpCode.Append _stack: ", _stack );
-					import std.conv: to;
-					assert( !_stack.empty, "Cannot execute Append instruction. Expected right operand, but exec stack is empty!" );
+					loger.write("OpCode.Append _stack: ", _stack);
+					loger.internalAssert(!_stack.empty, "Cannot execute Append instruction. Expected right operand, but exec stack is empty!");
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					assert( !_stack.empty, "Cannot execute Append instruction. Expected left operand, but exec stack is empty!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute Append instruction. Expected left operand, but exec stack is empty!");
 					TDataNode leftVal = _stack.back;
 					_stack.popBack();
-					assert( leftVal.type == DataNodeType.Array, "Left operand for Append instruction expected to be array, but got: " ~ leftVal.type.to!string );
+					loger.internalAssert(leftVal.type == DataNodeType.Array, "Left operand for Append instruction expected to be array, but got: ", leftVal.type);
 
 					leftVal ~= rightVal;
 					_stack ~= leftVal;
@@ -805,8 +820,8 @@ public:
 				// Useless unary plus operation
 				case OpCode.UnaryPlus:
 				{
-					assert( !_stack.empty, "Cannot execute UnaryPlus instruction. Operand expected, but exec stack is empty!" );
-					assert( _stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
+					loger.internalAssert(!_stack.empty, "Cannot execute UnaryPlus instruction. Operand expected, but exec stack is empty!");
+					loger.internalAssert(_stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
 						`Operand for unary plus operation must have integer or floating type!` );
 
 					// Do nothing for now:)
@@ -815,9 +830,9 @@ public:
 
 				case OpCode.UnaryMin:
 				{
-					assert( !_stack.empty, "Cannot execute UnaryMin instruction. Operand expected, but exec stack is empty!" );
-					assert( _stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
-						`Operand for unary minus operation must have integer or floating type!` );
+					loger.internalAssert(!_stack.empty, "Cannot execute UnaryMin instruction. Operand expected, but exec stack is empty!");
+					loger.internalAssert(_stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
+						`Operand for unary minus operation must have integer or floating type!`);
 
 					if( _stack.back.type == DataNodeType.Integer ) {
 						_stack.back = - _stack.back.integer;
@@ -830,9 +845,8 @@ public:
 
 				case OpCode.UnaryNot:
 				{
-					assert( !_stack.empty, "Cannot execute UnaryNot instruction. Operand expected, but exec stack is empty!" );
-					assert( _stack.back.type == DataNodeType.Boolean,
-						`Operand for unary not operation must have boolean type!` );
+					loger.internalAssert(!_stack.empty, "Cannot execute UnaryNot instruction. Operand expected, but exec stack is empty!");
+					loger.internalAssert(_stack.back.type == DataNodeType.Boolean, `Operand for unary not operation must have boolean type!`);
 
 					_stack.back = ! _stack.back.boolean;
 					break;
@@ -847,13 +861,13 @@ public:
 				// Stores data from stack into context variable
 				case OpCode.StoreName:
 				{
-					debug writeln( "StoreName _stack: ", _stack );
-					assert( !_stack.empty, "Cannot execute StoreName instruction. Expected var value operand, but exec stack is empty!" );
+					loger.write("StoreName _stack: ", _stack);
+					loger.internalAssert(!_stack.empty, "Cannot execute StoreName instruction. Expected var value operand, but exec stack is empty!");
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
 					TDataNode varNameNode = getModuleConstCopy( instr.arg );
-					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreName instruction. Variable name const must have string type!` );
+					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute StoreName instruction. Variable name const must have string type!`);
 
 					setValue( varNameNode.str, varValue );
 					break;
@@ -862,13 +876,13 @@ public:
 				// Stores data from stack into local context frame variable
 				case OpCode.StoreLocalName:
 				{
-					debug writeln( "StoreLocalName _stack: ", _stack );
-					assert( !_stack.empty, "Cannot execute StoreLocalName instruction. Expected var value operand, but exec stack is empty!" );
+					loger.write("StoreLocalName _stack: ", _stack);
+					loger.internalAssert(!_stack.empty, "Cannot execute StoreLocalName instruction. Expected var value operand, but exec stack is empty!");
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
 					TDataNode varNameNode = getModuleConstCopy( instr.arg );
-					assert( varNameNode.type == DataNodeType.String, `Cannot execute StoreLocalName instruction. Variable name const must have string type!` );
+					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute StoreLocalName instruction. Variable name const must have string type!`);
 
 					setLocalValue( varNameNode.str, varValue );
 					break;
@@ -878,7 +892,7 @@ public:
 				case OpCode.LoadName:
 				{
 					TDataNode varNameNode = getModuleConstCopy( instr.arg );
-					assert( varNameNode.type == DataNodeType.String, `Cannot execute LoadName instruction. Variable name operand must have string type!` );
+					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute LoadName instruction. Variable name operand must have string type!`);
 
 					_stack ~= getValue( varNameNode.str );
 					break;
@@ -886,13 +900,13 @@ public:
 
 				case OpCode.ImportModule:
 				{
-					assert( !_stack.empty, "Cannot execute ImportModule instruction. Expected module name operand, but exec stack is empty!" );
-					assert( _stack.back.type == DataNodeType.String, "Cannot execute ImportModule instruction. Module name operand must be a string!" );
+					loger.internalAssert(!_stack.empty, "Cannot execute ImportModule instruction. Expected module name operand, but exec stack is empty!");
+					loger.internalAssert(_stack.back.type == DataNodeType.String, "Cannot execute ImportModule instruction. Module name operand must be a string!");
 					string moduleName = _stack.back.str;
 					_stack.popBack();
 
-					debug writeln( `ImportModule _moduleObjects: `, _moduleObjects );
-					assert( moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: " ~ moduleName );
+					loger.write(`ImportModule _moduleObjects: `, _moduleObjects);
+					loger.internalAssert(moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: ", moduleName);
 
 					ExecutionFrame[] baseFrameStack = _frameStack[];
 
@@ -900,9 +914,9 @@ public:
 					{
 						// Run module here
 						ModuleObject modObject = _moduleObjects[moduleName];
-						assert( modObject, `Cannot execute ImportModule instruction, because module object "` ~ moduleName ~ `" is null!` );
+						loger.internalAssert(modObject, `Cannot execute ImportModule instruction, because module object "`, moduleName,`" is null!` );
 						CodeObject codeObject = modObject.mainCodeObject;
-						assert( codeObject, `Cannot execute ImportModule instruction, because main code object for module "` ~ moduleName ~ `" is null!` );
+						loger.internalAssert(codeObject, `Cannot execute ImportModule instruction, because main code object for module "`, moduleName, `" is null!` );
 
 						CallableObject callableObj = new CallableObject;
 						callableObj._name = moduleName;
@@ -932,17 +946,17 @@ public:
 
 				case OpCode.ImportFrom:
 				{
-					assert( false, "Unimplemented yet!" );
+					loger.internalAssert(false, "Unimplemented yet!");
 					break;
 				}
 
 				case OpCode.GetDataRange:
 				{
 					import std.range: empty, back, popBack;
-					assert( !_stack.empty, `Expected aggregate type for loop, but empty execution stack found` );
-					debug writeln( `GetDataRange begin _stack: `, _stack );
-					assert( _stack.back.type == DataNodeType.Array || _stack.back.type == DataNodeType.AssocArray,
-						`Expected array or assoc array as loop aggregate` );
+					loger.internalAssert(!_stack.empty, `Expected aggregate type for loop, but empty execution stack found`);
+					loger.write(`GetDataRange begin _stack: `, _stack);
+					loger.internalAssert(_stack.back.type == DataNodeType.Array || _stack.back.type == DataNodeType.AssocArray,
+						`Expected array or assoc array as loop aggregate`);
 
 					TDataNode dataRange;
 					switch( _stack.back.type )
@@ -958,7 +972,7 @@ public:
 							break;
 						}
 						default:
-							assert( false, `This should never happen!` );
+							loger.internalAssert(false, `This should never happen!` );
 					}
 					_stack.popBack(); // Drop aggregate from stack
 					_stack ~= dataRange; // Push range onto stack
@@ -968,15 +982,15 @@ public:
 
 				case OpCode.RunLoop:
 				{
-					debug writeln( "RunLoop beginning _stack: ", _stack );
-					assert( !_stack.empty, `Expected data range, but empty execution stack found` );
-					assert( _stack.back.type == DataNodeType.DataNodeRange, `Expected DataNodeRange` );
+					loger.write("RunLoop beginning _stack: ", _stack);
+					loger.internalAssert(!_stack.empty, `Expected data range, but empty execution stack found` );
+					loger.internalAssert(_stack.back.type == DataNodeType.DataNodeRange, `Expected DataNodeRange` );
 					auto dataRange = _stack.back.dataRange;
-					debug writeln( "RunLoop dataRange.empty: ", dataRange.empty );
+					loger.write("RunLoop dataRange.empty: ", dataRange.empty);
 					if( dataRange.empty )
 					{
-						debug writeln( "RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack );
-						assert( instr.arg < codeRange.length, `Cannot jump after the end of code object` );
+						loger.write("RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack);
+						loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 						pk = instr.arg;
 						_stack.popBack(); // Drop data range from stack as we no longer need it
 						break;
@@ -991,29 +1005,29 @@ public:
 						}
 						case DataNodeType.AssocArray:
 						{
-							assert( dataRange.front.type == DataNodeType.Array, `Expected array as assoc array key-value pair` );
+							loger.internalAssert(dataRange.front.type == DataNodeType.Array, `Expected array as assoc array key-value pair`);
 							TDataNode[] aaPair = dataRange.front.array;
-							assert( aaPair.length > 1, `Assoc array pair must have two items` );
+							loger.internalAssert(aaPair.length > 1, `Assoc array pair must have two items`);
 							_stack ~= aaPair[0];
 							_stack ~= aaPair[1];
 
 							break;
 						}
 						default:
-							assert( false, `Unexpected range aggregate type!` );
+							loger.internalAssert(false, `Unexpected range aggregate type!`);
 					}
 
 					// TODO: For now we just move range forward as take current value from it
 					// Maybe should fix it and make it move after loop block finish
 					dataRange.popFront();
 
-					debug writeln( "RunLoop. Iteration init finished. _stack is: ", _stack );
+					loger.write("RunLoop. Iteration init finished. _stack is: ", _stack);
 					break;
 				}
 
 				case OpCode.Jump:
 				{
-					assert( instr.arg < codeRange.length, `Cannot jump after the end of code object` );
+					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 
 					pk = instr.arg;
 					continue execution_loop;
@@ -1022,10 +1036,10 @@ public:
 				case OpCode.JumpIfFalse:
 				{
 					import std.algorithm: canFind;
-					assert( !_stack.empty, `Cannot evaluate logical value, because stack is empty` );
-					assert( [ DataNodeType.Boolean, DataNodeType.Undef, DataNodeType.Null ].canFind(_stack.back.type),
-						`Expected null, undef or boolean in logical context as jump condition` );
-					assert( instr.arg < codeRange.length, `Cannot jump after the end of code object` );
+					loger.internalAssert(!_stack.empty, `Cannot evaluate logical value, because stack is empty`);
+					loger.internalAssert([ DataNodeType.Boolean, DataNodeType.Undef, DataNodeType.Null ].canFind(_stack.back.type),
+						`Expected null, undef or boolean in logical context as jump condition`);
+					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 					TDataNode condNode = _stack.back;
 					_stack.popBack();
 					
@@ -1042,7 +1056,7 @@ public:
 
 				case OpCode.PopTop:
 				{
-					assert( !_stack.empty, "Cannot pop value from stack, because stack is empty" );
+					loger.internalAssert(!_stack.empty, "Cannot pop value from stack, because stack is empty");
 					_stack.popBack();
 					break;
 				}
@@ -1050,7 +1064,7 @@ public:
 				// Swaps two top items on the stack 
 				case OpCode.SwapTwo:
 				{
-					assert( _stack.length > 1, "Stack must have at least two items to swap" );
+					loger.internalAssert(_stack.length > 1, "Stack must have at least two items to swap");
 					TDataNode tmp = _stack[$-1];
 					_stack[$-1] = _stack[$-2];
 					_stack[$-2] = tmp;
@@ -1059,22 +1073,22 @@ public:
 
 				case OpCode.LoadDirective:
 				{
-					debug writeln( `LoadDirective _stack: `, _stack );
+					loger.write(`LoadDirective _stack: `, _stack);
 
-					assert( _stack.back.type == DataNodeType.String,
+					loger.internalAssert(_stack.back.type == DataNodeType.String,
 						`Name operand for directive loading instruction should have string type` );
 					string varName = _stack.back.str;
 
 					_stack.popBack();
 
-					assert( !_stack.empty, `Expected directive code object, but got empty execution stack!` );
-					assert( _stack.back.type == DataNodeType.CodeObject,
-						`Code object operand for directive loading instruction should have CodeObject type` );
+					loger.internalAssert(!_stack.empty, `Expected directive code object, but got empty execution stack!`);
+					loger.internalAssert(_stack.back.type == DataNodeType.CodeObject,
+						`Code object operand for directive loading instruction should have CodeObject type`);
 
 					CodeObject codeObj = _stack.back.codeObject;
 					_stack.popBack(); // Remove code object from stack
 
-					assert( codeObj, `Code object operand for directive loading instruction is null` );
+					loger.internalAssert(codeObj, `Code object operand for directive loading instruction is null`);
 					CallableObject dirObj = new CallableObject;
 					dirObj._name = varName;
 					dirObj._codeObj = codeObj;
@@ -1083,6 +1097,7 @@ public:
 					_stack ~= TDataNode(); // We should return something
 
 					debug {
+						import std.stdio: writeln;
 						foreach( lvl, frame; _frameStack )
 						{
 							writeln(`LoadDirective, frameStack lvl `, lvl, ` dataDict: `, frame._dataDict);
@@ -1101,22 +1116,22 @@ public:
 				{
 					import std.range: empty, popBack, back;
 
-					debug writeln( "RunCallable stack on init: : ", _stack );
+					loger.write("RunCallable stack on init: : ", _stack);
 
 					size_t stackArgCount = instr.arg;
-					assert( stackArgCount > 0, "Call must at least have 1 arguments in stack!" );
-					debug writeln( "RunCallable stackArgCount: ", stackArgCount );
-					assert( stackArgCount <= _stack.length, "Not enough arguments in execution stack" );
-					debug writeln( "RunCallable _stack: ", _stack );
-					debug writeln( "RunCallable callable type: ", _stack[ _stack.length - stackArgCount ].type );
-					assert( _stack[ _stack.length - stackArgCount ].type == DataNodeType.Callable, `Expected directive object operand in directive call operation` );
+					loger.internalAssert(stackArgCount > 0, "Call must at least have 1 arguments in stack!");
+					loger.write("RunCallable stackArgCount: ", stackArgCount );
+					loger.internalAssert(stackArgCount <= _stack.length, "Not enough arguments in execution stack");
+					loger.write("RunCallable _stack: ", _stack);
+					loger.write("RunCallable callable type: ", _stack[ _stack.length - stackArgCount ].type);
+					loger.internalAssert(_stack[ _stack.length - stackArgCount ].type == DataNodeType.Callable, `Expected directive object operand in directive call operation`);
 
 					CallableObject callableObj = _stack[ _stack.length - stackArgCount ].callable;
-					assert( callableObj, `Callable object is null!` );
+					loger.internalAssert(callableObj, `Callable object is null!` );
 					
 					DirAttrsBlock!(false)[] attrBlocks = callableObj.attrBlocks;
-					debug writeln( "RunCallable callableObj.attrBlocks: ", attrBlocks );
-					assert( attrBlocks[$-1].kind == DirAttrKind.BodyAttr, `Last attr block definition expected to be BodyAttr, but got: ` ~ attrBlocks[$-1].kind.to!string );
+					loger.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
+					loger.internalAssert(attrBlocks[$-1].kind == DirAttrKind.BodyAttr, `Last attr block definition expected to be BodyAttr, but got: `, attrBlocks[$-1].kind);
 					bool isNoscope = attrBlocks[$-1].bodyAttr.isNoscope;
 
 					ExecutionFrame moduleFrame;
@@ -1128,13 +1143,13 @@ public:
 
 					if( isNoscope )
 					{
-						debug writeln( "RunCallable creating noscope execution frame..." );
+						loger.write("RunCallable creating noscope execution frame...");
 						// If directive is noscope we create frame with _dataDict that is Undef
 						newFrame( callableObj, moduleFrame, TDataNode() );
 					}
 					else
 					{
-						debug writeln( "RunCallable creating scoped execution frame..." );
+						loger.write("RunCallable creating scoped execution frame...");
 						newFrame( callableObj, moduleFrame );
 					}
 
@@ -1144,14 +1159,14 @@ public:
 						
 						for( size_t i = 0; i < (stackArgCount - 1); )
 						{
-							assert( !_stack.empty, `Expected integer as arguments block header, but got empty exec stack!` );
-							assert( _stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!` );
+							loger.internalAssert(!_stack.empty, `Expected integer as arguments block header, but got empty exec stack!`);
+							loger.internalAssert(_stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!`);
 							size_t blockArgCount = _stack.back.integer >> _stackBlockHeaderSizeOffset;
-							debug writeln( "blockArgCount: ", blockArgCount );
+							loger.write("blockArgCount: ", blockArgCount);
 							DirAttrKind blockType = cast(DirAttrKind)( _stack.back.integer & _stackBlockHeaderTypeMask );
 							// Bit between block size part and block type must always be zero
-							assert( (_stack.back.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
-							debug writeln( "blockType: ", blockType );
+							loger.internalAssert( (_stack.back.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
+							loger.write("blockType: ", blockType);
 
 							_stack.popBack();
 							++i; // Block header was eaten, so increase counter
@@ -1163,65 +1178,65 @@ public:
 									size_t j = 0;
 									while( j < 2 * blockArgCount )
 									{
-										assert( !_stack.empty, "Execution stack is empty!" );
+										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
 										TDataNode attrValue = _stack.back;
 										_stack.popBack(); ++j; // Parallel bookkeeping ;)
 
-										assert( !_stack.empty, "Execution stack is empty!" );
-										debug writeln( `RunCallable debug, _stack is: `, _stack );
-										assert( _stack.back.type == DataNodeType.String, "Named attribute name must be string!" );
+										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
+										loger.write(`RunCallable debug, _stack is: `, _stack);
+										loger.internalAssert(_stack.back.type == DataNodeType.String, "Named attribute name must be string!");
 										string attrName = _stack.back.str;
 										_stack.popBack(); ++j;
 
 										setLocalValue( attrName, attrValue );
 									}
 									i += j; // Increase overall processed stack arguments count (2 items per iteration)
-									debug writeln( "_stack after parsing named arguments: ", _stack );
+									loger.write("_stack after parsing named arguments: ", _stack);
 									break;
 								}
 								case DirAttrKind.ExprAttr:
 								{
 									size_t currBlockIndex = attrBlocks.length - blockCounter - 2; // 2 is: 1, because of length PLUS 1 for body attr in the end
 
-									debug writeln( `Interpret pos arg, currBlockIndex: `, currBlockIndex );
+									loger.write(`Interpret pos arg, currBlockIndex: `, currBlockIndex );
 									
 									if( currBlockIndex >= attrBlocks.length ) {
-										interpretError( `Current attr block index is out of current bounds of declared blocks!` );
+										loger.error(`Current attr block index is out of current bounds of declared blocks!`);
 									}
 
 									DirAttrsBlock!(false) currBlock = attrBlocks[currBlockIndex];
 
-									debug writeln( `Interpret pos arg, attrBlocks: `, attrBlocks );
-									debug writeln( `Interpret pos arg, currBlock.kind: `, currBlock.kind.to!string );
+									loger.write(`Interpret pos arg, attrBlocks: `, attrBlocks);
+									loger.write(`Interpret pos arg, currBlock.kind: `, currBlock.kind.to!string);
 									if( currBlock.kind != DirAttrKind.ExprAttr ) {
-										interpretError( `Expected positional arguments block in block metainfo` );
+										loger.error(`Expected positional arguments block in block metainfo`);
 									}
 
 
 									for( size_t j = 0; j < blockArgCount; ++j, ++i /* Inc overall processed arg count*/ )
 									{
-										assert( !_stack.empty, "Execution stack is empty!" );
+										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
 										TDataNode attrValue = _stack.back;
 										_stack.popBack();
 
-										assert( j < currBlock.exprAttrs.length, `Unexpected number of attibutes in positional arguments block` );
+										loger.internalAssert(j < currBlock.exprAttrs.length, `Unexpected number of attibutes in positional arguments block`);
 
 										setLocalValue( currBlock.exprAttrs[j].name, attrValue );
 									}
-									debug writeln( "_stack after parsing positional arguments: ", _stack );
+									loger.write("_stack after parsing positional arguments: ", _stack);
 									break;
 								}
 								default:
-									assert( false, "Unexpected arguments block type" );
+									loger.internalAssert(false, "Unexpected arguments block type");
 							}
 
 							blockCounter += 1;
 						}
 					}
-					debug writeln( "_stack after parsing all arguments: ", _stack );
+					loger.write("_stack after parsing all arguments: ", _stack);
 
-					assert( !_stack.empty, "Expected callable object to call, but found end of execution stack!" );
-					assert( _stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation` );
+					loger.internalAssert(!_stack.empty, "Expected callable object to call, but found end of execution stack!");
+					loger.internalAssert(_stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation`);
 					_stack.popBack(); // Drop callable object from stack
 
 					if( callableObj._codeObj )
@@ -1233,7 +1248,7 @@ public:
 					}
 					else
 					{
-						assert( callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!` );
+						loger.internalAssert(callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!`);
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
 						
 						if( !isNoscope ) {
@@ -1249,11 +1264,11 @@ public:
 					size_t arrayLen = instr.arg;
 					TDataNode[] newArray;
 					newArray.length = arrayLen; // Preallocating is good ;)
-					debug writeln("MakeArray _stack: ", _stack );
-					debug writeln("MakeArray arrayLen: ", arrayLen);
+					loger.write("MakeArray _stack: ", _stack);
+					loger.write("MakeArray arrayLen: ", arrayLen);
 					for( size_t i = arrayLen; i > 0; --i )
 					{
-						assert( !_stack.empty, `Expected new array element, but got empty stack` );
+						loger.internalAssert(!_stack.empty, `Expected new array element, but got empty stack`);
 						// We take array items from the tail, so we must consider it!
 						newArray[i-1] = _stack.back;
 						_stack.popBack();
@@ -1270,12 +1285,12 @@ public:
 
 					for( size_t i = 0; i < aaLen; ++i )
 					{
-						assert( !_stack.empty, `Expected assoc array value, but got empty stack` );
+						loger.internalAssert(!_stack.empty, `Expected assoc array value, but got empty stack` );
 						TDataNode val = _stack.back;
 						_stack.popBack();
 
-						assert( !_stack.empty, `Expected assoc array key, but got empty stack` );
-						assert( _stack.back.type == DataNodeType.String, `Expected string as assoc array key` );
+						loger.internalAssert(!_stack.empty, `Expected assoc array key, but got empty stack`);
+						loger.internalAssert(_stack.back.type == DataNodeType.String, `Expected string as assoc array key`);
 						
 						newAssocArray[_stack.back.str] = val;
 						_stack.popBack();
@@ -1286,7 +1301,7 @@ public:
 
 				default:
 				{
-					assert( false, "Unexpected code of operation: " ~ instr.opcode.text );
+					loger.internalAssert(false, "Unexpected code of operation: ", instr.opcode);
 					break;
 				}
 			}
@@ -1294,9 +1309,9 @@ public:
 
 			if( pk == codeRange.length ) // Ended with this code object
 			{
-				debug writeln( "_stack on code object end: ", _stack );
-				debug writeln( "_frameStack on code object end: ", _frameStack );
-				assert( !_frameStack.empty, "Frame stack shouldn't be empty yet'" );
+				loger.write("_stack on code object end: ", _stack);
+				loger.write("_frameStack on code object end: ", _frameStack);
+				loger.internalAssert(!_frameStack.empty, "Frame stack shouldn't be empty yet'");
 				// TODO: Consider case with noscope directive
 				this.removeFrame(); // Exit out of this frame
 
@@ -1305,12 +1320,12 @@ public:
 					break;
 
 				// Else we expect to have result of directive on the stack
-				assert( !_stack.empty, "Expected directive result, but execution stack is empty!" );
+				loger.internalAssert(!_stack.empty, "Expected directive result, but execution stack is empty!" );
 				TDataNode result = _stack.back;
 				_stack.popBack(); // We saved result - so drop it!
 
-				assert( !_stack.empty, "Expected integer as instruction pointer, but got end of execution stack" );
-				assert( _stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer" );
+				loger.internalAssert(!_stack.empty, "Expected integer as instruction pointer, but got end of execution stack");
+				loger.internalAssert(_stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer");
 				pk = cast(size_t) _stack.back.integer;
 				_stack.popBack(); // Drop return address
 				codeRange = _frameStack.back._callableObj._codeObj._instrs[]; // Set old instruction range back
@@ -1319,11 +1334,5 @@ public:
 			}
 
 		}
-	}
-
-	void setDebugBreakpoint(string modName, string sourceLine)
-	{
-		// TODO: Add some debug support
-
 	}
 }
