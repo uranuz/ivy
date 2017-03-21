@@ -161,7 +161,7 @@ public:
 
 		lexer.popFront(); //Skip key-value delimeter
 
-		IvyNode val = parseBlockOrExpression();
+		IvyNode val = parseExpression();
 		if( !val )
 		{
 			lexer = lexerCopy.save;
@@ -198,7 +198,7 @@ public:
 			IvyNode attr = parseNamedAttribute();
 			
 			loger.write("Attempt to parse named attribute finished" );
-			loger.write(" attr is", ( attr is null ? null : " not" ) ~ " null" );
+			loger.write(" attr is", (attr is null ? null : " not"), " null" );
 			
 			//If no named attrs detected yet then we try parse unnamed attrs
 			if( attr )
@@ -210,7 +210,7 @@ public:
 			{
 				loger.write( "Attempt to parse unnamed attribute" );
 				//Named attribute was not found will try to parse unnamed one
-				attr = parseBlockOrExpression();
+				attr = parseExpression();
 				
 				if( attr )
 				{
@@ -230,13 +230,13 @@ public:
 		return stmt;
 	}
 	
-	IvyNode parseBlockOrExpression()
+	IExpression parseBlockOrExpression()
 	{
 		loger.write( "Start parsing block or expression" );
 		import std.array: array;
 		import std.conv: to;
 		
-		IvyNode result;
+		IExpression result;
 		
 		//CustLocation loc = this.currentLocation;
 		
@@ -280,7 +280,7 @@ public:
 			}
 			default:
 			{
-				result = parseExpression();
+				result = parsePrimaryExp();
 				break;
 			}
 		}
@@ -379,13 +379,13 @@ public:
 		return statement;
 	}
 	
-	ICompoundStatement parseMixedBlock()
+	IMixedBlockStatement parseMixedBlock()
 	{
 		loger.write( "Start parsing of mixed block" );
 		import std.array: array;
 		import std.conv: to;
 		
-		ICompoundStatement statement;
+		IMixedBlockStatement statement;
 		
 		IStatement[] statements;
 		
@@ -719,7 +719,7 @@ public:
 					IvyNode arg = parseNamedAttribute();
 
 					if( !arg )
-						arg = parseBlockOrExpression();
+						arg = parseExpression();
 
 					if( !arg )
 						loger.error("Null call argument expression found!!!");
@@ -992,7 +992,7 @@ public:
 			}
 			default:
 			{
-				expr = parsePrimaryExp();
+				expr = parseBlockOrExpression();
 				break;
 			}
 		}

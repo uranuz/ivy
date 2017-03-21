@@ -8,50 +8,37 @@ mixin template BaseExpressionImpl(LocationConfig c)
 	
 	public @property override
 	{
-// 		bool hasStatement()
-// 		{
-// 			return false;
-// 		}
-		
-		IStatement asStatement()
-		{
+		IStatement asStatement() {
 			return null;
 		}
-		
-		LiteralType literalType()
-		{
+
+		LiteralType literalType() {
 			return LiteralType.NotLiteral;
 		}
-		
-		bool isScalar()
-		{
+
+		bool isScalar() {
 			assert( 0, "Cannot determine expression type" );
 		}
-		
-		bool isNullExpr()
-		{
+
+		bool isNullExpr() {
 			assert( 0, "Expression is not null expr!" );
 		}
 	}
 	
 	public override {
-		bool toBoolean()
-		{
+		bool toBoolean() {
 			assert( 0, "Expression is not boolean!" );
 		}
 		
-		int toInteger()
-		{
+		int toInteger() {
 			assert( 0, "Expression is not integer!" );
 		}
 		
-		double toFloating()
-		{
+		double toFloating() {
 			assert( 0, "Expression is not floating!" );
 		}
 		
-		string toStr()
-		{
+		string toStr() {
 			assert( 0, "Expression is not string!" );
 		}
 	}

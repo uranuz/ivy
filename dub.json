@@ -71,7 +71,7 @@
 			"targetPath": "./",
 			"targetName": "simple_run_test",
 			"platforms": [],
-			"versions": [],
+			"versions": ["IvyTotalDebug"],
 			"libs": [],
 			"buildRequirements": ["silenceWarnings"],
 			"buildOptions": ["debugInfo"],

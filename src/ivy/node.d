@@ -231,7 +231,7 @@ interface IDirectiveStatementRange: IStatementRange
 	override IDirectiveStatement opIndex(size_t index);
 }
 
-interface ICodeBlockStatement: ICompoundStatement
+interface ICodeBlockStatement: ICompoundStatement, IExpression
 {
 	// Covariant overrides
 	override IDirectiveStatementRange opSlice();
@@ -240,7 +240,7 @@ interface ICodeBlockStatement: ICompoundStatement
 	bool isListBlock() @property;
 }
 
-interface IMixedBlockStatement: ICompoundStatement
+interface IMixedBlockStatement: ICompoundStatement, IExpression
 {
 }
 

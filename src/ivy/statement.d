@@ -199,9 +199,12 @@ public:
 	}
 }
 
+import ivy.expression;
+
 mixin template BaseBlockStatementImpl(LocationConfig c, alias IRange = IStatementRange)
 {
-	mixin BaseDeclNodeImpl!(c);
+	mixin BaseExpressionImpl!c;
+	//mixin BaseDeclNodeImpl!(c);
 	alias IStmt = typeof(IRange.front);
 private:
 	IStmt[] _statements;

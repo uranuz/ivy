@@ -864,15 +864,15 @@ class IfCompiler: IDirectiveCompiler
 
 		import std.typecons: Tuple;
 		import std.range: back, empty;
-		alias IfSect = Tuple!(IExpression, "cond", IStatement, "stmt");
+		alias IfSect = Tuple!(IExpression, "cond", IExpression, "stmt");
 
 		IfSect[] ifSects;
-		IStatement elseBody;
+		IExpression elseBody;
 
 		auto stmtRange = statement[];
 
 		IExpression condExpr = stmtRange.takeFrontAs!IExpression( "Conditional expression expected" );
-		IStatement bodyStmt = stmtRange.takeFrontAs!IStatement( "'If' directive body statement expected" );
+		IExpression bodyStmt = stmtRange.takeFrontAs!IExpression( "'If' directive body statement expected" );
 
 		ifSects ~= IfSect(condExpr, bodyStmt);
 
@@ -883,13 +883,13 @@ class IfCompiler: IDirectiveCompiler
 			if( keywordExpr.name == "elif" )
 			{
 				condExpr = stmtRange.takeFrontAs!IExpression( "'elif' conditional expression expected" );
-				bodyStmt = stmtRange.takeFrontAs!IStatement( "'elif' body statement expected" );
+				bodyStmt = stmtRange.takeFrontAs!IExpression( "'elif' body statement expected" );
 
 				ifSects ~= IfSect(condExpr, bodyStmt);
 			}
 			else if( keywordExpr.name == "else" )
 			{
-				elseBody = stmtRange.takeFrontAs!IStatement( "'else' body statement expected" );
+				elseBody = stmtRange.takeFrontAs!IExpression( "'else' body statement expected" );
 				if( !stmtRange.empty )
 					compilerError("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
 				break;
