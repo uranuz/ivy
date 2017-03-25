@@ -88,10 +88,13 @@ public:
 
 		debug writeln( `Call ExecutionFrame.findLocalValue with varName: `, varName );
 
+		
 		if( varName.empty )
 			interpretError( "VariableTable: Variable name cannot be empty" );
-
+		
+		
 		TDataNode* nodePtr = &_dataDict;
+		/*
 		if( _dataDict.type != DataNodeType.AssocArray )
 		{
 			static if( mode == FrameSearchMode.tryGet ) {
@@ -150,7 +153,7 @@ public:
 						interpretError( `Cannot find value, because execution frame is null!!!` );
 					}
 				}
-
+				
 				if( nodePtr.execFrame._dataDict.type != DataNodeType.AssocArray )
 				{
 					static if( mode == FrameSearchMode.tryGet ) {
@@ -176,6 +179,7 @@ public:
 				return null;
 			}
 		}
+		*/
 
 		return nodePtr;
 	}
@@ -285,10 +289,10 @@ public:
 	ModuleObject[string] _moduleObjects;
 	LogerMethod _logerMethod;
 
-	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, LogerMethod logerMethod)
+	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, IvyConfig ivyConfig)
 	{
 		_moduleObjects = moduleObjects;
-		_logerMethod = logerMethod;
+		_logerMethod = ivyConfig.interpreterLoger;
 		loger.internalAssert(mainModuleName in _moduleObjects, `Cannot get main module from module objects!`);
 
 		loger.write(`Iterpreter ctor: passed dataDict: `, dataDict);
@@ -300,6 +304,18 @@ public:
 
 		_globalFrame = new ExecutionFrame(null, null);
 		loger.write(`Iterpreter ctor 1: _globalFrame._dataDict: `, _globalFrame._dataDict);
+
+		foreach( name, dirInterp; ivyConfig.dirInterpreters )
+		{
+			if( !name.length || !dirInterp ) {
+				continue; // Калечных не добавляем
+			}
+			// Add custom native directive interpreters to global scope
+			CallableObject dirCallable = new CallableObject();
+			dirCallable._name = name;
+			dirCallable._dirInterp = dirInterp;
+			_globalFrame.setValue( name, TDataNode(dirCallable) );
+		}
 
 		// Add native directive interpreter __render__ to global scope
 		CallableObject renderDirInterp = new CallableObject();

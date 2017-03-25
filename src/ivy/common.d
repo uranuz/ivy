@@ -9,6 +9,35 @@ public:
 	}
 }
 
+// Structure for configuring Ivy
+struct IvyConfig
+{
+	string[] importPaths; // Paths where to search for templates
+	string fileExtension = `.ivy`; // Extension of files that are templates
+
+	// Signature for loging methods, so logs can be forwarded to stdout, file or anywhere else...
+	// If you wish debug output you must build with one of these -version specifiers:
+	// IvyTotalDebug - maximum debug verbosity
+	// IvyCompilerDebug - enable compiler debug output
+	// IvyInterpreterDebug - enable interpreter debug output
+	// IvyParserDebug - enable parser debug output
+	// But errors and warnings will be sent to logs in any case. But you can ignore them...
+	alias LogerMethod = void delegate(LogInfo);
+	LogerMethod interpreterLoger;
+	LogerMethod compilerLoger;
+	LogerMethod parserLoger;
+
+	import ivy.compiler: IDirectiveCompiler;
+	import ivy.interpreter: INativeDirectiveInterpreter;
+
+	IDirectiveCompiler[string] dirCompilers; // Dictionary of custom directive compilers
+	INativeDirectiveInterpreter[string] dirInterpreters; // Dictionary of custom directive interpreters
+	// Key difference between IDirectiveCompiler and INativeDirectiveInterpreter is that
+	// compiler generates bytecode to execute some operation, etc...
+	// But INativeDirectiveInterpreter runs in execution of Ivy programme and do these operation itself
+	// Using compilers is preferable, but in some cases interpreters may be needed
+}
+
 enum LogInfoType
 {
 	info, // Regular log message for debug or smth

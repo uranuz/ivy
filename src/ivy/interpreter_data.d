@@ -151,6 +151,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 	private DirAttrKind _kind;
 	private Storage _storage;
 
+public:
 	this( DirAttrKind attrKind, TValueAttr[string] attrs )
 	{
 		assert( attrKind == DirAttrKind.NamedAttr, `Expected NamedAttr kind for attr block` );

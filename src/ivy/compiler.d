@@ -1394,12 +1394,14 @@ private:
 
 
 public:
-	this( CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName, LogerMethod logerMethod = null )
+	this( CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName, IvyConfig ivyConfig )
 	{
 		_moduleRepo = moduleRepo;
 		_modulesSymbolTables = symbolTables;
-		_logerMethod = logerMethod;
+		_logerMethod = ivyConfig.compilerLoger;
+		_dirCompilers = ivyConfig.dirCompilers.dup;
 
+		// Add core directives set:
 		_dirCompilers["var"] = new VarCompiler();
 		_dirCompilers["set"] = new SetCompiler();
 		_dirCompilers["expr"] = new ExprCompiler();
@@ -2079,15 +2081,14 @@ class ExecutableProgramme
 private:
 	ModuleObject[string] _moduleObjects;
 	string _mainModuleName;
-	LogerMethod _logerMethod;
-
+	IvyConfig _ivyConfig;
 
 public:
-	this( ModuleObject[string] moduleObjects, string mainModuleName, LogerMethod logerMethod = null )
+	this( ModuleObject[string] moduleObjects, string mainModuleName, IvyConfig ivyConfig )
 	{
 		_moduleObjects = moduleObjects;
 		_mainModuleName = mainModuleName;
-		_logerMethod = logerMethod;
+		_ivyConfig = ivyConfig;
 	}
 
 	/// Run programme main module with arguments passed as mainModuleScope parameter
@@ -2097,7 +2098,7 @@ public:
 		import std.range: back;
 
 		import ivy.interpreter: Interpreter;
-		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
+		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _ivyConfig);
 		interp.execLoop();
 
 		return interp._stack.back;
@@ -2120,13 +2121,13 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	symbolsCollector.run(); // Run analyse
 
 	// Main compiler phase that generates bytecode for modules
-	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config.compilerLoger);
+	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config);
 	compiler.run(); // Run compilation itself
 
 	debug writeln( "compileModule:\r\n", compiler.toPrettyStr() );
 
 	// Creating additional object that stores all neccessary info for user
-	return new ExecutableProgramme(compiler.moduleObjects, mainModuleName, config.interpreterLoger);
+	return new ExecutableProgramme(compiler.moduleObjects, mainModuleName, config);
 }
 
 /// Simple method that can be used to compile source file and get executable
@@ -2141,16 +2142,6 @@ ExecutableProgramme compileFile(string sourceFileName, IvyConfig config)
 	string mainModuleName = sourceFileName.relativePath(config.importPaths.front).stripExtension().split(dirSeparator).join('.');
 
 	return compileModule(mainModuleName, config);
-}
-
-struct IvyConfig
-{
-	alias LogerMethod = void delegate(LogInfo);
-	string[] importPaths;
-	string fileExtension = `.ivy`;
-	LogerMethod interpreterLoger;
-	LogerMethod compilerLoger;
-	LogerMethod parserLoger;
 }
 
 /// Dump-simple in-memory cache for compiled programmes

@@ -4,8 +4,9 @@ import std.stdio;
 import ivy;
 import ivy.common;
 
-void main()
-{
+import ivy, ivy.compiler, ivy.interpreter, ivy.common, ivy.lexer, ivy.parser;
+
+void f() {
 	import std.path: getcwd, buildNormalizedPath;
 	
 	void stdOutLoger(LogInfo logInfo) {
@@ -19,11 +20,17 @@ void main()
 	ivyConfig.compilerLoger = &stdOutLoger;
 	ivyConfig.parserLoger = &stdOutLoger;
 
-	auto progCache = new ProgrammeCache!(true)(ivyConfig);
+	auto progCache = new ProgrammeCache!(false)(ivyConfig);
 	auto prog = progCache.getByModuleName("compiler_test_template");
 	
 	TDataNode dataDict;
 	TDataNode result = prog.run(dataDict);
 
 	writeln(result.toString());
+
+}
+
+void main()
+{
+	f();
 }
