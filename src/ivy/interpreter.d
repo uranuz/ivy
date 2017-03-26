@@ -242,7 +242,9 @@ public:
 
 class RenderDirInterpreter: INativeDirectiveInterpreter
 {
-	override void interpret( Interpreter interp )
+	import ivy.compiler: DirectiveDefinitionSymbol;
+	
+	override void interpret(Interpreter interp )
 	{
 		import std.array: appender;
 		TDataNode result = interp.getValue("__result__");
@@ -252,20 +254,32 @@ class RenderDirInterpreter: INativeDirectiveInterpreter
 		interp._stack ~= TDataNode(renderedResult.data);
 	}
 
-	private __gshared DirAttrsBlock!(false)[] _attrBlocks;
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks;
+	private __gshared DirAttrsBlock!(false)[] _interpAttrBlocks;
+	private __gshared DirectiveDefinitionSymbol _symbol;
 	
 	shared static this()
 	{
-		_attrBlocks = [
-			DirAttrsBlock!false( DirAttrKind.NamedAttr, [
-				"__result__": DirValueAttr!(false)( "__result__", "any" )
+		import std.algorithm: map;
+		import std.array: array;
+
+		_compilerAttrBlocks = [
+			DirAttrsBlock!true( DirAttrKind.NamedAttr, [
+				"__result__": DirValueAttr!(true)("__result__", "any")
 			]),
-			DirAttrsBlock!false( DirAttrKind.BodyAttr )
+			DirAttrsBlock!true(DirAttrKind.BodyAttr)
 		];
+
+		_interpAttrBlocks = _compilerAttrBlocks.map!( a => a.toInterpreterBlock() ).array;
+		_symbol = new DirectiveDefinitionSymbol("__render__", _compilerAttrBlocks);
 	}
 
 	override DirAttrsBlock!(false)[] attrBlocks() @property {
-		return _attrBlocks;
+		return _interpAttrBlocks;
+	}
+
+	override Symbol compilerSymbol() @property {
+		return _symbol;
 	}
 }
 
@@ -278,17 +292,29 @@ public:
 	alias TDataNode = DataNode!String;
 	alias LogerMethod = void delegate(LogInfo);
 
+	// Stack used to store temporary data during execution.
+	// Results of execution of instructions are plcaed there too...
 	TDataNode[] _stack;
+
+	// Stack of execution frames with directives or modules local data
 	ExecutionFrame[] _frameStack;
+
+	// Global execution frame used for some global built-in data
 	ExecutionFrame _globalFrame;
+
+	// Storage for execition frames of imported modules
 	ExecutionFrame[string] _moduleFrames;
+
+	// Storage for bytecode code and initial constant data for modules
 	ModuleObject[string] _moduleObjects;
+
+	// Loger method for used to send error and debug messages
 	LogerMethod _logerMethod;
 
-	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, LogerMethod logerMethod)
+	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, LogerMethod logerMethod = null)
 	{
-		_moduleObjects = moduleObjects;
 		_logerMethod = logerMethod;
+		_moduleObjects = moduleObjects;
 		loger.internalAssert(mainModuleName in _moduleObjects, `Cannot get main module from module objects!`);
 
 		loger.write(`Iterpreter ctor: passed dataDict: `, dataDict);
@@ -312,6 +338,22 @@ public:
 		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
 	}
 
+	// Method used to set custom global directive interpreters
+	void addDirInterpreters(INativeDirectiveInterpreter[string] dirInterps)
+	{
+		foreach( name, dirInterp; dirInterps )
+		{
+			if( !name.length || !dirInterp ) {
+				continue; // Калечных не добавляем
+			}
+			// Add custom native directive interpreters to global scope
+			CallableObject dirCallable = new CallableObject();
+			dirCallable._name = name;
+			dirCallable._dirInterp = dirInterp;
+			_globalFrame.setValue( name, TDataNode(dirCallable) );
+		}
+	}
+
 	version(IvyInterpreterDebug)
 		enum isDebugMode = true;
 	else
@@ -332,6 +374,11 @@ public:
 
 	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this);
+	}
+
+	/// Method for setting interpreter's loger method
+	void logerMethod(LogerMethod method) @property {
+		_logerMethod = method;
 	}
 
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame)
@@ -953,10 +1000,12 @@ public:
 				case OpCode.GetDataRange:
 				{
 					import std.range: empty, back, popBack;
+					import std.algorithm: canFind;
 					loger.internalAssert(!_stack.empty, `Expected aggregate type for loop, but empty execution stack found`);
 					loger.write(`GetDataRange begin _stack: `, _stack);
-					loger.internalAssert(_stack.back.type == DataNodeType.Array || _stack.back.type == DataNodeType.AssocArray,
-						`Expected array or assoc array as loop aggregate`);
+					loger.internalAssert(
+						[DataNodeType.Array, DataNodeType.AssocArray, DataNodeType.DataNodeRange].canFind(_stack.back.type),
+						`Expected array or assoc array as loop aggregate, but got: `, _stack.back.type);
 
 					TDataNode dataRange;
 					switch( _stack.back.type )
@@ -969,6 +1018,11 @@ public:
 						case DataNodeType.AssocArray:
 						{
 							dataRange = new AssocArrayRange(_stack.back.assocArray);
+							break;
+						}
+						case DataNodeType.DataNodeRange:
+						{
+							dataRange = _stack.back;
 							break;
 						}
 						default:
@@ -1221,7 +1275,7 @@ public:
 
 										loger.internalAssert(j < currBlock.exprAttrs.length, `Unexpected number of attibutes in positional arguments block`);
 
-										setLocalValue( currBlock.exprAttrs[j].name, attrValue );
+										setLocalValue( currBlock.exprAttrs[blockArgCount -j -1].name, attrValue );
 									}
 									loger.write("_stack after parsing positional arguments: ", _stack);
 									break;

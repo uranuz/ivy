@@ -86,7 +86,7 @@ struct DirValueAttr(bool isForCompiler = false)
 		import ivy.node: IExpression;
 		
 		IExpression defaultValueExpr;
-		this( string name, string typeName, IExpression defValue )
+		this( string name, string typeName, IExpression defValue = null )
 		{
 			this.name = name;
 			this.typeName = typeName;
@@ -336,9 +336,12 @@ public:
 interface INativeDirectiveInterpreter
 {
 	import ivy.interpreter: Interpreter;
-	void interpret( Interpreter interp );
+	import ivy.compiler: Symbol;
+	void interpret(Interpreter interp);
 
 	DirAttrsBlock!(false)[] attrBlocks() @property;
+
+	Symbol compilerSymbol() @property;
 }
 
 enum CallableKind { ScopedDirective, NoscopeDirective, Module, Package }

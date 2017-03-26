@@ -99,14 +99,20 @@ class CompilerModuleRepository
 	import ivy.common: LocationConfig;
 
 	alias TextRange = TextForwardRange!(string, LocationConfig());
-
+	alias LogerMethod = void delegate(LogInfo);
 private:
-	IvyConfig _config;
+	string[] _importPaths;
+	string _fileExtension;
+	LogerMethod _logerMethod;
+
 	IvyNode[string] _moduleTrees;
 
 public:
-	this(IvyConfig ivyConfig) {
-		_config = ivyConfig;
+	this(string[] importPaths, string fileExtension, LogerMethod logerMethod = null)
+	{
+		_importPaths = importPaths;
+		_fileExtension = fileExtension;
+		_logerMethod = logerMethod;
 	}
 
 	version(IvyCompilerDebug)
@@ -119,10 +125,10 @@ public:
 		CompilerModuleRepository moduleRepo;
 
 		void sendLogInfo(LogInfoType logInfoType, string msg) {
-			if( moduleRepo._config.compilerLoger is null ) {
+			if( moduleRepo._logerMethod is null ) {
 				return; // There is no loger method, so get out of here
 			}
-			moduleRepo._config.compilerLoger(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+			moduleRepo._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
 		}
 	}
 
@@ -142,13 +148,13 @@ public:
 
 		string fileName;
 		string[] existingFiles;
-		foreach( importPath; _config.importPaths )
+		foreach( importPath; _importPaths )
 		{
 			if( !isAbsolute(importPath) )
 				continue;
 			
 			// The module name is given. Try to build path to it
-			fileName = buildNormalizedPath( only(importPath).chain( moduleName.splitter('.') ).array ) ~ _config.fileExtension;
+			fileName = buildNormalizedPath( only(importPath).chain( moduleName.splitter('.') ).array ) ~ _fileExtension;
 
 			// Check if file name is not empty and located in root path
 			if( fileName.empty || !fileName.startsWith( buildNormalizedPath(importPath) ) )
@@ -159,7 +165,7 @@ public:
 		}
 
 		if( existingFiles.length == 0 )
-			loger.error(`Cannot load module `, moduleName, `. Searching in import paths: `, _config.importPaths.join(", ") );
+			loger.error(`Cannot load module `, moduleName, `. Searching in import paths: `, _importPaths.join(", ") );
 		else if( existingFiles.length == 1 )
 			fileName = existingFiles.front; // Success
 		else
@@ -170,7 +176,7 @@ public:
 		string fileContent = cast(string) std.file.read(fileName);
 
 		import ivy.parser;
-		auto parser = new Parser!(TextRange)(fileContent, fileName, _config.parserLoger);
+		auto parser = new Parser!(TextRange)(fileContent, fileName, _logerMethod);
 
 		_moduleTrees[moduleName] = parser.parse();
 	}
@@ -304,7 +310,7 @@ public:
 		return null;
 	}
 
-	void add( Symbol symb )
+	void add(Symbol symb)
 	{
 		_symbols[symb.name] = symb;
 	}
@@ -366,7 +372,7 @@ private:
 	LogerMethod _logerMethod;
 
 public:
-	this( CompilerModuleRepository moduleRepo, string mainModuleName, LogerMethod logerMethod )
+	this(CompilerModuleRepository moduleRepo, string mainModuleName, LogerMethod logerMethod = null)
 	{
 		import std.range: back;
 		_moduleRepo = moduleRepo;
@@ -616,6 +622,7 @@ public:
 				foreach( childNode; node[] )
 				{
 					loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
+					loger.internalAssert(childNode, `Child node is null`);
 					childNode.accept(this);
 				}
 			}
@@ -1376,6 +1383,9 @@ private:
 	// Dictionary maps module name to it's root symbol table frame
 	SymbolTableFrame[string] _modulesSymbolTables;
 
+	// Storage for global compiler's symbols (INativeDirectiveInterpreter's info for now)
+	SymbolTableFrame _globalSymbolTable;
+
 	// Compiler's storage for parsed module ASTs
 	CompilerModuleRepository _moduleRepo;
 
@@ -1394,12 +1404,14 @@ private:
 
 
 public:
-	this( CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName, LogerMethod logerMethod = null )
+	this(CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName, LogerMethod logerMethod = null)
 	{
+		_logerMethod = logerMethod;
 		_moduleRepo = moduleRepo;
 		_modulesSymbolTables = symbolTables;
-		_logerMethod = logerMethod;
+		_globalSymbolTable = new SymbolTableFrame(null);
 
+		// Add core directives set:
 		_dirCompilers["var"] = new VarCompiler();
 		_dirCompilers["set"] = new SetCompiler();
 		_dirCompilers["expr"] = new ExprCompiler();
@@ -1434,6 +1446,20 @@ public:
 
 	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this);
+	}
+
+	void addDirCompilers(IDirectiveCompiler[string] dirCompilers)
+	{
+		foreach( name, dirCompiler; dirCompilers ) {
+			_dirCompilers[name] = dirCompiler;
+		}
+	}
+
+	void addGlobalSymbols(Symbol[] symbols)
+	{
+		foreach(symb; symbols) {
+			_globalSymbolTable.add(symb);
+		}
 	}
 
 	void enterModuleScope( string moduleName )
@@ -1581,13 +1607,19 @@ public:
 		loger.internalAssert( _symbolTableStack.back, `Cannot look for symbol, current symbol table frame is null` );
 
 		Symbol symb = _symbolTableStack.back.lookup(name);
-
 		debug {
 			writeln( `symbolLookup, _symbolTableStack symbols:` );
 			foreach( lvl, table; _symbolTableStack[] ) {
 				writeln( `	symbols lvl`, lvl, `: `, table._symbols );
 			}
 		}
+
+		if( symb ) {
+			return symb;
+		}
+
+		loger.internalAssert(_globalSymbolTable, `Compiler's global symbol table is null`);
+		symb = _globalSymbolTable.lookup(name);
 
 		if( !symb ) {
 			loger.error( `Cannot find symbol "` ~ name ~ `"` );
@@ -2007,7 +2039,7 @@ public:
 
 		// In order to make call to __render__ creating block header for one positional argument
 		// which is currently at the TOP of the execution stack
-		size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr; //TODO: Change block type magic constant to enum!
+		size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
 		size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
 
 		addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
@@ -2066,133 +2098,7 @@ public:
 
 		}
 
-
 		return result;
 	}
 
-}
-
-// Representation of programme ready for execution
-class ExecutableProgramme
-{
-	alias LogerMethod = void delegate(LogInfo);
-private:
-	ModuleObject[string] _moduleObjects;
-	string _mainModuleName;
-	LogerMethod _logerMethod;
-
-
-public:
-	this( ModuleObject[string] moduleObjects, string mainModuleName, LogerMethod logerMethod = null )
-	{
-		_moduleObjects = moduleObjects;
-		_mainModuleName = mainModuleName;
-		_logerMethod = logerMethod;
-	}
-
-	/// Run programme main module with arguments passed as mainModuleScope parameter
-	TDataNode run( TDataNode mainModuleScope = TDataNode() )
-	{
-		mainModuleScope["__mentalModuleMagic_0451__"] = 451;
-		import std.range: back;
-
-		import ivy.interpreter: Interpreter;
-		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
-		interp.execLoop();
-
-		return interp._stack.back;
-	}
-}
-
-ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
-{
-	import std.range: empty;
-	debug import std.stdio: writeln;
-
-	if( config.importPaths.empty )
-		compilerError( `List of compiler import paths must not be empty!` );
-	
-	// Creating object that manages reading source files, parse and store them as AST
-	auto moduleRepo = new CompilerModuleRepository(config);
-
-	// Preliminary compiler phase that analyse imported modules and stores neccessary info about directives
-	auto symbolsCollector = new CompilerSymbolsCollector(moduleRepo, mainModuleName, config.compilerLoger);
-	symbolsCollector.run(); // Run analyse
-
-	// Main compiler phase that generates bytecode for modules
-	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config.compilerLoger);
-	compiler.run(); // Run compilation itself
-
-	debug writeln( "compileModule:\r\n", compiler.toPrettyStr() );
-
-	// Creating additional object that stores all neccessary info for user
-	return new ExecutableProgramme(compiler.moduleObjects, mainModuleName, config.interpreterLoger);
-}
-
-/// Simple method that can be used to compile source file and get executable
-ExecutableProgramme compileFile(string sourceFileName, IvyConfig config)
-{
-	import std.path: extension, stripExtension, relativePath, dirSeparator, dirName;
-	import std.array: split, join, empty, front;
-
-	//importPaths = sourceFileName.dirName() ~ importPaths; // For now let main source file path be in import paths
-
-	// Calculating main module name
-	string mainModuleName = sourceFileName.relativePath(config.importPaths.front).stripExtension().split(dirSeparator).join('.');
-
-	return compileModule(mainModuleName, config);
-}
-
-struct IvyConfig
-{
-	alias LogerMethod = void delegate(LogInfo);
-	string[] importPaths;
-	string fileExtension = `.ivy`;
-	LogerMethod interpreterLoger;
-	LogerMethod compilerLoger;
-	LogerMethod parserLoger;
-}
-
-/// Dump-simple in-memory cache for compiled programmes
-class ProgrammeCache(bool useCache = true)
-{
-private:
-	IvyConfig _config;
-
-	static if(useCache)
-	{
-		ExecutableProgramme[string] _progs;
-
-		import core.sync.mutex: Mutex;
-		Mutex _mutex;
-	}
-
-public:
-	this(IvyConfig config)
-	{
-		_config = config;
-		static if(useCache)
-		{
-			_mutex = new Mutex();
-		}
-	}
-
-	ExecutableProgramme getByModuleName(string moduleName)
-	{
-		static if(useCache)
-		{
-			if( moduleName !in _progs )
-			{
-				synchronized( _mutex )
-				{
-					_progs[moduleName] = compileModule(moduleName, _config);
-				}
-			}
-			return _progs[moduleName];
-		}
-		else
-		{
-			return compileModule(moduleName, _config);
-		}
-	}
 }

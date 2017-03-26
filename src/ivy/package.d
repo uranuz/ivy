@@ -1,3 +1,3 @@
 module ivy;
 
-public import ivy.compiler;
+public import ivy.toolkit;
