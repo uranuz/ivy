@@ -91,17 +91,25 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	auto symbolsCollector = new CompilerSymbolsCollector(moduleRepo, mainModuleName, config.compilerLoger);
 	symbolsCollector.run(); // Run analyse
 
+	auto dirInterps = config.dirInterpreters.dup;
+	// Add native directive interpreter __render__ to global scope
+	dirInterps["__render__"] = new RenderDirInterpreter();
+	dirInterps["int"] = new IntCtorDirInterpreter();
+	dirInterps["float"] = new FloatCtorDirInterpreter();
+	dirInterps["has"] = new HasDirInterpreter();
+	dirInterps["typestr"] = new TypeStrDirInterpreter();
+
 	// Main compiler phase that generates bytecode for modules
 	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config.compilerLoger);
 	compiler.addDirCompilers(config.dirCompilers);
-	compiler.addGlobalSymbols( config.dirInterpreters.values.map!(it => it.compilerSymbol).array );
+	compiler.addGlobalSymbols( dirInterps.values.map!(it => it.compilerSymbol).array );
 	compiler.run(); // Run compilation itself
 
 	debug writeln("compileModule:\r\n", compiler.toPrettyStr());
 
 	// Creating additional object that stores all neccessary info for simple usage
 	auto prog = new ExecutableProgramme(compiler.moduleObjects, mainModuleName, config.interpreterLoger);
-	prog.dirInterpreters = config.dirInterpreters;
+	prog.dirInterpreters = dirInterps;
 
 	return prog;
 }

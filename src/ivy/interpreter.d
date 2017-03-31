@@ -240,11 +240,36 @@ public:
 
 }
 
-class RenderDirInterpreter: INativeDirectiveInterpreter
+mixin template BaseNativeDirInterpreterImpl(string symbolName)
 {
 	import ivy.compiler: DirectiveDefinitionSymbol;
+
+	private __gshared DirAttrsBlock!(false)[] _interpAttrBlocks;
+	private __gshared DirectiveDefinitionSymbol _symbol;
 	
-	override void interpret(Interpreter interp )
+	shared static this()
+	{
+		import std.algorithm: map;
+		import std.array: array;
+
+		// Get directive description for interpreter
+		_interpAttrBlocks = _compilerAttrBlocks.map!( a => a.toInterpreterBlock() ).array;
+		// Create symbol for compiler
+		_symbol = new DirectiveDefinitionSymbol(symbolName, _compilerAttrBlocks);
+	}
+
+	override DirAttrsBlock!(false)[] attrBlocks() @property {
+		return _interpAttrBlocks;
+	}
+
+	override Symbol compilerSymbol() @property {
+		return _symbol;
+	}
+}
+
+class RenderDirInterpreter: INativeDirectiveInterpreter
+{
+	override void interpret(Interpreter interp)
 	{
 		import std.array: appender;
 		TDataNode result = interp.getValue("__result__");
@@ -255,32 +280,137 @@ class RenderDirInterpreter: INativeDirectiveInterpreter
 	}
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks;
-	private __gshared DirAttrsBlock!(false)[] _interpAttrBlocks;
-	private __gshared DirectiveDefinitionSymbol _symbol;
-	
 	shared static this()
 	{
-		import std.algorithm: map;
-		import std.array: array;
-
 		_compilerAttrBlocks = [
-			DirAttrsBlock!true( DirAttrKind.NamedAttr, [
+			DirAttrsBlock!true(DirAttrKind.NamedAttr, [
 				"__result__": DirValueAttr!(true)("__result__", "any")
 			]),
 			DirAttrsBlock!true(DirAttrKind.BodyAttr)
 		];
-
-		_interpAttrBlocks = _compilerAttrBlocks.map!( a => a.toInterpreterBlock() ).array;
-		_symbol = new DirectiveDefinitionSymbol("__render__", _compilerAttrBlocks);
 	}
 
-	override DirAttrsBlock!(false)[] attrBlocks() @property {
-		return _interpAttrBlocks;
+	mixin BaseNativeDirInterpreterImpl!("__render__");
+}
+
+class IntCtorDirInterpreter: INativeDirectiveInterpreter
+{
+	override void interpret(Interpreter interp)
+	{
+		import std.conv: to;
+		TDataNode value = interp.getValue("value");
+		switch(value.type)
+		{
+			case DataNodeType.Boolean:
+				interp._stack ~= TDataNode(value.boolean? 1: 0);
+				break;
+			case DataNodeType.Integer:
+				interp._stack ~= value;
+				break;
+			case DataNodeType.String:
+				interp._stack ~= TDataNode(value.str.to!long);
+				break;
+			default:
+				interp.loger.error(`Cannot convert value of type: `, value.type, ` to integer`);
+				break;
+		}
 	}
 
-	override Symbol compilerSymbol() @property {
-		return _symbol;
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true( DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("int");
+}
+
+class FloatCtorDirInterpreter: INativeDirectiveInterpreter
+{
+	override void interpret(Interpreter interp)
+	{
+		import std.conv: to;
+		TDataNode value = interp.getValue("value");
+		switch(value.type)
+		{
+			case DataNodeType.Boolean:
+				interp._stack ~= TDataNode(value.boolean? 1.0: 0.0);
+				break;
+			case DataNodeType.Integer:
+				interp._stack ~= TDataNode(value.integer.to!double);
+				break;
+			case DataNodeType.Floating:
+				interp._stack ~= value;
+				break;
+			case DataNodeType.String:
+				interp._stack ~= TDataNode(value.str.to!double);
+				break;
+			default:
+				interp.loger.error(`Cannot convert value of type: `, value.type, ` to integer`);
+				break;
+		}
 	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("float");
+}
+
+class HasDirInterpreter: INativeDirectiveInterpreter
+{
+	override void interpret(Interpreter interp)
+	{
+		import std.conv: to;
+		TDataNode collection = interp.getValue("collection");
+		TDataNode key = interp.getValue("key");
+		switch(collection.type)
+		{
+			case DataNodeType.AssocArray:
+				if( key.type != DataNodeType.String ) {
+					interp.loger.error(`Expected string as second "has" directive attribute, but got: `, key.type);
+				}
+				interp._stack ~= TDataNode(cast(bool)(key.str in collection));
+				break;
+			default:
+				interp.loger.error(`Expected assoc array as first "has" directive attribute, but got: `, collection.type);
+				break;
+		}
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("collection", "any"),
+			DirValueAttr!(true)("key", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("has");
+}
+
+class TypeStrDirInterpreter: INativeDirectiveInterpreter
+{
+	override void interpret(Interpreter interp)
+	{
+		import std.conv: text;
+		TDataNode value = interp.getValue("value");
+		interp._stack ~= TDataNode(value.type.text);
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("typestr");
 }
 
 import ivy.bytecode;
@@ -325,32 +455,27 @@ public:
 		rootCallableObj._name = "__main__";
 
 		_globalFrame = new ExecutionFrame(null, null);
-		loger.write(`Iterpreter ctor 1: _globalFrame._dataDict: `, _globalFrame._dataDict);
-
-		// Add native directive interpreter __render__ to global scope
-		CallableObject renderDirInterp = new CallableObject();
-		renderDirInterp._name = "__render__";
-		renderDirInterp._dirInterp = new RenderDirInterpreter();
-		_globalFrame.setValue( "__render__", TDataNode(renderDirInterp) );
-
 		loger.write(`Iterpreter ctor 2: _globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
 	}
 
+	private void _addNativeDirInterp(string name, INativeDirectiveInterpreter dirInterp)
+	{
+		loger.internalAssert(name.length && dirInterp, `Directive name is empty or dirInterp is null!`);
+
+		// Add custom native directive interpreters to global scope
+		CallableObject dirCallable = new CallableObject();
+		dirCallable._name = name;
+		dirCallable._dirInterp = dirInterp;
+		_globalFrame.setValue(name, TDataNode(dirCallable));
+	}
+
 	// Method used to set custom global directive interpreters
 	void addDirInterpreters(INativeDirectiveInterpreter[string] dirInterps)
 	{
-		foreach( name, dirInterp; dirInterps )
-		{
-			if( !name.length || !dirInterp ) {
-				continue; // Калечных не добавляем
-			}
-			// Add custom native directive interpreters to global scope
-			CallableObject dirCallable = new CallableObject();
-			dirCallable._name = name;
-			dirCallable._dirInterp = dirInterp;
-			_globalFrame.setValue( name, TDataNode(dirCallable) );
+		foreach( name, dirInterp; dirInterps ) {
+			_addNativeDirInterp(name, dirInterp);
 		}
 	}
 
