@@ -1464,6 +1464,7 @@ public:
 
 	void enterModuleScope( string moduleName )
 	{
+		loger.write( `Enter method` );
 		loger.write( `_modulesSymbolTables: `, _modulesSymbolTables );
 		if( auto table = moduleName in _modulesSymbolTables )
 		{
@@ -1474,6 +1475,7 @@ public:
 		{
 			loger.error( `Cannot enter module symbol table, because module "` ~ moduleName ~ `" not found!` );
 		}
+		loger.write( `Exit method` );
 	}
 
 	void enterScope( size_t sourceIndex )
@@ -1640,18 +1642,26 @@ public:
 		{
 			// Initiate module object compilation on demand
 			IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
+			loger.internalAssert(moduleNode, `Module node is null`);
 
+			loger.write(`Entering new code object`);
 			enterNewCodeObject( newModuleObject(moduleName) );
-			enterModuleScope( moduleName );
+			loger.write(`Entering module scope`);
+			enterModuleScope(moduleName);
+			loger.write(`Starting compiling module AST`);
 			moduleNode.accept(this);
+			loger.write(`Finished compiling module AST`);
 
 			scope(exit)
 			{
+				loger.write(`Exiting compiler scopes`);
 				this.exitScope();
 				this.exitCodeObject();
+				loger.write(`Compiler scopes exited`);
 			}
 		}
 
+		loger.write(`Exiting method`);
 		return _moduleObjects[moduleName];
 	}
 
@@ -1813,125 +1823,128 @@ public:
 				// Keeps count of stack arguments actualy used by this call. First is directive object
 				size_t stackItemsCount = 1;
 
-				while( !attrRange.empty )
+				loger.write(`Entering directive attrs blocks loop`);
+				while( !dirAttrBlocks.empty )
 				{
-					while( !dirAttrBlocks.empty )
+					final switch( dirAttrBlocks.front.kind )
 					{
-						final switch( dirAttrBlocks.front.kind )
+						case DirAttrKind.NamedAttr:
 						{
-							case DirAttrKind.NamedAttr:
-							{
-								size_t argCount = 0;
-								bool[string] argsSet;
+							size_t argCount = 0;
+							bool[string] argsSet;
 
-								DirAttrsBlock!(true) namedAttrsDef = dirAttrBlocks.front;
-								while( !attrRange.empty )
+							DirAttrsBlock!(true) namedAttrsDef = dirAttrBlocks.front;
+							while( !attrRange.empty )
+							{
+								IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
+								if( !keyValueAttr )
 								{
-									IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
-									if( !keyValueAttr )
-									{
-										break; // We finished with key-value attributes
-									}
-
-									if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
-										loger.error( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
-
-									// Add name of named argument into stack
-									size_t nameConstIndex = addConst( TDataNode(keyValueAttr.name) );
-									addInstr( OpCode.LoadConst, nameConstIndex );
-									++stackItemsCount;
-
-									// Compile value expression (it should put result value on the stack)
-									keyValueAttr.value.accept(this);
-									++stackItemsCount;
-
-									++argCount;
-									argsSet[keyValueAttr.name] = true;
-									attrRange.popFront();
+									break; // We finished with key-value attributes
 								}
 
-								foreach( name, attrDecl; namedAttrsDef.namedAttrs )
+								if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
+									loger.error( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
+
+								// Add name of named argument into stack
+								size_t nameConstIndex = addConst( TDataNode(keyValueAttr.name) );
+								addInstr( OpCode.LoadConst, nameConstIndex );
+								++stackItemsCount;
+
+								// Compile value expression (it should put result value on the stack)
+								keyValueAttr.value.accept(this);
+								++stackItemsCount;
+
+								++argCount;
+								argsSet[keyValueAttr.name] = true;
+								attrRange.popFront();
+							}
+
+							foreach( name, attrDecl; namedAttrsDef.namedAttrs )
+							{
+								if( name !in argsSet )
 								{
-									if( name !in argsSet )
+									IExpression defVal = namedAttrsDef.namedAttrs[name].defaultValueExpr;
+
+									if( defVal )
 									{
-										IExpression defVal = namedAttrsDef.namedAttrs[name].defaultValueExpr;
+										// Add name of named argument into stack
+										size_t nameConstIndex = addConst( TDataNode(name) );
+										addInstr( OpCode.LoadConst, nameConstIndex );
+										++stackItemsCount;
 
-										if( defVal )
-										{
-											// Add name of named argument into stack
-											size_t nameConstIndex = addConst( TDataNode(name) );
-											addInstr( OpCode.LoadConst, nameConstIndex );
-											++stackItemsCount;
-
-											// Generate code to set default values
-											defVal.accept(this);
-											++stackItemsCount;
-											++argCount;
-										}
+										// Generate code to set default values
+										defVal.accept(this);
+										++stackItemsCount;
+										++argCount;
 									}
 								}
-
-								// Add instruction to load value that consists of number of pairs in block and type of block
-								size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
-								size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
-								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
-								++stackItemsCount; // We should count args block header
-								break;
 							}
-							case DirAttrKind.ExprAttr:
-							{
-								size_t argCount = 0;
 
-								DirAttrsBlock!(true) exprAttrsDef = dirAttrBlocks.front;
-								while( !attrRange.empty )
-								{
-									IExpression exprAttr = cast(IExpression) attrRange.front;
-									if( !exprAttr )
-									{
-										break; // We finished with value attributes
-									}
-									exprAttr.accept(this);
-									++stackItemsCount;
-									++argCount;
-
-									attrRange.popFront();
-								}
-
-								// Add instruction to load value that consists of number of positional arguments in block and type of block
-								size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr; // TODO: Change magic const to enum
-								size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
-								addInstr( OpCode.LoadConst, blockHeaderConstIndex );
-								++stackItemsCount; // We should count args block header
-								break;
-							}
-							case DirAttrKind.IdentAttr:
-							{
-								loger.internalAssert( false );
-								// TODO: We should take number of identifiers passed in directive definition
-								while( !attrRange.empty ) {
-									IExpression identAttr = cast(INameExpression) attrRange.front;
-									if( !identAttr ) {
-										break;
-									}
-
-									attrRange.popFront();
-								}
-								break;
-							}
-							case DirAttrKind.KwdAttr:
-							{
-								loger.internalAssert( false );
-								DirAttrsBlock!(true) kwdDef = dirAttrBlocks.front;
-								INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression( `Expected keyword attribute` );
-								if( kwdDef.keyword != kwdAttr.name )
-									loger.error( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
-								break;
-							}
-							case DirAttrKind.BodyAttr:
-								break;
+							// Add instruction to load value that consists of number of pairs in block and type of block
+							size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
+							size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
+							addInstr( OpCode.LoadConst, blockHeaderConstIndex );
+							++stackItemsCount; // We should count args block header
+							break;
 						}
-						dirAttrBlocks.popFront();
+						case DirAttrKind.ExprAttr:
+						{
+							size_t argCount = 0;
+
+							DirAttrsBlock!(true) exprAttrsDef = dirAttrBlocks.front;
+							while( !attrRange.empty )
+							{
+								IExpression exprAttr = cast(IExpression) attrRange.front;
+								if( !exprAttr )
+								{
+									break; // We finished with value attributes
+								}
+								exprAttr.accept(this);
+								++stackItemsCount;
+								++argCount;
+
+								attrRange.popFront();
+							}
+
+							// Add instruction to load value that consists of number of positional arguments in block and type of block
+							size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr; // TODO: Change magic const to enum
+							size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
+							addInstr( OpCode.LoadConst, blockHeaderConstIndex );
+							++stackItemsCount; // We should count args block header
+							break;
+						}
+						case DirAttrKind.IdentAttr:
+						{
+							loger.internalAssert( false );
+							// TODO: We should take number of identifiers passed in directive definition
+							while( !attrRange.empty ) {
+								IExpression identAttr = cast(INameExpression) attrRange.front;
+								if( !identAttr ) {
+									break;
+								}
+
+								attrRange.popFront();
+							}
+							break;
+						}
+						case DirAttrKind.KwdAttr:
+						{
+							loger.internalAssert( false );
+							DirAttrsBlock!(true) kwdDef = dirAttrBlocks.front;
+							INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression( `Expected keyword attribute` );
+							if( kwdDef.keyword != kwdAttr.name )
+								loger.error( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
+							break;
+						}
+						case DirAttrKind.BodyAttr:
+							break;
 					}
+					dirAttrBlocks.popFront();
+				}
+				loger.write(`Exited directive attrs blocks loop`);
+
+				if( !attrRange.empty ) {
+					loger.error( `Not all directive attributes processed correctly. Seems that there are unexpected attributes or missing ;` );
 				}
 
 				// After all preparations add instruction to call directive
