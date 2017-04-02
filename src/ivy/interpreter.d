@@ -133,7 +133,9 @@ public:
 						if( nameSplitted.length == 1 ) {
 							return null;
 						} else {
-							interpretError( `Cannot find value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!` );
+							//debug writeln( `ExecutionFrame.findLocalValue, searchedNode: `, nodePtr.assocArray );
+							return null;
+							//interpretError( `Cannot find value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!` );
 						}
 						
 					}
@@ -183,18 +185,18 @@ public:
 	TDataNode* findValue(FrameSearchMode mode)(string varName)
 	{
 		debug import std.stdio: writeln;
-		debug writeln( `Call ExecutionFrame.findLocalValue with varName: `, varName );
+		debug writeln( `Call ExecutionFrame.findValue with varName: `, varName );
 
 		TDataNode* nodePtr = findLocalValue!(mode)(varName);
 		if( nodePtr )
 			return nodePtr;
 		
-		debug writeln( `Call ExecutionFrame.findLocalValue. No varName: `, varName, ` in exec frame. Try to find in module frame` );
+		debug writeln( `Call ExecutionFrame.findValue. No varName: `, varName, ` in exec frame. Try to find in module frame` );
 
 		if( _moduleFrame )
 			return _moduleFrame.findLocalValue!(mode)(varName);
 
-		debug writeln( `Call ExecutionFrame.findLocalValue. Cannot find: `, varName, ` in module exec frame. Module frame is null!` );
+		debug writeln( `Call ExecutionFrame.findValue. Cannot find: `, varName, ` in module exec frame. Module frame is null!` );
 		
 		return null;
 	}
@@ -443,6 +445,8 @@ public:
 
 	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, LogerMethod logerMethod = null)
 	{
+		import std.range: back;
+
 		_logerMethod = logerMethod;
 		_moduleObjects = moduleObjects;
 		loger.internalAssert(mainModuleName in _moduleObjects, `Cannot get main module from module objects!`);
@@ -453,11 +457,13 @@ public:
 		rootCallableObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
 		rootCallableObj._kind = CallableKind.Module;
 		rootCallableObj._name = "__main__";
+		loger.write(`Iterpreter ctor: rootCallableObj._codeObj._moduleObj: `, rootCallableObj._codeObj._moduleObj._name);
 
 		_globalFrame = new ExecutionFrame(null, null);
 		loger.write(`Iterpreter ctor 2: _globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
+		_moduleFrames[mainModuleName] = _frameStack.back; // We need to add entry point module frame to storage manually
 	}
 
 	private void _addNativeDirInterp(string name, INativeDirectiveInterpreter dirInterp)
@@ -509,13 +515,13 @@ public:
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame)
 	{
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame);
-		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` without dataDict`);
+		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` without dataDict, and modFrame `, (modFrame? `is not null`: `is null`));
 	}
 
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
 	{
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict);
-		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict);
+		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict, `, and modFrame `, (modFrame? `is not null`: `is null`));
 	}
 
 	void removeFrame()
@@ -530,7 +536,10 @@ public:
 	{
 		if( modName !in _moduleFrames )
 		{
+			loger.write(`There is no execution frame for module: `, modName, `, creating new one`);
 			_moduleFrames[modName] = new ExecutionFrame(null, _globalFrame);
+		} else {
+			loger.write(`Getting existing execution frame for module: `, modName);
 		}
 
 		return _moduleFrames[modName];
@@ -1098,6 +1107,13 @@ public:
 						newFrame(callableObj, null); // Create entry point module frame
 						_moduleFrames[moduleName] = _frameStack.back; // We need to store module frame into storage
 
+						debug {
+							import std.stdio: writeln;
+							foreach( lvl, execFrame; baseFrameStack ) {
+								writeln( `ImportModule, baseFrameStack, lvl: `, lvl, ` _dataDict: `, execFrame._dataDict );
+							}
+						}
+
 						// Put module frame in frame of the caller
 						setValueImpl!(FrameSearchMode.setWithParents)( moduleName, TDataNode(_frameStack.back), baseFrameStack, _globalFrame );
 
@@ -1315,11 +1331,12 @@ public:
 
 					ExecutionFrame moduleFrame;
 					if( callableObj._codeObj ) {
-						moduleFrame = getModuleFrame( callableObj._codeObj._moduleObj._name );
+						moduleFrame = getModuleFrame(callableObj._codeObj._moduleObj._name);
 					} else {
-						moduleFrame = getModuleFrame( "__main__" );
+						moduleFrame = getModuleFrame("__builtins__");
 					}
 
+					loger.internalAssert( moduleFrame, `Module frame for callable is null` );
 					if( isNoscope )
 					{
 						loger.write("RunCallable creating noscope execution frame...");
