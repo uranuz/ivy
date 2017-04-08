@@ -53,7 +53,7 @@ enum OpCode: ubyte {
 
 	// Import another module
 	ImportModule,
-	ImportFrom,
+	FromImport,
 
 	// Flow control opcodes
 	JumpIfTrue,

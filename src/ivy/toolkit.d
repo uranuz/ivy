@@ -81,9 +81,7 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	import std.array: array;
 	debug import std.stdio: writeln;
 
-	if( config.importPaths.empty )
-		compilerError(`List of compiler import paths must not be empty!`);
-	
+	assert(!config.importPaths.empty, `List of compiler import paths must not be empty!`);
 	// Creating object that manages reading source files, parse and store them as AST
 	auto moduleRepo = new CompilerModuleRepository(config.importPaths, config.fileExtension, config.parserLoger);
 
@@ -98,6 +96,8 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	dirInterps["float"] = new FloatCtorDirInterpreter();
 	dirInterps["has"] = new HasDirInterpreter();
 	dirInterps["typestr"] = new TypeStrDirInterpreter();
+	dirInterps["len"] = new LenDirInterpreter();
+	dirInterps["empty"] = new EmptyDirInterpreter();
 
 	// Main compiler phase that generates bytecode for modules
 	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config.compilerLoger);

@@ -415,6 +415,83 @@ class TypeStrDirInterpreter: INativeDirectiveInterpreter
 	mixin BaseNativeDirInterpreterImpl!("typestr");
 }
 
+class LenDirInterpreter: INativeDirectiveInterpreter
+{
+	override void interpret(Interpreter interp)
+	{
+		import std.conv: text;
+		TDataNode value = interp.getValue("value");
+		switch(value.type)
+		{
+			case DataNodeType.String:
+				interp._stack ~= TDataNode(value.str.length);
+				break;
+			case DataNodeType.Array:
+				interp._stack ~= TDataNode(value.array.length);
+				break;
+			case DataNodeType.AssocArray:
+				interp._stack ~= TDataNode(value.assocArray.length);
+				break;
+			default:
+				interp.loger.error(`Cannot get length for value of type: `, value.type);
+				break;
+		}
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("len");
+}
+
+class EmptyDirInterpreter: INativeDirectiveInterpreter
+{
+	override void interpret(Interpreter interp)
+	{
+		import std.conv: text;
+		TDataNode value = interp.getValue("value");
+		switch(value.type)
+		{
+			case DataNodeType.Undef, DataNodeType.Null:
+				interp._stack ~= TDataNode(true);
+				break;
+			case DataNodeType.Integer, DataNodeType.Floating:
+				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
+				// because in many cases they could be treated as significant values
+				interp._stack ~= TDataNode(false);
+				break;
+			case DataNodeType.String:
+				interp._stack ~= TDataNode(!!value.str.length);
+				break;
+			case DataNodeType.Array:
+				interp._stack ~= TDataNode(!!value.array.length);
+				break;
+			case DataNodeType.AssocArray:
+				interp._stack ~= TDataNode(!!value.assocArray.length);
+				break;
+			case DataNodeType.DataNodeRange:
+				interp._stack ~= TDataNode(!value.dataRange || value.dataRange.empty);
+				break;
+			default:
+				interp.loger.error(`Cannot test type: `, value.type, ` for emptyness`);
+				break;
+		}
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("empty");
+}
+
 import ivy.bytecode;
 
 class Interpreter
@@ -1132,7 +1209,7 @@ public:
 					break;
 				}
 
-				case OpCode.ImportFrom:
+				case OpCode.FromImport:
 				{
 					loger.internalAssert(false, "Unimplemented yet!");
 					break;

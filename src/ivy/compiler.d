@@ -81,11 +81,6 @@ public:
 
 }
 
-void compilerError(string msg, string file = __FILE__, size_t line = __LINE__)
-{
-	throw new IvyCompilerException(msg, file, line);
-}
-
 alias TDataNode = DataNode!string;
 
 interface IDirectiveCompiler
@@ -322,8 +317,7 @@ public:
 
 	SymbolTableFrame newChildFrame(size_t sourceIndex)
 	{
-		if( sourceIndex in _childFrames )
-			compilerError( `Child frame already exists!` );
+		assert(sourceIndex !in _childFrames, `Child frame already exists!`);
 
 		// For now consider if this frame has no module frame - so it is module frame itself
 		SymbolTableFrame child = new SymbolTableFrame(_moduleFrame? _moduleFrame: this);
@@ -425,208 +419,202 @@ public:
 		{
 			import std.range: popBack, empty, back;
 			import std.algorithm: canFind;
-			debug import std.stdio: writeln;
 
-			if( node.name == "def" )
+			switch( node.name )
 			{
-				//if( !_currentFrame )
-				//	compilerError( "Current symbol table frame is null" );
-
-				IAttributeRange defAttrsRange = node[];
-
-				debug {
-					loger.write(`CompilerSymbolsCollector. Attr kinds for IDirectiveStatement children:`);
-					foreach( childNode; node[] ) {
-						loger.write(`		` ~ childNode.kind);
-					}
-				}
-
-				INameExpression dirNameExpr = defAttrsRange.takeFrontAs!INameExpression("Expected directive name");
-				ICodeBlockStatement attrsDefBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
-
-				IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
-
-				bool isNoscope = false;
-				ICompoundStatement bodyStmt;
-
-				DirAttrsBlock!(true)[] attrBlocks;
-
-				alias TValueAttr = DirValueAttr!(true);
-
-				attr_def_stmts_loop:
-				while( !attrsDefStmtRange.empty )
+				case "def":
 				{
-					IDirectiveStatement attrsDefStmt = attrsDefStmtRange.front; // Current attributes definition statement
-					IAttributeRange attrsDefStmtAttrRange = attrsDefStmt[]; // Range on attributes of attributes definition statement
+					IAttributeRange defAttrsRange = node[];
 
-					switch( attrsDefStmt.name )
+					INameExpression dirNameExpr = defAttrsRange.takeFrontAs!INameExpression("Expected directive name");
+					ICodeBlockStatement attrsDefBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
+
+					IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
+
+					bool isNoscope = false;
+					ICompoundStatement bodyStmt;
+
+					DirAttrsBlock!(true)[] attrBlocks;
+
+					alias TValueAttr = DirValueAttr!(true);
+
+					attr_def_stmts_loop:
+					while( !attrsDefStmtRange.empty )
 					{
-						case "def.kv":
+						IDirectiveStatement attrsDefStmt = attrsDefStmtRange.front; // Current attributes definition statement
+						IAttributeRange attrsDefStmtAttrRange = attrsDefStmt[]; // Range on attributes of attributes definition statement
+
+						switch( attrsDefStmt.name )
 						{
-							TValueAttr[string] namedAttrs;
-							while( !attrsDefStmtAttrRange.empty )
+							case "def.kv":
 							{
-								auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
-								if( parsed.empty )
+								TValueAttr[string] namedAttrs;
+								while( !attrsDefStmtAttrRange.empty )
 								{
-									attrsDefStmtRange.popFront();
-									continue attr_def_stmts_loop;
+									auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
+									if( parsed.empty )
+									{
+										attrsDefStmtRange.popFront();
+										continue attr_def_stmts_loop;
+									}
+
+									TValueAttr attrDecl = parsed.attr;
+
+									if( attrDecl.name in namedAttrs )
+										loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
+
+									namedAttrs[attrDecl.name] = attrDecl;
 								}
 
-								TValueAttr attrDecl = parsed.attr;
-
-								if( attrDecl.name in namedAttrs )
-									loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
-
-								namedAttrs[attrDecl.name] = attrDecl;
+								attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.NamedAttr, namedAttrs );
+								break;
 							}
-
-							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.NamedAttr, namedAttrs );
-							break;
-						}
-						case "def.pos":
-						{
-							TValueAttr[] exprAttrs;
-							while( !attrsDefStmtAttrRange.empty )
+							case "def.pos":
 							{
-								auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
-								if( parsed.empty )
+								TValueAttr[] exprAttrs;
+								while( !attrsDefStmtAttrRange.empty )
 								{
-									attrsDefStmtRange.popFront();
-									continue attr_def_stmts_loop;
+									auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
+									if( parsed.empty )
+									{
+										attrsDefStmtRange.popFront();
+										continue attr_def_stmts_loop;
+									}
+
+									TValueAttr attrDecl = parsed.attr;
+
+									if( exprAttrs.canFind!( (it, needle) => it.name == needle )(attrDecl.name) )
+										loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
+
+									exprAttrs ~= attrDecl;
 								}
 
-								TValueAttr attrDecl = parsed.attr;
-
-								if( exprAttrs.canFind!( (it, needle) => it.name == needle )(attrDecl.name) )
-									loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
-
-								exprAttrs ~= attrDecl;
+								attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.ExprAttr, exprAttrs );
+								break;
 							}
+							case "def.names":
+								assert( false, `Not implemented yet!` );
+								break;
+							case "def.kwd":
+								assert( false, `Not implemented yet!` );
+								break;
+							case "def.body":
+								if( bodyStmt )
+									loger.error(`Multiple body statements are not allowed!`);
 
-							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.ExprAttr, exprAttrs );
-							break;
-						}
-						case "def.names":
-							assert( false, `Not implemented yet!` );
-							break;
-						case "def.kwd":
-							assert( false, `Not implemented yet!` );
-							break;
-						case "def.body":
-							if( bodyStmt )
-								loger.error(`Multiple body statements are not allowed!`);
-
-							if( attrsDefStmtAttrRange.empty )
-								loger.error("Unexpected end of def.body directive!");
-							
-							// Try to parse noscope flag
-							INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
-							if( noscopeExpr && noscopeExpr.name == "noscope" )
-							{
-								isNoscope = true;
 								if( attrsDefStmtAttrRange.empty )
-									loger.error("Expected directive body, but end of def.body directive found!");
-								attrsDefStmtAttrRange.popFront();
-							}
+									loger.error("Unexpected end of def.body directive!");
+								
+								// Try to parse noscope flag
+								INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
+								if( noscopeExpr && noscopeExpr.name == "noscope" )
+								{
+									isNoscope = true;
+									if( attrsDefStmtAttrRange.empty )
+										loger.error("Expected directive body, but end of def.body directive found!");
+									attrsDefStmtAttrRange.popFront();
+								}
 
-							bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
-							if( !bodyStmt )
-								loger.error("Expected compound statement as directive body statement");
+								bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
+								if( !bodyStmt )
+									loger.error("Expected compound statement as directive body statement");
 
-							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope) );
+								attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope) );
 
-							break;
-						default:
-							break;
+								break;
+							default:
+								break;
+						}
+
+						attrsDefStmtRange.popFront();
 					}
 
-					attrsDefStmtRange.popFront();
-				}
+					if( _frameStack.empty )
+						loger.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
+					if( !_frameStack.back )
+						loger.error(`Cannot store symbol, because symbol table frame is null`);
+					// Add directive definition into existing frame
+					_frameStack.back.add( new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks) );
 
-				if( _frameStack.empty )
-					loger.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
-				if( !_frameStack.back )
-					loger.error(`Cannot store symbol, because symbol table frame is null`);
-				// Add directive definition into existing frame
-				_frameStack.back.add( new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks) );
-
-				if( bodyStmt && !isNoscope )
-				{
-					// Create new frame for body if not forbidden
-					_frameStack ~= _frameStack.back.newChildFrame(bodyStmt.location.index);
-				}
-
-				scope(exit)
-				{
-					if( bodyStmt && !isNoscope ) {
-						_frameStack.popBack();
+					if( bodyStmt && !isNoscope )
+					{
+						// Create new frame for body if not forbidden
+						_frameStack ~= _frameStack.back.newChildFrame(bodyStmt.location.index);
 					}
-				}
 
-				if( bodyStmt )
-				{
-					// Analyse nested tree
-					bodyStmt.accept(this);
-				}
-
-				if( !defAttrsRange.empty )
-					loger.error(`Expected end of directive definition statement. Maybe ; is missing`);
-			}
-			else if( node.name == "import" )
-			{
-				IAttributeRange attrRange = node[];
-				if( attrRange.empty )
-					loger.error(`Expected module name in import statement, but got end of directive`);
-
-				INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
-
-				if( !attrRange.empty )
-					loger.error(`Expected end of import directive, maybe ; is missing`);
-
-				{
-					_moduleStack ~= moduleNameExpr.name;
 					scope(exit)
 					{
-						loger.internalAssert(!_moduleStack.empty, `Compiler directive collector module stack is empty!`);
-						_moduleStack.popBack(); // We will exit module when finish with it
-						loger.internalAssert(!_frameStack.empty, `Compiler directive collector frame stack is empty!`);
-						_frameStack.popBack();
+						if( bodyStmt && !isNoscope ) {
+							_frameStack.popBack();
+						}
 					}
 
-					if( auto modFramePtr = moduleNameExpr.name in _moduleSymbols ) {
-						_frameStack ~= *modFramePtr; // Module is analyzed already...
-					} else {
-						// Try to open, parse and load symbols info from another module
-						IvyNode moduleTree = _moduleRepo.getModuleTree( moduleNameExpr.name );
-
-						if( !moduleTree )
-							loger.error(`Couldn't load module: `, moduleNameExpr.name);
-
-						_frameStack ~= new SymbolTableFrame(null);
-						
-						_moduleSymbols[moduleNameExpr.name] = _frameStack.back;
-
-						// Go to find directive definitions in this imported module
-						moduleTree.accept(this);
+					if( bodyStmt )
+					{
+						// Analyse nested tree
+						bodyStmt.accept(this);
 					}
+
+					if( !defAttrsRange.empty )
+						loger.error(`Expected end of directive definition statement. Maybe ; is missing`);
+					break;
 				}
-
-				loger.internalAssert(!_frameStack.empty, "Cannot store imported symbols, because symbol table frame stack is empty!");
-				loger.internalAssert(_frameStack.back, "Cannot store imported symbols, because symbol table stack is null!");
-				// Add imported module symbol table as local symbol
-				_frameStack.back.add( new ModuleSymbol(moduleNameExpr.name, _moduleSymbols[moduleNameExpr.name] ) );
-			}
-			else
-			{
-				foreach( childNode; node[] )
+				case "import":
 				{
-					loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
-					loger.internalAssert(childNode, `Child node is null`);
-					childNode.accept(this);
-				}
-			}
+					IAttributeRange attrRange = node[];
+					if( attrRange.empty )
+						loger.error(`Expected module name in import statement, but got end of directive`);
 
+					INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
+
+					if( !attrRange.empty )
+						loger.error(`Expected end of import directive, maybe ; is missing`);
+
+					// Add imported module symbol table as local symbol
+					_frameStack.back.add(new ModuleSymbol(
+						moduleNameExpr.name,
+						analyzeModuleSymbols(moduleNameExpr.name)
+					));
+					break;
+				}
+				case "from":
+				{
+					IAttributeRange attrRange = node[];
+					if( attrRange.empty )
+						loger.error(`Expected module name in import statement, but got end of directive`);
+
+					INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
+					INameExpression importKwdExpr = attrRange.takeFrontAs!INameExpression("Expected 'import' keyword!");
+					if( importKwdExpr.name != "import" )
+						loger.error("Expected 'import' keyword!");
+
+					string[] symbolNames;
+					while( !attrRange.empty )
+					{
+						INameExpression symbolNameExpr = attrRange.takeFrontAs!INameExpression("Expected imported symbol name");
+						symbolNames ~= symbolNameExpr.name;
+					}
+
+					SymbolTableFrame moduleTable = analyzeModuleSymbols(moduleNameExpr.name);
+
+					foreach( symbolName; symbolNames )
+					{
+						// As long as variables currently shall be imported in runtime only and there is no compile-time
+						// symbols for it, so import symbol that currently exists
+						if( Symbol importedSymbol = moduleTable.localLookup(symbolName) ) {
+							_frameStack.back.add(importedSymbol);
+						}
+					}
+					break;
+				}
+				default:
+					foreach( childNode; node[] )
+					{
+						loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
+						loger.internalAssert(childNode, `Child node is null`);
+						childNode.accept(this);
+					}
+			}
 			// TODO: Check if needed to analyse other directive attributes scopes
 		}
 		void visit(IDataFragmentStatement node) {  }
@@ -641,6 +629,39 @@ public:
 		}
 	}
 
+	SymbolTableFrame analyzeModuleSymbols(string moduleName)
+	{
+		import std.range: popBack, empty, back;
+		if( auto modFramePtr = moduleName in _moduleSymbols ) {
+			_frameStack ~= *modFramePtr; // Module is analyzed already...
+			loger.internalAssert(*modFramePtr, "Cannot store imported symbols, because symbol table stack is null!");
+			return *modFramePtr;
+		} else {
+			_moduleStack ~= moduleName;
+			scope(exit) {
+				loger.internalAssert(!_moduleStack.empty, `Compiler directive collector module stack is empty!`);
+				_moduleStack.popBack(); // We will exit module when finish with it
+			}
+
+			// Try to open, parse and load symbols info from another module
+			IvyNode moduleTree = _moduleRepo.getModuleTree(moduleName);
+
+			if( !moduleTree )
+				loger.error(`Couldn't load module: `, moduleName);
+
+			SymbolTableFrame moduleTable = new SymbolTableFrame(null);
+			_moduleSymbols[moduleName] = moduleTable;
+			_frameStack ~= moduleTable;
+			scope(exit) {
+				loger.internalAssert(!_frameStack.empty, `Compiler directive collector frame stack is empty!`);
+				_frameStack.popBack();
+			}
+
+			// Go to find directive definitions in this imported module
+			moduleTree.accept(this);
+			return moduleTable;
+		}
+	}
 
 	auto analyzeValueAttr(IAttributeRange attrRange)
 	{
@@ -753,7 +774,7 @@ public:
 		import std.range: empty, back, empty;
 
 		if( !stmt || stmt.name != "var" )
-			compilerError( `Expected "var" directive statement!` );
+			compiler.loger.error(`Expected "var" directive statement!`);
 
 		auto stmtRange = stmt[];
 		while( !stmtRange.empty )
@@ -762,11 +783,11 @@ public:
 			if( auto kwPair = cast(IKeyValueAttribute) stmtRange.front )
 			{
 				if( kwPair.name.empty )
-					compilerError( `Variable name cannot be empty` );
+					compiler.loger.error(`Variable name cannot be empty`);
 				varNameConstIndex = compiler.addConst( TDataNode(kwPair.name) );
 
 				if( !kwPair.value )
-					compilerError( "Expected value for 'var' directive" );
+					compiler.loger.error("Expected value for 'var' directive");
 
 				kwPair.value.accept(compiler); // Compile expression for getting value
 				stmtRange.popFront();
@@ -774,14 +795,14 @@ public:
 			else if( auto nameExpr = cast(INameExpression) stmtRange.front )
 			{
 				if( nameExpr.name.empty )
-					compilerError( `Variable name cannot be empty` );
+					compiler.loger.error(`Variable name cannot be empty`);
 				varNameConstIndex = compiler.addConst( TDataNode(nameExpr.name) );
 
 				stmtRange.popFront();
 			}
 			else
 			{
-				compilerError( `Expected named attribute or name as variable declarator!` );
+				compiler.loger.error( `Expected named attribute or name as variable declarator!` );
 			}
 
 			if( !stmtRange.empty )
@@ -795,7 +816,7 @@ public:
 						stmtRange.popFront(); // Skip `as` keyword
 
 						if( stmtRange.empty )
-							compilerError( `Expected variable type declaration` );
+							compiler.loger.error(`Expected variable type declaration`);
 
 						// For now just skip type expression
 						stmtRange.popFront();
@@ -811,7 +832,7 @@ public:
 		compiler.addInstr( OpCode.LoadConst, fakeValueConstIndex );
 
 		if( !stmtRange.empty )
-			compilerError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
+			compiler.loger.error("Expected end of directive after key-value pair. Maybe ';' is missing");
 	}
 }
 
@@ -834,7 +855,7 @@ public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
 		if( !statement || statement.name != "set" )
-			compilerError( "Expected 'set' directive" );
+			compiler.loger.error("Expected 'set' directive");
 
 		auto stmtRange = statement[];
 
@@ -843,7 +864,7 @@ public:
 			IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
 
 			if( !kwPair.value )
-				compilerError( "Expected value for 'set' directive" );
+				compiler.loger.error("Expected value for 'set' directive");
 
 			kwPair.value.accept(compiler); //Evaluating expression
 
@@ -856,7 +877,7 @@ public:
 		compiler.addInstr( OpCode.LoadConst, fakeValueConstIndex );
 
 		if( !stmtRange.empty )
-			compilerError( "Expected end of directive after key-value pair. Maybe ';' is missing" );
+			compiler.loger.error("Expected end of directive after key-value pair. Maybe ';' is missing");
 	}
 
 }
@@ -867,7 +888,7 @@ class IfCompiler: IDirectiveCompiler
 	{
 		debug import std.stdio: writeln;
 		if( !statement || statement.name != "if" )
-			compilerError( `Expected "if" directive statement!` );
+			compiler.loger.error(`Expected "if" directive statement!`);
 
 		import std.typecons: Tuple;
 		import std.range: back, empty;
@@ -898,12 +919,12 @@ class IfCompiler: IDirectiveCompiler
 			{
 				elseBody = stmtRange.takeFrontAs!IExpression( "'else' body statement expected" );
 				if( !stmtRange.empty )
-					compilerError("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
+					compiler.loger.error("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
 				break;
 			}
 			else
 			{
-				compilerError("'elif' or 'else' keyword expected");
+				compiler.loger.error("'elif' or 'else' keyword expected");
 			}
 		}
 
@@ -956,7 +977,7 @@ class IfCompiler: IDirectiveCompiler
 		}
 
 		if( !stmtRange.empty )
-			compilerError( `Expected end of "if" directive. Maybe ';' is missing` );
+			compiler.loger.error(`Expected end of "if" directive. Maybe ';' is missing`);
 
 	}
 
@@ -969,7 +990,7 @@ public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
 		if( !statement || statement.name != "for" )
-			compilerError( "Expected 'for' directive" );
+			compiler.loger.error("Expected 'for' directive");
 
 		auto stmtRange = statement[];
 
@@ -977,12 +998,12 @@ public:
 
 		string varName = varNameExpr.name;
 		if( varName.length == 0 )
-			compilerError("Loop variable name cannot be empty");
+			compiler.loger.error("Loop variable name cannot be empty");
 
 		INameExpression inAttribute = stmtRange.takeFrontAs!INameExpression("Expected 'in' attribute");
 
 		if( inAttribute.name != "in" )
-			compilerError( "Expected 'in' keyword" );
+			compiler.loger.error("Expected 'in' keyword");
 
 		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected 'for' aggregate expression");
 
@@ -992,7 +1013,7 @@ public:
 		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement( "Expected loop body statement" );
 
 		if( !stmtRange.empty )
-			compilerError( "Expected end of directive after loop body. Maybe ';' is missing" );
+			compiler.loger.error("Expected end of directive after loop body. Maybe ';' is missing");
 
 		// TODO: Check somehow if aggregate has supported type
 
@@ -1025,7 +1046,7 @@ public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
 		if( !statement || statement.name != "at" )
-			compilerError( "Expected 'at' directive" );
+			compiler.loger.error("Expected 'at' directive");
 
 		auto stmtRange = statement[];
 
@@ -1037,8 +1058,8 @@ public:
 		compiler.addInstr(OpCode.LoadSubscr);
 
 		if( !stmtRange.empty )
-			compilerError( `Expected end of "at" directive after index expression. Maybe ';' is missing. `
-				~ `Info: multiple index expressions are not supported yet.` );
+			compiler.loger.error(`Expected end of "at" directive after index expression. Maybe ';' is missing. `
+				~ `Info: multiple index expressions are not supported yet.`);
 	}
 }
 
@@ -1048,7 +1069,7 @@ public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
 		if( !statement || statement.name != "setat" )
-			compilerError( "Expected 'setat' directive" );
+			compiler.loger.error("Expected 'setat' directive");
 
 		auto stmtRange = statement[];
 
@@ -1062,8 +1083,8 @@ public:
 		indexValue.accept(compiler); // Evaluate index
 
 		if( !stmtRange.empty )
-			compilerError( `Expected end of "setat" directive after index expression. Maybe ';' is missing. `
-				~ `Info: multiple index expressions are not supported yet.` );
+			compiler.loger.error(`Expected end of "setat" directive after index expression. Maybe ';' is missing. `
+				~ `Info: multiple index expressions are not supported yet.`);
 	}
 }
 
@@ -1073,7 +1094,7 @@ public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
 		if( !statement || statement.name != "repeat" )
-			compilerError( "Expected 'repeat' directive" );
+			compiler.loger.error("Expected 'repeat' directive");
 
 		auto stmtRange = statement[];
 
@@ -1081,22 +1102,22 @@ public:
 
 		string varName = varNameExpr.name;
 		if( varName.length == 0 )
-			compilerError("Loop variable name cannot be empty");
+			compiler.loger.error("Loop variable name cannot be empty");
 
 		INameExpression inAttribute = stmtRange.takeFrontAs!INameExpression("Expected 'in' attribute");
 
 		if( inAttribute.name != "in" )
-			compilerError( "Expected 'in' keyword" );
+			compiler.loger.error("Expected 'in' keyword");
 
 		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected loop aggregate expression");
 
 		// Compile code to calculate aggregate value
 		aggregateExpr.accept(compiler);
 
-		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement( "Expected loop body statement" );
+		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement("Expected loop body statement");
 
 		if( !stmtRange.empty )
-			compilerError( "Expected end of directive after loop body. Maybe ';' is missing" );
+			compiler.loger.error("Expected end of directive after loop body. Maybe ';' is missing");
 
 		// Issue instruction to get iterator from aggregate in execution stack
 		compiler.addInstr( OpCode.GetDataRange );
@@ -1150,22 +1171,20 @@ class ExprCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
 	{
-		debug import std.stdio: writeln;
-
 		if( !stmt || stmt.name != "expr" )
-			compilerError( `Expected "expr" directive statement!` );
+			compiler.loger.error(`Expected "expr" directive statement!`);
 
 		auto stmtRange = stmt[];
 		if( stmtRange.empty )
-			compilerError( `Expected node as "expr" argument!` );
+			compiler.loger.error(`Expected node as "expr" argument!`);
 
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		if( !stmtRange.empty )
 		{
-			debug writeln( "ExprCompiler. At end. stmtRange.front.kind: ", ( cast(INameExpression) stmtRange.front ).name );
-			compilerError( `Expected end of "expr" directive. Maybe ';' is missing` );
+			compiler.loger.write("ExprCompiler. At end. stmtRange.front.kind: ", ( cast(INameExpression) stmtRange.front ).name);
+			compiler.loger.error(`Expected end of "expr" directive. Maybe ';' is missing`);
 		}
 			
 	}
@@ -1225,13 +1244,13 @@ public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
 		if( !statement || statement.name != "import" )
-			compilerError( "Expected 'import' directive" );
+			compiler.loger.error("Expected 'import' directive");
 
 		auto stmtRange = statement[];
 
 		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
 		if( !stmtRange.empty )
-			compilerError( `Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere` );
+			compiler.loger.error(`Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere`);
 
 		ModuleObject modObject = compiler.getOrCompileModule(moduleNameExpr.name);
 
@@ -1240,7 +1259,30 @@ public:
 
 		compiler.addInstr( OpCode.ImportModule );
 	}
+}
 
+/// Compiles module into module object and saves it into dictionary
+class FromImportCompiler: IDirectiveCompiler
+{
+public:
+	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	{
+		if( !statement || statement.name != "from" )
+			compiler.loger.error("Expected 'from' directive");
+
+		auto stmtRange = statement[];
+
+		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
+		if( !stmtRange.empty )
+			compiler.loger.error(`Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere`);
+
+		ModuleObject modObject = compiler.getOrCompileModule(moduleNameExpr.name);
+
+		size_t modNameConstIndex = compiler.addConst( TDataNode(moduleNameExpr.name) );
+		compiler.addInstr( OpCode.LoadConst, modNameConstIndex );
+
+		compiler.addInstr( OpCode.ImportModule );
+	}
 }
 
 debug import std.stdio;
@@ -1250,7 +1292,7 @@ class DefCompiler: IDirectiveCompiler
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
 		if( !statement || statement.name != "def" )
-			compilerError( "Expected 'def' directive" );
+			compiler.loger.error("Expected 'def' directive");
 
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
@@ -1289,10 +1331,10 @@ class DefCompiler: IDirectiveCompiler
 					}
 					case "def.body": {
 						if( bodyStatement )
-							compilerError( "Multiple body statements are not allowed!!!" );
+							compiler.loger.error("Multiple body statements are not allowed!!!");
 
 						if( attrsDefStmtAttrRange.empty )
-							compilerError( "Unexpected end of def.body directive!" );
+							compiler.loger.error("Unexpected end of def.body directive!");
 						
 						// Try to parse noscope flag
 						INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
@@ -1300,18 +1342,18 @@ class DefCompiler: IDirectiveCompiler
 						{
 							isNoscope = true;
 							if( attrsDefStmtAttrRange.empty )
-								compilerError( "Expected directive body, but end of def.body directive found!" );
+								compiler.loger.error("Expected directive body, but end of def.body directive found!");
 							attrsDefStmtAttrRange.popFront();
 						}
 
 						bodyStatement = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
 						if( !bodyStatement )
-							compilerError( "Expected compound statement as directive body statement" );
+							compiler.loger.error("Expected compound statement as directive body statement");
 
 						break;
 					}
 					default: {
-						compilerError( `Unexpected directive attribute definition statement "` ~ attrDefStmt.name ~ `"` );
+						compiler.loger.error(`Unexpected directive attribute definition statement "` ~ attrDefStmt.name ~ `"`);
 						break;
 					}
 				}
@@ -1329,7 +1371,7 @@ class DefCompiler: IDirectiveCompiler
 
 			Symbol symb = compiler.symbolLookup( defNameExpr.name );
 			if( symb.kind != SymbolKind.DirectiveDefinition )
-				compilerError(`Expected directive definition symbol kind`);
+				compiler.loger.error(`Expected directive definition symbol kind`);
 
 			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
 			assert( dirSymbol, `Directive definition symbol is null` );
@@ -1367,9 +1409,7 @@ class DefCompiler: IDirectiveCompiler
 
 		// Add instruction to create directive object
 		compiler.addInstr( OpCode.LoadDirective );
-
 	}
-
 }
 
 class ByteCodeCompiler: AbstractNodeVisitor
