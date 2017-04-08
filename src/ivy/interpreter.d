@@ -465,13 +465,13 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 				interp._stack ~= TDataNode(false);
 				break;
 			case DataNodeType.String:
-				interp._stack ~= TDataNode(!!value.str.length);
+				interp._stack ~= TDataNode(!value.str.length);
 				break;
 			case DataNodeType.Array:
-				interp._stack ~= TDataNode(!!value.array.length);
+				interp._stack ~= TDataNode(!value.array.length);
 				break;
 			case DataNodeType.AssocArray:
-				interp._stack ~= TDataNode(!!value.assocArray.length);
+				interp._stack ~= TDataNode(!value.assocArray.length);
 				break;
 			case DataNodeType.DataNodeRange:
 				interp._stack ~= TDataNode(!value.dataRange || value.dataRange.empty);
