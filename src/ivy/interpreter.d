@@ -1116,33 +1116,24 @@ public:
 					break;
 				}
 
-				// Stores data from stack into context variable
-				case OpCode.StoreName:
-				{
-					loger.write("StoreName _stack: ", _stack);
-					loger.internalAssert(!_stack.empty, "Cannot execute StoreName instruction. Expected var value operand, but exec stack is empty!");
-					TDataNode varValue = _stack.back;
-					_stack.popBack();
-
-					TDataNode varNameNode = getModuleConstCopy( instr.arg );
-					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute StoreName instruction. Variable name const must have string type!`);
-
-					setValue( varNameNode.str, varValue );
-					break;
-				}
-
 				// Stores data from stack into local context frame variable
-				case OpCode.StoreLocalName:
+				case OpCode.StoreName, OpCode.StoreLocalName, OpCode.StoreNameWithParents:
 				{
-					loger.write("StoreLocalName _stack: ", _stack);
-					loger.internalAssert(!_stack.empty, "Cannot execute StoreLocalName instruction. Expected var value operand, but exec stack is empty!");
+					loger.write(instr.opcode, " _stack: ", _stack);
+					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected var value operand, but exec stack is empty!");
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
 					TDataNode varNameNode = getModuleConstCopy( instr.arg );
-					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute StoreLocalName instruction. Variable name const must have string type!`);
+					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute `, instr.opcode, ` instruction. Variable name const must have string type!`);
 
-					setLocalValue( varNameNode.str, varValue );
+					
+					switch(instr.opcode) {
+						case OpCode.StoreName: setValue(varNameNode.str, varValue); break;
+						case OpCode.StoreLocalName: setLocalValue(varNameNode.str, varValue); break;
+						case OpCode.StoreNameWithParents: setValueWithParents(varNameNode.str, varValue); break;
+						default: loger.internalAssert(false, `Unexpected 'store name' instruction kind`);
+					}
 					break;
 				}
 
@@ -1166,8 +1157,6 @@ public:
 					loger.write(`ImportModule _moduleObjects: `, _moduleObjects);
 					loger.internalAssert(moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: ", moduleName);
 
-					ExecutionFrame[] baseFrameStack = _frameStack[];
-
 					if( moduleName !in _moduleFrames )
 					{
 						// Run module here
@@ -1183,17 +1172,9 @@ public:
 
 						newFrame(callableObj, null); // Create entry point module frame
 						_moduleFrames[moduleName] = _frameStack.back; // We need to store module frame into storage
+						_stack ~= TDataNode(_frameStack.back); // Put module root frame into execution frame (it will be stored with StoreName)
 
-						debug {
-							import std.stdio: writeln;
-							foreach( lvl, execFrame; baseFrameStack ) {
-								writeln( `ImportModule, baseFrameStack, lvl: `, lvl, ` _dataDict: `, execFrame._dataDict );
-							}
-						}
-
-						// Put module frame in frame of the caller
-						setValueImpl!(FrameSearchMode.setWithParents)( moduleName, TDataNode(_frameStack.back), baseFrameStack, _globalFrame );
-
+						// Preparing to run code object in newly created frame
 						_stack ~= TDataNode(pk+1);
 						codeRange = codeObject._instrs[];
 						pk = 0;
@@ -1202,8 +1183,9 @@ public:
 					}
 					else
 					{
-						// If module is already imported then just put reference to it into caller's frame
-						setValueImpl!(FrameSearchMode.setWithParents)( moduleName, TDataNode(_moduleFrames[moduleName]), baseFrameStack, _globalFrame );
+						_stack ~= TDataNode(_moduleFrames[moduleName]); // Put module root frame into execution frame
+						// As long as module returns some value at the end of execution, so put fake value there for consistency
+						_stack ~= TDataNode();
 					}
 
 					break;
@@ -1211,7 +1193,25 @@ public:
 
 				case OpCode.FromImport:
 				{
-					loger.internalAssert(false, "Unimplemented yet!");
+					import std.algorithm: map;
+					import std.array: array;
+
+					loger.internalAssert(!_stack.empty, "Cannot execute FromImport instruction, because exec stack is empty!");
+					loger.internalAssert(_stack.back.type == DataNodeType.Array, "Cannot execute FromImport instruction. Expected list of symbol names");
+					string[] symbolNames = _stack.back.array.map!( it => it.str ).array;
+					_stack.popBack();
+					
+					loger.internalAssert(!_stack.empty, "Cannot execute FromImport instruction, because exec stack is empty!");
+					loger.internalAssert(_stack.back.type == DataNodeType.ExecutionFrame, "Cannot execute FromImport instruction. Expected execution frame argument");
+					
+					ExecutionFrame moduleFrame = _stack.back.execFrame;
+					loger.internalAssert(moduleFrame, "Cannot execute FromImport instruction, because module frame argument is null");
+					_stack.popBack();
+
+					foreach( name; symbolNames ) {
+						setValue( name, moduleFrame.getValue(name) );
+					}
+
 					break;
 				}
 

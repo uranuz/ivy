@@ -1254,10 +1254,12 @@ public:
 
 		ModuleObject modObject = compiler.getOrCompileModule(moduleNameExpr.name);
 
-		size_t modNameConstIndex = compiler.addConst( TDataNode(moduleNameExpr.name) );
-		compiler.addInstr( OpCode.LoadConst, modNameConstIndex );
+		size_t modNameConstIndex = compiler.addConst(TDataNode(moduleNameExpr.name));
+		compiler.addInstr(OpCode.LoadConst, modNameConstIndex); // The first is for ImportModule
 
-		compiler.addInstr( OpCode.ImportModule );
+		compiler.addInstr(OpCode.ImportModule);
+		compiler.addInstr(OpCode.SwapTwo); // Swap module return value and imported execution frame
+		compiler.addInstr(OpCode.StoreNameWithParents, modNameConstIndex);
 	}
 }
 
@@ -1273,15 +1275,31 @@ public:
 		auto stmtRange = statement[];
 
 		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
+
+		INameExpression importKwdExpr = stmtRange.takeFrontAs!INameExpression("Expected 'import' keyword, but got end of range");
+		if( importKwdExpr.name != "import" )
+			compiler.loger.error("Expected 'import' keyword");
+
+		string[] varNames;
+		while( !stmtRange.empty )
+		{
+			INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("Expected imported variable name");
+			varNames ~= varNameExpr.name;
+		}
+
 		if( !stmtRange.empty )
-			compiler.loger.error(`Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere`);
+			compiler.loger.error(`Not all attributes for directive "from" were parsed. Maybe ; is missing somewhere`);
 
 		ModuleObject modObject = compiler.getOrCompileModule(moduleNameExpr.name);
 
-		size_t modNameConstIndex = compiler.addConst( TDataNode(moduleNameExpr.name) );
-		compiler.addInstr( OpCode.LoadConst, modNameConstIndex );
+		size_t modNameConstIndex = compiler.addConst(TDataNode(moduleNameExpr.name));
+		compiler.addInstr(OpCode.LoadConst, modNameConstIndex);
 
-		compiler.addInstr( OpCode.ImportModule );
+		compiler.addInstr(OpCode.ImportModule);
+		compiler.addInstr(OpCode.SwapTwo); // Swap module return value and imported execution frame
+		size_t varNamesConstIndex = compiler.addConst(TDataNode(varNames));
+		compiler.addInstr(OpCode.LoadConst, varNamesConstIndex); // Put list of imported names on the stack
+		compiler.addInstr(OpCode.FromImport); // Store names from module exec frame into current frame
 	}
 }
 
@@ -1460,6 +1478,7 @@ public:
 		_dirCompilers["repeat"] = new RepeatCompiler();
 		_dirCompilers["def"] = new DefCompiler();
 		_dirCompilers["import"] = new ImportCompiler();
+		_dirCompilers["from"] = new FromImportCompiler();
 		_dirCompilers["at"] = new AtCompiler();
 
 		_mainModuleName = mainModuleName;
