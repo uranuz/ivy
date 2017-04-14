@@ -148,24 +148,33 @@ public:
 			if( !isAbsolute(importPath) )
 				continue;
 			
+			string fileNameNoExt = buildNormalizedPath( only(importPath).chain( moduleName.splitter('.') ).array );
 			// The module name is given. Try to build path to it
-			fileName = buildNormalizedPath( only(importPath).chain( moduleName.splitter('.') ).array ) ~ _fileExtension;
+			fileName = fileNameNoExt ~ _fileExtension;
 
 			// Check if file name is not empty and located in root path
 			if( fileName.empty || !fileName.startsWith( buildNormalizedPath(importPath) ) )
 				loger.error(`Incorrect path to module: `, fileName);
 
-			if( std.file.exists(fileName) && std.file.isFile(fileName) )
+			if( std.file.exists(fileName) && std.file.isFile(fileName) ) {
 				existingFiles ~= fileName;
+			} else if( std.file.exists(fileNameNoExt) && std.file.isDir(fileNameNoExt) ) {
+				// If there is no file with exact name then try to find folder with this path
+				// and check if there is file with name <moduleName> and <_fileExtension>
+				fileName = buildNormalizedPath(fileNameNoExt, moduleName.splitter('.').back) ~ _fileExtension;
+				if( std.file.exists(fileName) && std.file.isFile(fileName) ) {
+					existingFiles ~= fileName;
+				}
+			}
 		}
 
 		if( existingFiles.length == 0 )
-			loger.error(`Cannot load module `, moduleName, `. Searching in import paths: `, _importPaths.join(", ") );
+			loger.error(`Cannot load module `, moduleName, ". Searching in import paths:\n", _importPaths.join(",\n") );
 		else if( existingFiles.length == 1 )
 			fileName = existingFiles.front; // Success
 		else
 			loger.error(`Found multiple source files in import paths matching module name `, moduleName,
-				`. Following files matched: `, existingFiles.join(", ") );
+				". Following files matched:\n", existingFiles.join(",\n") );
 
 		loger.write("loadModuleFromFile loading module from file: ", fileName);
 		string fileContent = cast(string) std.file.read(fileName);
