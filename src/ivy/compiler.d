@@ -370,7 +370,7 @@ class CompilerSymbolsCollector: AbstractNodeVisitor
 private:
 	CompilerModuleRepository _moduleRepo;
 	SymbolTableFrame[string] _moduleSymbols;
-	string[] _moduleStack;
+	string _mainModuleName;
 	SymbolTableFrame[] _frameStack;
 	LogerMethod _logerMethod;
 
@@ -380,9 +380,7 @@ public:
 		import std.range: back;
 		_moduleRepo = moduleRepo;
 		_logerMethod = logerMethod;
-		_moduleStack ~= mainModuleName;
-		_frameStack ~= new SymbolTableFrame(null);
-		_moduleSymbols[mainModuleName] = _frameStack.back;
+		_mainModuleName = mainModuleName;
 	}
 
 	version(IvyCompilerDebug)
@@ -642,16 +640,9 @@ public:
 	{
 		import std.range: popBack, empty, back;
 		if( auto modFramePtr = moduleName in _moduleSymbols ) {
-			_frameStack ~= *modFramePtr; // Module is analyzed already...
 			loger.internalAssert(*modFramePtr, "Cannot store imported symbols, because symbol table stack is null!");
 			return *modFramePtr;
 		} else {
-			_moduleStack ~= moduleName;
-			scope(exit) {
-				loger.internalAssert(!_moduleStack.empty, `Compiler directive collector module stack is empty!`);
-				_moduleStack.popBack(); // We will exit module when finish with it
-			}
-
 			// Try to open, parse and load symbols info from another module
 			IvyNode moduleTree = _moduleRepo.getModuleTree(moduleName);
 
@@ -729,15 +720,6 @@ public:
 		return Result( DirValueAttr!(true)(attrName, attrType, defaultValueExpr), false );
 	}
 
-	string currentModuleName() @property
-	{
-		import std.range: back, empty;
-		if( _moduleStack.empty )
-			return null;
-
-		return _moduleStack.back;
-	}
-
 	SymbolTableFrame[string] getModuleSymbols() @property
 	{
 		return _moduleSymbols;
@@ -750,9 +732,7 @@ public:
 
 	void run()
 	{
-		import std.range: back;
-		IvyNode ast = _moduleRepo.getModuleTree( _moduleStack.back );
-		ast.accept(this);
+		analyzeModuleSymbols(_mainModuleName);
 	}
 }
 
@@ -1681,6 +1661,11 @@ public:
 			writeln( `symbolLookup, _symbolTableStack symbols:` );
 			foreach( lvl, table; _symbolTableStack[] ) {
 				writeln( `	symbols lvl`, lvl, `: `, table._symbols );
+				if( table._moduleFrame ) {
+					writeln( `	module symbols lvl`, lvl, `: `, table._moduleFrame._symbols );
+				} else {
+					writeln( `	module frame lvl`, lvl, ` is null` );
+				}
 			}
 		}
 
@@ -1826,10 +1811,31 @@ public:
 		}
 		void visit(IBinaryExpression node)
 		{
+			import std.range: back;
+			import std.conv: to;
+
 			// Generate code that evaluates left and right parts of binary expression and get result on the stack
 			loger.internalAssert( node.leftExpr, "Left expr expected!" );
-			node.leftExpr.accept(this);
 			loger.internalAssert( node.rightExpr, "Right expr expected!" );
+
+			switch( node.operatorIndex )
+			{
+				case Operator.And, Operator.Or:
+				{
+					node.leftExpr.accept(this);
+					size_t jumpInstrIndex = addInstr(
+						node.operatorIndex == Operator.And? OpCode.JumpIfFalseOrPop: OpCode.JumpIfTrueOrPop
+					);
+					node.rightExpr.accept(this);
+
+					setInstrArg(jumpInstrIndex, _codeObjStack.back._instrs.length);
+					return;
+				}
+				default:
+					break; // Check out other operators
+			}
+
+			node.leftExpr.accept(this);
 			node.rightExpr.accept(this);
 
 			OpCode opcode;
@@ -1841,9 +1847,6 @@ public:
 				case Operator.Div: opcode = OpCode.Div; break;
 				case Operator.Mod: opcode = OpCode.Mod; break;
 				case Operator.Concat: opcode = OpCode.Concat; break;
-				case Operator.And: opcode = OpCode.And; break;
-				case Operator.Or: opcode = OpCode.Or; break;
-				//case Operator.Xor: opcode = OpCode.Xor; break;
 				case Operator.Equal: opcode = OpCode.Equal; break;
 				case Operator.NotEqual: opcode = OpCode.NotEqual; break;
 				case Operator.LT: opcode = OpCode.LT; break;
@@ -1851,7 +1854,7 @@ public:
 				case Operator.LTEqual: opcode = OpCode.LTEqual; break;
 				case Operator.GTEqual: opcode = OpCode.GTEqual; break;
 				default:
-					loger.internalAssert( false, "Unexpected binary operator type!" );
+					loger.internalAssert( false, "Unexpected binary operator type: ", (cast(Operator) node.operatorIndex) );
 			}
 
 			addInstr( opcode );

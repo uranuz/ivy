@@ -369,6 +369,7 @@ class HasDirInterpreter: INativeDirectiveInterpreter
 	override void interpret(Interpreter interp)
 	{
 		import std.conv: to;
+		import std.algorithm: canFind;
 		TDataNode collection = interp.getValue("collection");
 		TDataNode key = interp.getValue("key");
 		switch(collection.type)
@@ -379,8 +380,11 @@ class HasDirInterpreter: INativeDirectiveInterpreter
 				}
 				interp._stack ~= TDataNode(cast(bool)(key.str in collection));
 				break;
+			case DataNodeType.Array:
+				interp._stack ~= TDataNode(collection.array.canFind(key));
+				break;
 			default:
-				interp.loger.error(`Expected assoc array as first "has" directive attribute, but got: `, collection.type);
+				interp.loger.error(`Expected array or assoc array as first "has" directive attribute, but got: `, collection.type);
 				break;
 		}
 	}
@@ -846,37 +850,6 @@ public:
 					break;
 				}
 
-				// Logical binary operations
-				case OpCode.And, OpCode.Or, OpCode.Xor:
-				{
-					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected right operand, but exec stack is empty!" );
-					TDataNode rightVal = _stack.back;
-					_stack.popBack();
-
-					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode.to!string, " instruction. Expected left operand, but exec stack is empty!");
-					TDataNode leftVal = _stack.back;
-					loger.internalAssert(leftVal.type == DataNodeType.Boolean && leftVal.type == rightVal.type,
-						`Left and right values of arithmetic operation must have boolean type!` );
-
-					logical_op_switch:
-					switch( instr.opcode )
-					{
-						foreach( logicalOp; AliasSeq!(
-							tuple(OpCode.And, "&&"),
-							tuple(OpCode.Or, "||"),
-							tuple(OpCode.Xor, "^^")) )
-						{
-							case logicalOp[0]: {
-								mixin( `_stack.back = leftVal.boolean ` ~ logicalOp[1] ~ ` rightVal.boolean;` );
-								break logical_op_switch;
-							}
-						}
-						default:
-							loger.internalAssert(false, `This should never happen!`);
-					}
-					break;
-				}
-
 				// Comparision operations
 				case OpCode.LT, OpCode.GT, OpCode.LTEqual, OpCode.GTEqual:
 				{
@@ -1305,7 +1278,7 @@ public:
 					continue execution_loop;
 				}
 
-				case OpCode.JumpIfFalse:
+				case OpCode.JumpIfTrue, OpCode.JumpIfFalse, OpCode.JumpIfTrueOrPop, OpCode.JumpIfFalseOrPop:
 				{
 					import std.algorithm: canFind;
 					loger.internalAssert(!_stack.empty, `Cannot evaluate logical value, because stack is empty`);
@@ -1313,17 +1286,24 @@ public:
 						`Expected null, undef or boolean in logical context as jump condition`);
 					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 					TDataNode condNode = _stack.back;
-					_stack.popBack();
-					
-					if( condNode.type == DataNodeType.Boolean && condNode.boolean )
-					{
-						break;
+
+					bool jumpCond = DataNodeType.Boolean && condNode.boolean; // This is actual condition to test
+					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].canFind(instr.opcode) ) {
+						jumpCond = !jumpCond; // Invert condition if False family is used
 					}
-					else
+
+					if( [OpCode.JumpIfTrue, OpCode.JumpIfFalse].canFind(instr.opcode) || !jumpCond ) {
+						// Drop condition from _stack on JumpIfTrue, JumpIfFalse anyway
+						// But for JumpIfTrueOrPop, JumpIfFalseOrPop drop it only if jumpCond is false
+						_stack.popBack();
+					}
+
+					if( jumpCond )
 					{
 						pk = instr.arg;
 						continue execution_loop;
 					}
+					break;
 				}
 
 				case OpCode.PopTop:

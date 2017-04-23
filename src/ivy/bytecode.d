@@ -25,11 +25,6 @@ enum OpCode: ubyte {
 	UnaryPlus,
 	UnaryNot,
 
-	// Logical binary operations opcodes
-	And,
-	Or,
-	Xor,
-
 	// Comparision operations opcodes
 	LT,
 	GT,
@@ -59,6 +54,8 @@ enum OpCode: ubyte {
 	// Flow control opcodes
 	JumpIfTrue,
 	JumpIfFalse,
+	JumpIfFalseOrPop, // Used in "and"
+	JumpIfTrueOrPop, // Used in "or"
 	Jump,
 	Return,
 
