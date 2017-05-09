@@ -496,6 +496,25 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 	mixin BaseNativeDirInterpreterImpl!("empty");
 }
 
+class DumpScopeDirInterpreter: INativeDirectiveInterpreter
+{
+	import std.typecons: Tuple;
+
+	override void interpret(Interpreter interp)
+	{
+		import std.base64: Base64;
+		import std.range: back;
+		ubyte[] jsonStr = cast(ubyte[]) interp.currentFrame._dataDict.toJSONString();
+		interp._stack ~= TDataNode(cast(string) Base64.encode(jsonStr));
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.BodyAttr, Tuple!(ICompoundStatement, "ast", bool, "isNoscope")(null, true))
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("__dumpScope__");
+}
+
 import ivy.bytecode;
 
 class Interpreter
@@ -603,6 +622,21 @@ public:
 	{
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict);
 		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict, `, and modFrame `, (modFrame? `is not null`: `is null`));
+	}
+
+	ExecutionFrame currentFrame() @property
+	{
+		import std.range: empty, back, popBack;
+		
+		auto frameStackSlice = _frameStack[];
+		for( ; !_frameStack.empty; _frameStack.popBack() )
+		{
+			if( _frameStack.back.hasOwnScope ) {
+				return _frameStack.back;
+			}
+		}
+		loger.internalAssert(false, `Cannot get current execution frame`);
+		return null;
 	}
 
 	void removeFrame()
@@ -992,7 +1026,8 @@ public:
 						case DataNodeType.AssocArray:
 							loger.internalAssert(indexValue.type == DataNodeType.String,
 								"Cannot execute LoadSubscr instruction. Index value for assoc array aggregate must be string!");
-							loger.internalAssert(indexValue.str in aggr.assocArray, `Assoc array key must be present in assoc array`);
+							loger.internalAssert(indexValue.str in aggr.assocArray,
+								`Assoc array key "`, indexValue.str, `" must be present in assoc array`);
 							_stack ~= aggr.assocArray[indexValue.str];
 							break;
 						default:
@@ -1383,8 +1418,13 @@ public:
 					
 					DirAttrsBlock!(false)[] attrBlocks = callableObj.attrBlocks;
 					loger.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
-					loger.internalAssert(attrBlocks[$-1].kind == DirAttrKind.BodyAttr, `Last attr block definition expected to be BodyAttr, but got: `, attrBlocks[$-1].kind);
-					bool isNoscope = attrBlocks[$-1].bodyAttr.isNoscope;
+
+					bool isNoscope = false;
+					if( attrBlocks.length > 0 )
+					{
+						loger.internalAssert(attrBlocks[$-1].kind == DirAttrKind.BodyAttr, `Last attr block definition expected to be BodyAttr, but got: `, attrBlocks[$-1].kind);
+						isNoscope = attrBlocks[$-1].bodyAttr.isNoscope;
+					}
 
 					ExecutionFrame moduleFrame;
 					if( callableObj._codeObj ) {

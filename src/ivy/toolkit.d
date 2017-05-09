@@ -98,6 +98,7 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	dirInterps["typestr"] = new TypeStrDirInterpreter();
 	dirInterps["len"] = new LenDirInterpreter();
 	dirInterps["empty"] = new EmptyDirInterpreter();
+	dirInterps["__dumpScope__"] = new DumpScopeDirInterpreter();
 
 	// Main compiler phase that generates bytecode for modules
 	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config.compilerLoger);
