@@ -790,14 +790,15 @@ public:
 		
 		auto strRange = lexer.frontValue.save;
 
-		if( strRange.front != '\"' )
-			loger.error("Expected \"");
+		if( strRange.front != '\"' && strRange.front != '\'' )
+			loger.error("Expected \" or \' starting quoted string");
+		auto quoteChar = strRange.front;
 		strRange.popFront();
 		
 		auto clearStrRange = strRange.save;
 		size_t clearCount;
 		
-		while( !strRange.empty && strRange.front != '\"' )
+		while( !strRange.empty && strRange.front != quoteChar )
 		{
 			if( strRange.front == '\\' )
 			{
@@ -840,8 +841,8 @@ public:
 			strRange.popFront();
 		}
 
-		if( strRange.front != '\"' )
-			loger.error("Expected \" closing quoted string literal");
+		if( strRange.front != quoteChar )
+			loger.error("Expected end of quoted string literal");
 			
 		result ~= clearStrRange[0..clearCount].array; //Appending last part of string except last quote
 			

@@ -1908,13 +1908,15 @@ public:
 							while( !attrRange.empty )
 							{
 								IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
-								if( !keyValueAttr )
-								{
+								if( !keyValueAttr ) {
 									break; // We finished with key-value attributes
 								}
 
 								if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
-									loger.error( `Unexpected named attribute "` ~ keyValueAttr.name ~ `"` );
+									loger.error(`Unexpected named attribute "` ~ keyValueAttr.name ~ `"`);
+								
+								if( keyValueAttr.name in argsSet )
+									loger.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
 
 								// Add name of named argument into stack
 								size_t nameConstIndex = addConst( TDataNode(keyValueAttr.name) );
@@ -1940,7 +1942,7 @@ public:
 									{
 										// Add name of named argument into stack
 										size_t nameConstIndex = addConst( TDataNode(name) );
-										addInstr( OpCode.LoadConst, nameConstIndex );
+										addInstr(OpCode.LoadConst, nameConstIndex);
 										++stackItemsCount;
 
 										// Generate code to set default values
@@ -1953,8 +1955,8 @@ public:
 
 							// Add instruction to load value that consists of number of pairs in block and type of block
 							size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
-							size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
-							addInstr( OpCode.LoadConst, blockHeaderConstIndex );
+							size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) );
+							addInstr(OpCode.LoadConst, blockHeaderConstIndex);
 							++stackItemsCount; // We should count args block header
 							break;
 						}
@@ -1962,25 +1964,41 @@ public:
 						{
 							size_t argCount = 0;
 
-							DirAttrsBlock!(true) exprAttrsDef = dirAttrBlocks.front;
+							auto exprAttrDefs = dirAttrBlocks.front.exprAttrs[];
 							while( !attrRange.empty )
 							{
 								IExpression exprAttr = cast(IExpression) attrRange.front;
-								if( !exprAttr )
-								{
-									break; // We finished with value attributes
+								if( !exprAttr ) {
+									break; // We finished with positional attributes
 								}
+
+								if( exprAttrDefs.empty ) {
+									loger.error(`Got more positional arguments than expected!`);
+								}
+
 								exprAttr.accept(this);
 								++stackItemsCount;
 								++argCount;
 
-								attrRange.popFront();
+								attrRange.popFront(); exprAttrDefs.popFront();
+							}
+
+							while( !exprAttrDefs.empty )
+							{
+								IExpression defVal = exprAttrDefs.front.defaultValueExpr;
+								if( !defVal )
+									loger.error(`Positional attribute is not passed explicitly and has no default value`);
+
+								defVal.accept(this);
+								++stackItemsCount;
+								++argCount;
+								exprAttrDefs.popFront();
 							}
 
 							// Add instruction to load value that consists of number of positional arguments in block and type of block
-							size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr; // TODO: Change magic const to enum
-							size_t blockHeaderConstIndex = addConst( TDataNode( blockHeader ) );
-							addInstr( OpCode.LoadConst, blockHeaderConstIndex );
+							size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
+							size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) );
+							addInstr(OpCode.LoadConst, blockHeaderConstIndex);
 							++stackItemsCount; // We should count args block header
 							break;
 						}
