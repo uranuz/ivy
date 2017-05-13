@@ -1241,7 +1241,7 @@ public:
 		if( !stmtRange.empty )
 			compiler.loger.error(`Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere`);
 
-		ModuleObject modObject = compiler.getOrCompileModule(moduleNameExpr.name);
+		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
 
 		size_t modNameConstIndex = compiler.addConst(TDataNode(moduleNameExpr.name));
 		compiler.addInstr(OpCode.LoadConst, modNameConstIndex); // The first is for ImportModule
@@ -1279,7 +1279,7 @@ public:
 		if( !stmtRange.empty )
 			compiler.loger.error(`Not all attributes for directive "from" were parsed. Maybe ; is missing somewhere`);
 
-		ModuleObject modObject = compiler.getOrCompileModule(moduleNameExpr.name);
+		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
 
 		size_t modNameConstIndex = compiler.addConst(TDataNode(moduleNameExpr.name));
 		compiler.addInstr(OpCode.LoadConst, modNameConstIndex);

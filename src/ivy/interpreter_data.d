@@ -909,13 +909,10 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			}
 
 			import std.conv: text;
-			if( node.codeObject )
-			{
-				outRange.put( "<code object, size: " ~ node.codeObject._instrs.length.text ~ ">" );
-			}
-			else
-			{
-				outRange.put( "<code object (null)>" );
+			if( node.codeObject ) {
+				outRange.put("<code object, size: " ~ node.codeObject._instrs.length.text ~ ">");
+			} else {
+				outRange.put("<code object (null)>");
 			}
 
 			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
@@ -926,7 +923,11 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
 				outRange.put("\"");
 			}
-			outRange.put( "<callable object, " ~ node.callable._kind.to!string ~ ">" );
+			if( node.callable ) {
+				outRange.put("<callable object, " ~ node.callable._kind.to!string ~ ", " ~ node.callable._name ~ ">");
+			} else {
+				outRange.put("<callable object (null)>");
+			}
 			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
 				outRange.put("\"");
 			}

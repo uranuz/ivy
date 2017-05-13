@@ -496,23 +496,41 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 	mixin BaseNativeDirInterpreterImpl!("empty");
 }
 
-class DumpScopeDirInterpreter: INativeDirectiveInterpreter
+class ToJSONBase64DirInterpreter: INativeDirectiveInterpreter
 {
 	import std.typecons: Tuple;
 
 	override void interpret(Interpreter interp)
 	{
 		import std.base64: Base64;
-		import std.range: back;
-		ubyte[] jsonStr = cast(ubyte[]) interp.currentFrame._dataDict.toJSONString();
+		ubyte[] jsonStr = cast(ubyte[]) interp.getValue("value").toJSONString();
 		interp._stack ~= TDataNode(cast(string) Base64.encode(jsonStr));
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("toJSONBase64");
+}
+
+class ScopeDirInterpreter: INativeDirectiveInterpreter
+{
+	import std.typecons: Tuple;
+
+	override void interpret(Interpreter interp) {
+		interp.loger.internalAssert(interp.currentFrame, `Current frame is null!`);
+		interp._stack ~= interp.currentFrame._dataDict;
 	}
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
 		DirAttrsBlock!true(DirAttrKind.BodyAttr, Tuple!(ICompoundStatement, "ast", bool, "isNoscope")(null, true))
 	];
 
-	mixin BaseNativeDirInterpreterImpl!("__dumpScope__");
+	mixin BaseNativeDirInterpreterImpl!("scope");
 }
 
 import ivy.bytecode;
@@ -629,10 +647,10 @@ public:
 		import std.range: empty, back, popBack;
 		
 		auto frameStackSlice = _frameStack[];
-		for( ; !_frameStack.empty; _frameStack.popBack() )
+		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
-			if( _frameStack.back.hasOwnScope ) {
-				return _frameStack.back;
+			if( frameStackSlice.back.hasOwnScope ) {
+				return frameStackSlice.back;
 			}
 		}
 		loger.internalAssert(false, `Cannot get current execution frame`);
@@ -1039,7 +1057,7 @@ public:
 				// Load constant from programme data table into stack
 				case OpCode.LoadConst:
 				{
-					_stack ~= getModuleConst( instr.arg );
+					_stack ~= getModuleConst(instr.arg);
 					break;
 				}
 
@@ -1132,7 +1150,7 @@ public:
 					TDataNode varValue = _stack.back;
 					_stack.popBack();
 
-					TDataNode varNameNode = getModuleConstCopy( instr.arg );
+					TDataNode varNameNode = getModuleConstCopy(instr.arg);
 					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute `, instr.opcode, ` instruction. Variable name const must have string type!`);
 
 					
@@ -1148,7 +1166,7 @@ public:
 				// Loads data from local context frame variable by index of var name in module constants
 				case OpCode.LoadName:
 				{
-					TDataNode varNameNode = getModuleConstCopy( instr.arg );
+					TDataNode varNameNode = getModuleConstCopy(instr.arg);
 					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute LoadName instruction. Variable name operand must have string type!`);
 
 					_stack ~= getValue( varNameNode.str );
@@ -1219,7 +1237,6 @@ public:
 					foreach( name; symbolNames ) {
 						setValue( name, moduleFrame.getValue(name) );
 					}
-
 					break;
 				}
 
@@ -1415,6 +1432,7 @@ public:
 
 					CallableObject callableObj = _stack[ _stack.length - stackArgCount ].callable;
 					loger.internalAssert(callableObj, `Callable object is null!` );
+					loger.write("RunCallable name: ", callableObj._name);
 					
 					DirAttrsBlock!(false)[] attrBlocks = callableObj.attrBlocks;
 					loger.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
@@ -1544,9 +1562,7 @@ public:
 						loger.internalAssert(callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!`);
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
 						
-						if( !isNoscope ) {
-							this.removeFrame(); // Drop context from stack after end of execution
-						}
+						this.removeFrame(); // Drop frame from stack after end of execution
 					}
 
 					break;
