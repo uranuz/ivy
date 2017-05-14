@@ -1370,6 +1370,7 @@ class DefCompiler: IDirectiveCompiler
 		}
 
 		// Here should go commands to compile directive body
+		compiler.loger.internalAssert(bodyStatement, `Directive definition body is null`);
 
 		size_t codeObjIndex;
 		{
