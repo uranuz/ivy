@@ -3,31 +3,6 @@ module ivy.interpreter_data;
 import std.exception: enforceEx;
 import std.traits;
 
-enum DataNodeType { Undef, Null, Boolean, Integer, Floating, String, Array, AssocArray, CodeObject, Callable, ExecutionFrame, DataNodeRange };
-
-class DataNodeException : Exception
-{
-	this(string msg, int line = 0, int pos = 0)
-	{
-// 		if(line)
-// 			super(text(msg, " (Line ", line, ":", pos, ")"));
-// 		else
-			super(msg);
-	}
-	this(string msg, string file, size_t line)
-	{
-		super(msg, file, line);
-	}
-}
-
-interface IClassObject
-{
-	@property int typeId();
-	@property string typeName();
-	//override string toString();
-
-}
-
 /**
 	Module is inner runtime representation of source file.
 	It consists of list of constants, list of code objects and other data
@@ -461,11 +436,34 @@ public:
 	}
 }
 
-import ivy.interpreter: ExecutionFrame;
+interface IClassNode
+{
+	IDataNodeRange opSlice();
+}
+
+enum DataNodeType {
+	Undef, Null, Boolean, Integer, Floating, String, DateTime, Array, AssocArray, ClassNode,
+	CodeObject, Callable, ExecutionFrame, DataNodeRange
+};
+
+class DataNodeException : Exception
+{
+	this(string msg, int line = 0, int pos = 0) {
+		super(msg);
+	}
+	this(string msg, string file, size_t line)
+	{
+		super(msg, file, line);
+	}
+}
 
 struct DataNode(S)
 {
+	import std.datetime: SysTime;
+	import ivy.interpreter: ExecutionFrame;
+
 	alias String = S;
+	alias TDataNode = DataNode!(S);
 
 	struct Storage {
 		union {
@@ -474,7 +472,9 @@ struct DataNode(S)
 			double floating;
 			String str;
 			DataNode[] array;
+			SysTime dateTime;
 			DataNode[String] assocArray;
+			IClassNode classNode;
 			CodeObject codeObject;
 			CallableObject callable;
 			ExecutionFrame execFrame;
@@ -482,8 +482,7 @@ struct DataNode(S)
 		}
 	}
 
-	this(T)(auto ref T value)
-	{
+	this(T)(auto ref T value) {
 		assign(value);
 	}
 
@@ -492,56 +491,61 @@ struct DataNode(S)
 
 	bool boolean() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.Boolean, "DataNode is not boolean");
+		enforceEx!DataNodeException(type == DataNodeType.Boolean, "DataNode is not boolean");
 		return storage.boolean;
 	}
 	
-	void boolean(bool val) @property
-	{
+	void boolean(bool val) @property {
 		assign(val);
 	}
 	
 	long integer() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.Integer, "DataNode is not integer");
+		enforceEx!DataNodeException(type == DataNodeType.Integer, "DataNode is not integer");
 		return storage.integer;
 	}
 	
-	void integer(long val) @property
-	{
+	void integer(long val) @property {
 		assign(val);
 	}
 	
 	double floating() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.Floating, "DataNode is not floating");
+		enforceEx!DataNodeException(type == DataNodeType.Floating, "DataNode is not floating");
 		return storage.floating;
 	}
 	
-	void floating(double val) @property
-	{
+	void floating(double val) @property {
 		assign(val);
 	}
 	
 	String str() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.String, "DataNode is not string");
+		enforceEx!DataNodeException(type == DataNodeType.String, "DataNode is not string");
 		return storage.str;
 	}
 	
-	void str(String val) @property
-	{
+	void str(String val) @property {
 		assign(val);
 	}
-	
+
+	SysTime dateTime() @property
+	{
+		enforceEx!DataNodeException(type == DataNodeType.DateTime, "DataNode is not DateTime");
+		return storage.dateTime;
+	}
+
+	void dateTime(SysTime val) @property {
+		assign(val);
+	}
+
 	ref DataNode[] array() @property
 	{
-		enforceEx!DataNodeException( type == DataNodeType.Array, "DataNode is not array");
+		enforceEx!DataNodeException(type == DataNodeType.Array, "DataNode is not array");
 		return storage.array;
 	}
 	
-	void array(DataNode[] val) @property
-	{
+	void array(DataNode[] val) @property {
 		assign(val);
 	}
 	
@@ -551,8 +555,16 @@ struct DataNode(S)
 		return storage.assocArray;
 	}
 	
-	void assocArray(DataNode[String] val) @property
-	{
+	void assocArray(DataNode[String] val) @property {
+		assign(val);
+	}
+
+	IClassNode classNode() @property {
+		enforceEx!DataNodeException( type == DataNodeType.ClassNode, "DataNode is not class node");
+		return storage.classNode;
+	}
+
+	void classNode(IClassNode val) @property {
 		assign(val);
 	}
 
@@ -562,8 +574,7 @@ struct DataNode(S)
 		return storage.codeObject;
 	}
 
-	void codeObject(CodeObject val) @property
-	{
+	void codeObject(CodeObject val) @property {
 		assign(val);
 	}
 
@@ -573,8 +584,7 @@ struct DataNode(S)
 		return storage.callable;
 	}
 
-	void callable(CallableObject val) @property
-	{
+	void callable(CallableObject val) @property {
 		assign(val);
 	}
 
@@ -584,8 +594,7 @@ struct DataNode(S)
 		return storage.execFrame;
 	}
 
-	void execFrame(ExecutionFrame val) @property
-	{
+	void execFrame(ExecutionFrame val) @property {
 		assign(val);
 	}
 
@@ -595,13 +604,11 @@ struct DataNode(S)
 		return storage.dataRange;
 	}
 
-	void dataRange(IDataNodeRange val) @property
-	{
+	void dataRange(IDataNodeRange val) @property {
 		assign(val);
 	}
 	
-	DataNodeType type() @property
-	{
+	DataNodeType type() @property {
 		return typeTag;
 	}
 	
@@ -635,6 +642,16 @@ struct DataNode(S)
 			typeTag = DataNodeType.Floating;
 			storage.floating = arg;
 		}
+		else static if( is( T : SysTime ) )
+		{
+			typeTag = DataNodeType.DateTime;
+			storage.dateTime = arg;
+		}
+		else static if( is( T : IClassNode ) )
+		{
+			typeTag = DataNodeType.ClassNode;
+			storage.classNode = arg;
+		}
 		else static if( is( T : CodeObject ) )
 		{
 			typeTag = DataNodeType.CodeObject;
@@ -658,9 +675,9 @@ struct DataNode(S)
 		else static if( is(T : Value[Key], Key, Value) )
 		{
 			static assert(is(Key : String), "AA key must be string");
-				typeTag = DataNodeType.AssocArray;
-			static if(is(Value : DataNode)) 
-			{
+			
+			typeTag = DataNodeType.AssocArray;
+			static if(is(Value : DataNode)) {
 				storage.assocArray = arg;
 			}
 			else
@@ -674,8 +691,7 @@ struct DataNode(S)
 		else static if( isArray!T )
 		{
 			typeTag = DataNodeType.Array;
-			static if( is(ElementEncodingType!T : DataNode) )
-			{
+			static if( is(ElementEncodingType!T : DataNode) ) {
 				storage.array = arg;
 			}
 			else
@@ -686,10 +702,25 @@ struct DataNode(S)
 				storage.array = new_arg;
 			}
 		}
-		else static if(is(T : DataNode))
+		else static if(is(T : TDataNode))
 		{
 			typeTag = arg.type;
-			storage = arg.storage;
+			final switch(typeTag)
+			{
+				case DataNodeType.Undef, DataNodeType.Null:  break;
+				case DataNodeType.Boolean: storage.boolean = arg.boolean; break;
+				case DataNodeType.Integer: storage.integer = arg.integer; break;
+				case DataNodeType.Floating: storage.floating = arg.floating; break;
+				case DataNodeType.String: storage.str = arg.str; break;
+				case DataNodeType.DateTime: storage.dateTime = arg.dateTime; break;
+				case DataNodeType.Array: storage.array = arg.array; break;
+				case DataNodeType.AssocArray: storage.assocArray = arg.assocArray; break;
+				case DataNodeType.ClassNode: storage.classNode = arg.classNode; break;
+				case DataNodeType.CodeObject: storage.codeObject = arg.codeObject; break;
+				case DataNodeType.Callable: storage.callable = arg.callable; break;
+				case DataNodeType.ExecutionFrame: storage.execFrame = arg.execFrame; break;
+				case DataNodeType.DataNodeRange: storage.dataRange = arg.dataRange; break;
+			}
 		}
 		else
 			static assert(false, `unable to convert type "` ~ T.stringof ~ `" to parse node`);
@@ -868,6 +899,17 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 				outRange.put("\"");
 			}
 			break;
+		case DateTime:
+			static if( renderType == DataRenderType.Text ) {
+				outRange.put(node.dateTime.toISOExtString());
+			}
+			else
+			{
+				outRange.put("\"");
+				_writeEscapedString(node.dateTime.toISOExtString(), outRange);
+				outRange.put("\"");
+			}
+			break;
 		case Array:
 			static if( renderType == DataRenderType.Text ) {
 				foreach( i, ref el; node.array ) {
@@ -902,6 +944,22 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 				++i;
 			}
 			outRange.put("}");
+			break;
+		case ClassNode:
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
+			}
+
+			import std.conv: text;
+			if( node.classNode ) {
+				outRange.put("<class node>");
+			} else {
+				outRange.put("<class node (null)>");
+			}
+
+			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+				outRange.put("\"");
+			}
 			break;
 		case CodeObject:
 			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
@@ -957,7 +1015,7 @@ TDataNode deeperCopy(TDataNode)(auto ref TDataNode node)
 {
 	final switch( node.type ) with( DataNodeType )
 	{
-		case Undef, Null, Boolean, Integer, Floating:
+		case Undef, Null, Boolean, Integer, Floating, DateTime:
 			// These types of nodes are value types, so make plain copy
 			return node;
 		case String:
@@ -981,6 +1039,8 @@ TDataNode deeperCopy(TDataNode)(auto ref TDataNode node)
 			}
 			return TDataNode(newAA);
 		}
+		case ClassNode:
+			assert( false, `Getting of deeper copy for class node is not implemented for now` );
 		case CodeObject:
 			// We don't do deeper copy of code object, because it should always be used as constant
 			return node;

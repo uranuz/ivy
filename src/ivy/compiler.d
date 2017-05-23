@@ -239,14 +239,38 @@ public:
 
 class SymbolTableFrame
 {
+	alias LogerMethod = void delegate(LogInfo);
 	Symbol[string] _symbols;
 	SymbolTableFrame _moduleFrame;
 	SymbolTableFrame[size_t] _childFrames; // size_t - is index of scope start in source code?
+	LogerMethod _logerMethod;
 
 public:
-	this(SymbolTableFrame moduleFrame)
+	this(SymbolTableFrame moduleFrame, LogerMethod logerMethod)
 	{
 		_moduleFrame = moduleFrame;
+		_logerMethod = logerMethod;
+	}
+
+	version(IvyCompilerDebug)
+		enum isDebugMode = true;
+	else
+		enum isDebugMode = false;
+
+	static struct LogerProxy {
+		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
+		SymbolTableFrame table;
+
+		void sendLogInfo(LogInfoType logInfoType, string msg) {
+			if( table._logerMethod is null ) {
+				return; // There is no loger method, so get out of here
+			}
+			table._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+		}
+	}
+
+	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+		return LogerProxy(func, file, line, this);
 	}
 
 	Symbol localLookup(string name)
@@ -256,44 +280,40 @@ public:
 
 	Symbol lookup(string name)
 	{
-		debug import std.stdio;
-		
-		debug writeln(`SymbolTableFrame: Starting compiler symbol lookup: `, name);
+		loger.write(`SymbolTableFrame: Starting compiler symbol lookup: `, name);
 
 		if( Symbol* symb = name in _symbols ) {
-			debug writeln(`SymbolTableFrame: Symbol: `, name, ` found in frame`);
+			loger.write(`SymbolTableFrame: Symbol: `, name, ` found in frame`);
 			return *symb;
 		}
 
-		debug writeln(`SymbolTableFrame: Couldn't find symbol in frame: `, name);
+		loger.write(`SymbolTableFrame: Couldn't find symbol in frame: `, name);
 
 		// We need to try to look in module symbol table
 		if( Symbol symb = moduleLookup(name) ) {
-			debug writeln(`SymbolTableFrame: Symbol found in imported modules: `, name);
+			loger.write(`SymbolTableFrame: Symbol found in imported modules: `, name);
 			return symb;
 		}
 
-		debug writeln(`SymbolTableFrame: Couldn't find symbol in imported modules: `, name);
+		loger.write(`SymbolTableFrame: Couldn't find symbol in imported modules: `, name);
 
 		if( !_moduleFrame ) {
-			debug writeln(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope failed, because _moduleFrame is null`);
+			loger.write(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope failed, because _moduleFrame is null`);
 			return null;
 		}
 
-		debug writeln(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope!`);
+		loger.write(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope!`);
 		return _moduleFrame.lookup(name);
 	}
 
 	Symbol moduleLookup(string name)
 	{
-		debug import std.stdio;
-		
 		import std.algorithm: splitter;
 		import std.string: join;
 		import std.range: take, drop;
 		import std.array: array;
 
-		debug writeln(`SymbolTableFrame: Attempt to perform imported modules lookup for symbol: `, name);
+		loger.write(`SymbolTableFrame: Attempt to perform imported modules lookup for symbol: `, name);
 
 		auto splittedName = splitter(name, ".").array;
 		for( size_t i = 1; i <= splittedName.length; ++i )
@@ -326,10 +346,10 @@ public:
 
 	SymbolTableFrame newChildFrame(size_t sourceIndex)
 	{
-		assert(sourceIndex !in _childFrames, `Child frame already exists!`);
+		loger.internalAssert(sourceIndex !in _childFrames, `Child frame already exists!`);
 
 		// For now consider if this frame has no module frame - so it is module frame itself
-		SymbolTableFrame child = new SymbolTableFrame(_moduleFrame? _moduleFrame: this);
+		SymbolTableFrame child = new SymbolTableFrame(_moduleFrame? _moduleFrame: this, _logerMethod);
 		_childFrames[sourceIndex] = child;
 		return child;
 	}
@@ -649,7 +669,7 @@ public:
 			if( !moduleTree )
 				loger.error(`Couldn't load module: `, moduleName);
 
-			SymbolTableFrame moduleTable = new SymbolTableFrame(null);
+			SymbolTableFrame moduleTable = new SymbolTableFrame(null, _logerMethod);
 			_moduleSymbols[moduleName] = moduleTable;
 			_frameStack ~= moduleTable;
 			scope(exit) {
@@ -875,7 +895,6 @@ class IfCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		debug import std.stdio: writeln;
 		if( !statement || statement.name != "if" )
 			compiler.loger.error(`Expected "if" directive statement!`);
 
@@ -895,7 +914,7 @@ class IfCompiler: IDirectiveCompiler
 
 		while( !stmtRange.empty )
 		{
-			debug writeln(`IfCompiler, stmtRange.front: `, stmtRange.front);
+			compiler.loger.write(`IfCompiler, stmtRange.front: `, stmtRange.front);
 			INameExpression keywordExpr = stmtRange.takeFrontAs!INameExpression("'elif' or 'else' keyword expected");
 			if( keywordExpr.name == "elif" )
 			{
@@ -1457,7 +1476,7 @@ public:
 		_logerMethod = logerMethod;
 		_moduleRepo = moduleRepo;
 		_modulesSymbolTables = symbolTables;
-		_globalSymbolTable = new SymbolTableFrame(null);
+		_globalSymbolTable = new SymbolTableFrame(null, _logerMethod);
 
 		// Add core directives set:
 		_dirCompilers["var"] = new VarCompiler();
@@ -1653,19 +1672,18 @@ public:
 	Symbol symbolLookup(string name)
 	{
 		import std.range: empty, back;
-		debug import std.stdio: writeln;
 		loger.internalAssert( !_symbolTableStack.empty, `Cannot look for symbol, because symbol table stack is empty` );
 		loger.internalAssert( _symbolTableStack.back, `Cannot look for symbol, current symbol table frame is null` );
 
 		Symbol symb = _symbolTableStack.back.lookup(name);
 		debug {
-			writeln( `symbolLookup, _symbolTableStack symbols:` );
+			loger.write(`symbolLookup, _symbolTableStack symbols:`);
 			foreach( lvl, table; _symbolTableStack[] ) {
-				writeln( `	symbols lvl`, lvl, `: `, table._symbols );
+				loger.write(`	symbols lvl`, lvl, `: `, table._symbols);
 				if( table._moduleFrame ) {
-					writeln( `	module symbols lvl`, lvl, `: `, table._moduleFrame._symbols );
+					loger.write(`	module symbols lvl`, lvl, `: `, table._moduleFrame._symbols);
 				} else {
-					writeln( `	module frame lvl`, lvl, ` is null` );
+					loger.write(`	module frame lvl`, lvl, ` is null`);
 				}
 			}
 		}

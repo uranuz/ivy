@@ -16,18 +16,13 @@ public:
 	{
 		super(msg, file, line, next);
 	}
-
-}
-
-void interpretError(string msg, string file = __FILE__, size_t line = __LINE__)
-{
-	throw new IvyInterpretException(msg, file, line);
 }
 
 enum FrameSearchMode { get, tryGet, set, setWithParents };
 
 class ExecutionFrame
 {
+	alias LogerMethod = void delegate(LogInfo);
 //private:
 	CallableObject _callableObj;
 
@@ -39,57 +34,83 @@ class ExecutionFrame
 	TDataNode _dataDict;
 
 	ExecutionFrame _moduleFrame;
+
+	// Loger method for used to send error and debug messages
+	LogerMethod _logerMethod;
 	
 public:
-	this(CallableObject callableObj, ExecutionFrame modFrame)
+	this(CallableObject callableObj, ExecutionFrame modFrame, LogerMethod logerMethod)
 	{
 		_callableObj = callableObj;
 		_moduleFrame = modFrame;
 
 		TDataNode[string] emptyDict;
 		_dataDict = emptyDict;
+		_logerMethod = logerMethod;
 	}
 
-	this(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
+	this(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, LogerMethod logerMethod)
 	{
 		_callableObj = callableObj;
 		_moduleFrame = modFrame;
 		_dataDict = dataDict;
+		_logerMethod = logerMethod;
 	}
 
-	TDataNode getValue( string varName )
+	version(IvyInterpreterDebug)
+		enum isDebugMode = true;
+	else
+		enum isDebugMode = false;
+
+	static struct LogerProxy {
+		mixin LogerProxyImpl!(IvyInterpretException, isDebugMode);
+		ExecutionFrame frame;
+
+		void sendLogInfo(LogInfoType logInfoType, string msg) {
+			if( frame._logerMethod is null ) {
+				return; // There is no loger method, so get out of here
+			}
+
+			frame._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+		}
+	}
+
+	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+		return LogerProxy(func, file, line, this);
+	}
+
+	TDataNode getValue(string varName)
 	{
 		TDataNode* nodePtr = findValue!(FrameSearchMode.get)(varName);
 		if( nodePtr is null )
-			interpretError( "VariableTable: Cannot find variable with name: " ~ varName );
+			loger.error( "VariableTable: Cannot find variable with name: " ~ varName );
 		return *nodePtr;
 	}
 	
-	bool canFindValue( string varName )
+	bool canFindValue(string varName)
 	{
 		return cast(bool)( findValue!(FrameSearchMode.tryGet)(varName) );
 	}
 	
-	DataNodeType getDataNodeType( string varName )
+	DataNodeType getDataNodeType(string varName)
 	{
 		TDataNode* nodePtr = findValue!(FrameSearchMode.get)(varName);
 		if( nodePtr is null )
-			interpretError( "VariableTable: Cannot find variable with name: " ~ varName );
+			loger.error("VariableTable: Cannot find variable with name: " ~ varName);
 		return nodePtr.type;
 	}
 
 	// Basic method used to search symbols in context
-	TDataNode* findLocalValue(FrameSearchMode mode)( string varName )
+	TDataNode* findLocalValue(FrameSearchMode mode)(string varName)
 	{
-		debug import std.stdio: writeln;
 		import std.conv: text;
 		import std.range: empty, front, popFront;
 		import std.array: split;
 
-		debug writeln( `Call ExecutionFrame.findLocalValue with varName: `, varName );
+		loger.write(`Call ExecutionFrame.findLocalValue with varName: `, varName);
 
 		if( varName.empty )
-			interpretError( "VariableTable: Variable name cannot be empty" );
+			loger.error( "VariableTable: Variable name cannot be empty" );
 
 		TDataNode* nodePtr = &_dataDict;
 		if( _dataDict.type != DataNodeType.AssocArray )
@@ -97,7 +118,7 @@ public:
 			static if( mode == FrameSearchMode.tryGet ) {
 				return null;
 			} else {
-				interpretError( "VariableTable: cannot find variable: " ~ varName ~ " in execution frame, because callable doesn't have it's on scope!" );
+				loger.error("VariableTable: cannot find variable: " ~ varName ~ " in execution frame, because callable doesn't have it's on scope!");
 			}
 		}
 
@@ -106,26 +127,26 @@ public:
 		{
 			if( nodePtr.type == DataNodeType.AssocArray )
 			{
-				debug writeln( `ExecutionFrame.findLocalValue. Search: `, nameSplitted.front, ` in assoc array` );
+				loger.write(`ExecutionFrame.findLocalValue. Search: `, nameSplitted.front, ` in assoc array`);
 				if( TDataNode* tmpNodePtr = nameSplitted.front in nodePtr.assocArray )
 				{
-					debug writeln( `ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, ` found in assoc array` );
+					loger.write(`ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, ` found in assoc array`);
 					nodePtr = tmpNodePtr;
 				}
 				else
 				{
-					debug writeln( `ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, ` NOT found in assoc array` );
+					loger.write(`ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, ` NOT found in assoc array`);
 					static if( mode == FrameSearchMode.setWithParents ) {
 						nodePtr.assocArray[nameSplitted.front] = (TDataNode[string]).init;
 						nodePtr = nameSplitted.front in nodePtr.assocArray;
-						debug writeln( `ExecutionFrame.findLocalValue(withParents=true). Creating node: `, nameSplitted.front );
+						loger.write(`ExecutionFrame.findLocalValue(withParents=true). Creating node: `, nameSplitted.front);
 					} else static if( mode == FrameSearchMode.set ) {
 						if( nameSplitted.length == 1 ) {
 							nodePtr.assocArray[nameSplitted.front] = TDataNode.init;
-							debug writeln( `ExecutionFrame.findLocalValue. Creating node: `, nameSplitted.front );
+							loger.write(`ExecutionFrame.findLocalValue. Creating node: `, nameSplitted.front);
 							return nameSplitted.front in nodePtr.assocArray;
 						} else {
-							interpretError( `Cannot set value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!` );
+							loger.error(`Cannot set value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
 						}
 					} else static if( mode == FrameSearchMode.tryGet ) {
 						return null;
@@ -133,9 +154,9 @@ public:
 						if( nameSplitted.length == 1 ) {
 							return null;
 						} else {
-							//debug writeln( `ExecutionFrame.findLocalValue, searchedNode: `, nodePtr.assocArray );
+							//loger.write(`ExecutionFrame.findLocalValue, searchedNode: `, nodePtr.assocArray);
 							return null;
-							//interpretError( `Cannot find value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!` );
+							//loger.error(`Cannot find value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
 						}
 						
 					}
@@ -143,13 +164,13 @@ public:
 			}
 			else if( nodePtr.type == DataNodeType.ExecutionFrame )
 			{
-				debug writeln( `ExecutionFrame.findLocalValue. Search: `, nameSplitted.front, ` in execution frame` );
+				loger.write(`ExecutionFrame.findLocalValue. Search: `, nameSplitted.front, ` in execution frame`);
 				if( !nodePtr.execFrame )
 				{
 					static if( mode == FrameSearchMode.tryGet ) {
 						return null;
 					} else {
-						interpretError( `Cannot find value, because execution frame is null!!!` );
+						loger.error(`Cannot find value, because execution frame is null!!!`);
 					}
 				}
 
@@ -158,23 +179,23 @@ public:
 					static if( mode == FrameSearchMode.tryGet ) {
 						return null;
 					} else {
-						interpretError( `Cannot find value, because execution frame data dict is not of assoc array type!!!` );
+						loger.error(`Cannot find value, because execution frame data dict is not of assoc array type!!!`);
 					}
 				}
 					
 				nodePtr = nameSplitted.front in nodePtr.execFrame._dataDict.assocArray;
-				debug writeln( `ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, (nodePtr ? ` found` : ` NOT found`) ,` in execution frame` );
+				loger.write(`ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, (nodePtr ? ` found` : ` NOT found`) ,` in execution frame`);
 			}
 			else
 			{
-				debug writeln( `ExecutionFrame.findLocalValue. Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type` );
+				loger.write(`ExecutionFrame.findLocalValue. Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type`);
 				return null;
 			}
 			
 			nameSplitted.popFront();
 			if( nodePtr is null )
 			{
-				debug writeln( `ExecutionFrame.findlocalValue. Got empty node at end of iteration` );
+				loger.write(`ExecutionFrame.findlocalValue. Got empty node at end of iteration`);
 				return null;
 			}
 		}
@@ -184,43 +205,40 @@ public:
 
 	TDataNode* findValue(FrameSearchMode mode)(string varName)
 	{
-		debug import std.stdio: writeln;
-		debug writeln( `Call ExecutionFrame.findValue with varName: `, varName );
+		loger.write(`Call ExecutionFrame.findValue with varName: `, varName);
 
 		TDataNode* nodePtr = findLocalValue!(mode)(varName);
 		if( nodePtr )
 			return nodePtr;
 		
-		debug writeln( `Call ExecutionFrame.findValue. No varName: `, varName, ` in exec frame. Try to find in module frame` );
+		loger.write(`Call ExecutionFrame.findValue. No varName: `, varName, ` in exec frame. Try to find in module frame`);
 
 		if( _moduleFrame )
 			return _moduleFrame.findLocalValue!(mode)(varName);
 
-		debug writeln( `Call ExecutionFrame.findValue. Cannot find: `, varName, ` in module exec frame. Module frame is null!` );
+		loger.write(`Call ExecutionFrame.findValue. Cannot find: `, varName, ` in module exec frame. Module frame is null!`);
 		
 		return null;
 	}
 
-	void setValue( string varName, TDataNode value )
+	void setValue(string varName, TDataNode value)
 	{
-		debug import std.stdio: writeln;
-		debug writeln( `Call ExecutionFrame.setValue with varName: `, varName, ` and value: `, value );
+		loger.write(`Call ExecutionFrame.setValue with varName: `, varName, ` and value: `, value);
 
 		TDataNode* valuePtr = findValue!(FrameSearchMode.set)(varName);
 		if( valuePtr is null )
-			interpretError( `Failed to set variable: ` ~ varName );
+			loger.error(`Failed to set variable: ` ~ varName);
 
 		*valuePtr = value;
 	}
 
-	void setValueWithParents( string varName, TDataNode value )
+	void setValueWithParents(string varName, TDataNode value)
 	{
-		debug import std.stdio: writeln;
-		debug writeln( `Call ExecutionFrame.setValueWithParents with varName: `, varName, ` and value: `, value );
+		loger.write(`Call ExecutionFrame.setValueWithParents with varName: `, varName, ` and value: `, value);
 		
 		TDataNode* valuePtr = findValue!(FrameSearchMode.setWithParents)(varName);
 		if( valuePtr is null )
-			interpretError( `Failed to set variable: ` ~ varName );
+			loger.error(`Failed to set variable: ` ~ varName);
 
 		*valuePtr = value;
 	}
@@ -533,6 +551,51 @@ class ScopeDirInterpreter: INativeDirectiveInterpreter
 	mixin BaseNativeDirInterpreterImpl!("scope");
 }
 
+class DateTimeGetDirInterpreter: INativeDirectiveInterpreter
+{
+	import std.typecons: Tuple;
+	import std.datetime: SysTime;
+
+	override void interpret(Interpreter interp) {
+		TDataNode value = interp.getValue("value");
+		TDataNode field = interp.getValue("field");
+
+		if( value.type !=  DataNodeType.DateTime ) {
+			interp.loger.error(`Expected DateTime as first argument in dtGet!`);
+		}
+		if( field.type !=  DataNodeType.String ) {
+			interp.loger.error(`Expected string as second argument in dtGet!`);
+		}
+
+		SysTime dt = value.dateTime;
+		switch( field.str )
+		{
+			case "year": interp._stack ~= TDataNode(dt.year); break;
+			case "month": interp._stack ~= TDataNode(dt.month); break;
+			case "day": interp._stack ~= TDataNode(dt.day); break;
+			case "hour": interp._stack ~= TDataNode(dt.hour); break;
+			case "minute": interp._stack ~= TDataNode(dt.minute); break;
+			case "second": interp._stack ~= TDataNode(dt.second); break;
+			case "millisecond": interp._stack ~= TDataNode(dt.fracSecs.split().msecs); break;
+			case "dayOfWeek": interp._stack ~= TDataNode(cast(int) dt.dayOfWeek); break;
+			case "dayOfYear": interp._stack ~= TDataNode(dt.dayOfYear); break;
+			case "utcMinuteOffset" : interp._stack ~= TDataNode(dt.utcOffset.total!("minutes")); break;
+			default:
+				interp.loger.error("Unexpected date field specifier: ", field.str);
+		}
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any"),
+			DirValueAttr!(true)("field", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("dtGet");
+}
+
 import ivy.bytecode;
 
 class Interpreter
@@ -577,7 +640,7 @@ public:
 		rootCallableObj._name = "__main__";
 		loger.write(`Iterpreter ctor: rootCallableObj._codeObj._moduleObj: `, rootCallableObj._codeObj._moduleObj._name);
 
-		_globalFrame = new ExecutionFrame(null, null);
+		_globalFrame = new ExecutionFrame(null, null, _logerMethod);
 		loger.write(`Iterpreter ctor 2: _globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
@@ -632,13 +695,13 @@ public:
 
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame)
 	{
-		_frameStack ~= new ExecutionFrame(callableObj, modFrame);
+		_frameStack ~= new ExecutionFrame(callableObj, modFrame, _logerMethod);
 		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` without dataDict, and modFrame `, (modFrame? `is not null`: `is null`));
 	}
 
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
 	{
-		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict);
+		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict, _logerMethod);
 		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict, `, and modFrame `, (modFrame? `is not null`: `is null`));
 	}
 
@@ -670,7 +733,7 @@ public:
 		if( modName !in _moduleFrames )
 		{
 			loger.write(`There is no execution frame for module: `, modName, `, creating new one`);
-			_moduleFrames[modName] = new ExecutionFrame(null, _globalFrame);
+			_moduleFrames[modName] = new ExecutionFrame(null, _globalFrame, _logerMethod);
 		} else {
 			loger.write(`Getting existing execution frame for module: `, modName);
 		}
@@ -766,14 +829,13 @@ public:
 		if( valuePtr is null )
 		{
 			debug {
-				import std.stdio: writeln;
 				foreach( i, frame; _frameStack[] )
 				{
-					writeln( `Scope frame lvl `, i, `, _dataDict: `, frame._dataDict );
+					loger.write(`Scope frame lvl `, i, `, _dataDict: `, frame._dataDict);
 					if( frame._moduleFrame ) {
-						writeln( `Scope frame lvl `, i, `, _moduleFrame._dataDict: `, frame._moduleFrame._dataDict );
+						loger.write(`Scope frame lvl `, i, `, _moduleFrame._dataDict: `, frame._moduleFrame._dataDict);
 					} else {
-						writeln( `Scope frame lvl `, i, `, _moduleFrame is null` );
+						loger.write(`Scope frame lvl `, i, `, _moduleFrame is null`);
 					}
 				}
 			}
@@ -1246,9 +1308,15 @@ public:
 					import std.algorithm: canFind;
 					loger.internalAssert(!_stack.empty, `Expected aggregate type for loop, but empty execution stack found`);
 					loger.write(`GetDataRange begin _stack: `, _stack);
-					loger.internalAssert(
-						[DataNodeType.Array, DataNodeType.AssocArray, DataNodeType.DataNodeRange].canFind(_stack.back.type),
-						`Expected array or assoc array as loop aggregate, but got: `, _stack.back.type);
+					loger.internalAssert([
+							DataNodeType.Array,
+							DataNodeType.AssocArray,
+							DataNodeType.DataNodeRange,
+							DataNodeType.ClassNode
+						].canFind(_stack.back.type),
+						`Expected array or assoc array as loop aggregate, but got: `,
+						_stack.back.type
+					);
 
 					TDataNode dataRange;
 					switch( _stack.back.type )
@@ -1256,6 +1324,12 @@ public:
 						case DataNodeType.Array:
 						{
 							dataRange = new ArrayRange(_stack.back.array);
+							break;
+						}
+						case DataNodeType.ClassNode:
+						{
+							loger.internalAssert(_stack.back.classNode, "Aggregate class node for loop is null!");
+							dataRange = TDataNode(_stack.back.classNode[]);
 							break;
 						}
 						case DataNodeType.AssocArray:
@@ -1401,14 +1475,13 @@ public:
 					_stack ~= TDataNode(); // We should return something
 
 					debug {
-						import std.stdio: writeln;
 						foreach( lvl, frame; _frameStack )
 						{
-							writeln(`LoadDirective, frameStack lvl `, lvl, ` dataDict: `, frame._dataDict);
+							loger.write(`LoadDirective, frameStack lvl `, lvl, ` dataDict: `, frame._dataDict);
 							if( frame._moduleFrame ) {
-								writeln(`LoadDirective, frameStack lvl `, lvl, ` moduleFrame.dataDict: `, frame._dataDict);
+								loger.write(`LoadDirective, frameStack lvl `, lvl, ` moduleFrame.dataDict: `, frame._dataDict);
 							} else {
-								writeln(`LoadDirective, frameStack lvl `, lvl, ` moduleFrame is null`);
+								loger.write(`LoadDirective, frameStack lvl `, lvl, ` moduleFrame is null`);
 							}
 						}
 					}
@@ -1427,10 +1500,10 @@ public:
 					loger.write("RunCallable stackArgCount: ", stackArgCount );
 					loger.internalAssert(stackArgCount <= _stack.length, "Not enough arguments in execution stack");
 					loger.write("RunCallable _stack: ", _stack);
-					loger.write("RunCallable callable type: ", _stack[ _stack.length - stackArgCount ].type);
-					loger.internalAssert(_stack[ _stack.length - stackArgCount ].type == DataNodeType.Callable, `Expected directive object operand in directive call operation`);
+					loger.write("RunCallable callable type: ", _stack[_stack.length - stackArgCount].type);
+					loger.internalAssert(_stack[_stack.length - stackArgCount].type == DataNodeType.Callable, `Expected directive object operand in directive call operation`);
 
-					CallableObject callableObj = _stack[ _stack.length - stackArgCount ].callable;
+					CallableObject callableObj = _stack[_stack.length - stackArgCount].callable;
 					loger.internalAssert(callableObj, `Callable object is null!` );
 					loger.write("RunCallable name: ", callableObj._name);
 					
