@@ -20,6 +20,8 @@ public:
 
 enum FrameSearchMode { get, tryGet, set, setWithParents };
 
+private __gshared UndefProperty = TDataNode(); // Global undef value
+
 class ExecutionFrame
 {
 	alias LogerMethod = void delegate(LogInfo);
@@ -84,6 +86,7 @@ public:
 		TDataNode* nodePtr = findValue!(FrameSearchMode.get)(varName);
 		if( nodePtr is null )
 			loger.error( "VariableTable: Cannot find variable with name: " ~ varName );
+		// UndefProperty should be copied(return by value), so we cannot modify it with something else
 		return *nodePtr;
 	}
 	
@@ -106,6 +109,7 @@ public:
 		import std.conv: text;
 		import std.range: empty, front, popFront;
 		import std.array: split;
+		import std.algorithm: canFind;
 
 		loger.write(`Call ExecutionFrame.findLocalValue with varName: `, varName);
 
@@ -151,8 +155,8 @@ public:
 					} else static if( mode == FrameSearchMode.tryGet ) {
 						return null;
 					} else {
-						if( nameSplitted.length == 1 ) {
-							return null;
+						if( nameSplitted.length == 1 && varName.canFind('.') ) {
+							return &UndefProperty;
 						} else {
 							//loger.write(`ExecutionFrame.findLocalValue, searchedNode: `, nodePtr.assocArray);
 							return null;
@@ -621,7 +625,7 @@ public:
 	// Storage for bytecode code and initial constant data for modules
 	ModuleObject[string] _moduleObjects;
 
-	// Loger method for used to send error and debug messages
+	// Loger method used to send error and debug messages
 	LogerMethod _logerMethod;
 
 	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, LogerMethod logerMethod = null)

@@ -40,7 +40,7 @@ public:
 	void error(string msg, string file = __FILE__, size_t line = __LINE__)
 	{
 		import std.conv: to;
-		throw new IvyJSONException( `Parsing error at: ` ~ _source.str[_source.index .. _source.index + 30 ].to!string ~ `..: ` ~ msg, file, line);
+		throw new IvyJSONException(`Parsing error in: ` ~ _source.str ~ `..: ` ~ msg, file, line);
 	}
 
 	String parseString()
