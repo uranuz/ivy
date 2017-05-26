@@ -79,7 +79,6 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	import std.range: empty;
 	import std.algorithm: map;
 	import std.array: array;
-	debug import std.stdio: writeln;
 
 	assert(!config.importPaths.empty, `List of compiler import paths must not be empty!`);
 	// Creating object that manages reading source files, parse and store them as AST
@@ -108,7 +107,13 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	compiler.addGlobalSymbols( dirInterps.values.map!(it => it.compilerSymbol).array );
 	compiler.run(); // Run compilation itself
 
-	debug writeln("compileModule:\r\n", compiler.toPrettyStr());
+	if( config.compilerLoger ) {
+		config.compilerLoger(LogInfo(
+			"compileModule:\r\n" ~ compiler.toPrettyStr(),
+			LogInfoType.info,
+			__FUNCTION__, __FILE__, __LINE__
+		));
+	}
 
 	// Creating additional object that stores all neccessary info for simple usage
 	auto prog = new ExecutableProgramme(compiler.moduleObjects, mainModuleName, config.interpreterLoger);
