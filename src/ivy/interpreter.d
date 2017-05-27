@@ -1114,6 +1114,15 @@ public:
 								`Assoc array key "`, indexValue.str, `" must be present in assoc array`);
 							_stack ~= aggr.assocArray[indexValue.str];
 							break;
+						case DataNodeType.ClassNode:
+							if( indexValue.type == DataNodeType.Integer ) {
+								_stack ~= aggr.classNode[indexValue.integer];
+							} else if( indexValue.type == DataNodeType.String ) {
+								_stack ~= aggr.classNode[indexValue.str];
+							} else {
+								loger.error("Cannot execute LoadSubscr instruction. Index value for class node must be string or integer!");
+							}
+							break;
 						default:
 							loger.internalAssert(false, `This should never happen`);
 					}

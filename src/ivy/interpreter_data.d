@@ -438,7 +438,10 @@ public:
 
 interface IClassNode
 {
+	alias TDataNode = DataNode!string;
 	IDataNodeRange opSlice();
+	TDataNode opIndex(string);
+	TDataNode opIndex(size_t);
 }
 
 enum DataNodeType {
