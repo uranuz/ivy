@@ -1071,6 +1071,7 @@ public:
 				case OpCode.LoadSubscr:
 				{
 					import std.utf: toUTFindex, decode;
+					import std.algorithm: canFind;
 
 					loger.write(`OpCode.LoadSubscr. _stack: `, _stack);
 
@@ -1084,8 +1085,9 @@ public:
 					loger.write(`OpCode.LoadSubscr. aggr: `, aggr);
 					loger.write(`OpCode.LoadSubscr. indexValue: `, indexValue);
 
-					loger.internalAssert(aggr.type == DataNodeType.String || aggr.type == DataNodeType.Array || aggr.type == DataNodeType.AssocArray,
-						"Cannot execute LoadSubscr instruction. Aggregate value must be string, array or assoc array!");
+					loger.internalAssert(
+						[DataNodeType.String, DataNodeType.Array, DataNodeType.AssocArray, DataNodeType.ClassNode].canFind(aggr.type),
+						"Cannot execute LoadSubscr instruction. Aggregate value must be string, array, assoc array or class node!");
 
 					switch( aggr.type )
 					{
