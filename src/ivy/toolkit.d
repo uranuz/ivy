@@ -54,7 +54,7 @@ public:
 	/// Run programme main module with arguments passed as mainModuleScope parameter
 	TDataNode run(TDataNode mainModuleScope = TDataNode())
 	{
-		mainModuleScope["__mentalModuleMagic_0451__"] = 451; // Just to make it a dict
+		mainModuleScope["__scopeName__"] = "__main__"; // Allocating a dict if it's not
 		import std.range: back;
 
 		import ivy.interpreter: Interpreter;

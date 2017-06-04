@@ -1750,7 +1750,7 @@ public:
 			switch( node.literalType )
 			{
 				case LiteralType.Undef:
-					constIndex = addConst( TDataNode() ); // Undef is default
+					constIndex = addConst( TDataNode.makeUndef() ); 
 					break;
 				case LiteralType.Null:
 					constIndex = addConst( TDataNode(null) );

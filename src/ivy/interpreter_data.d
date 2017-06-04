@@ -442,10 +442,12 @@ interface IClassNode
 	IDataNodeRange opSlice();
 	TDataNode opIndex(string);
 	TDataNode opIndex(size_t);
+	TDataNode __getAttr__(string);
+	void __setAttr__(TDataNode, string);
 }
 
 enum DataNodeType {
-	Undef, Null, Boolean, Integer, Floating, String, DateTime, Array, AssocArray, ClassNode,
+	Null, Undef, Boolean, Integer, Floating, String, DateTime, Array, AssocArray, ClassNode,
 	CodeObject, Callable, ExecutionFrame, DataNodeRange
 };
 
@@ -617,6 +619,14 @@ struct DataNode(S)
 	
 	bool empty() @property {
 		return type == DataNodeType.Undef || type == DataNodeType.Null;
+	}
+
+	bool isUndef() @property {
+		return type == DataNodeType.Undef;
+	}
+
+	bool isNull() @property {
+		return type == DataNodeType.Null;
 	}
 	
 	private void assign(T)(auto ref T arg)
@@ -816,6 +826,12 @@ struct DataNode(S)
 		foreach( i; 0..1 )
 			ind ~= "  ";
 		return ind ~ text.split("\r\n").join("\r\n" ~ ind);
+	}
+
+	static TDataNode makeUndef() {
+		TDataNode undef;
+		undef.typeTag = DataNodeType.Undef;
+		return undef;
 	}
 	
 	string toString()

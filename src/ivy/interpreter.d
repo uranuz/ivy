@@ -20,8 +20,6 @@ public:
 
 enum FrameSearchMode { get, tryGet, set, setWithParents };
 
-private __gshared UndefProperty = TDataNode(); // Global undef value
-
 class ExecutionFrame
 {
 	alias LogerMethod = void delegate(LogInfo);
@@ -41,16 +39,6 @@ class ExecutionFrame
 	LogerMethod _logerMethod;
 	
 public:
-	this(CallableObject callableObj, ExecutionFrame modFrame, LogerMethod logerMethod)
-	{
-		_callableObj = callableObj;
-		_moduleFrame = modFrame;
-
-		TDataNode[string] emptyDict;
-		_dataDict = emptyDict;
-		_logerMethod = logerMethod;
-	}
-
 	this(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, LogerMethod logerMethod)
 	{
 		_callableObj = callableObj;
@@ -83,168 +71,226 @@ public:
 
 	TDataNode getValue(string varName)
 	{
-		TDataNode* nodePtr = findValue!(FrameSearchMode.get)(varName);
-		if( nodePtr is null )
-			loger.error( "VariableTable: Cannot find variable with name: " ~ varName );
-		// UndefProperty should be copied(return by value), so we cannot modify it with something else
-		return *nodePtr;
+		SearchResult result = findValue!(FrameSearchMode.get)(varName);
+		if( result.node.isUndef && !result.allowUndef )
+			loger.error("Cannot find variable with name: " ~ varName );
+		return result.node;
 	}
 	
-	bool canFindValue(string varName)
-	{
-		return cast(bool)( findValue!(FrameSearchMode.tryGet)(varName) );
+	bool canFindValue(string varName) {
+		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
 	}
 	
 	DataNodeType getDataNodeType(string varName)
 	{
-		TDataNode* nodePtr = findValue!(FrameSearchMode.get)(varName);
-		if( nodePtr is null )
-			loger.error("VariableTable: Cannot find variable with name: " ~ varName);
-		return nodePtr.type;
+		SearchResult result = findValue!(FrameSearchMode.get)(varName);
+		if( result.node.isUndef  )
+			loger.error("Cannot find variable with name: " ~ varName);
+		return result.node.type;
 	}
 
+	import std.typecons: Tuple;
+	alias SearchResult = Tuple!(bool, "allowUndef", TDataNode, "node");
+
 	// Basic method used to search symbols in context
-	TDataNode* findLocalValue(FrameSearchMode mode)(string varName)
+	SearchResult findLocalValue(FrameSearchMode mode)(string varName)
 	{
 		import std.conv: text;
 		import std.range: empty, front, popFront;
-		import std.array: split;
 		import std.algorithm: canFind;
+		import std.array: split;
 
-		loger.write(`Call ExecutionFrame.findLocalValue with varName: `, varName);
+		loger.write(`Start searching for variable with name: `, varName);
 
 		if( varName.empty )
-			loger.error( "VariableTable: Variable name cannot be empty" );
+			loger.error( "Variable name cannot be empty" );
 
-		TDataNode* nodePtr = &_dataDict;
 		if( _dataDict.type != DataNodeType.AssocArray )
 		{
 			static if( mode == FrameSearchMode.tryGet ) {
-				return null;
+				return SearchResult(false, TDataNode.makeUndef());
 			} else {
-				loger.error("VariableTable: cannot find variable: " ~ varName ~ " in execution frame, because callable doesn't have it's on scope!");
+				loger.error("Cannot find variable: " ~ varName ~ " in execution frame, because callable doesn't have it's on scope!");
 			}
 		}
+		TDataNode node = _dataDict;
 
 		string[] nameSplitted = varName.split('.');
+		size_t namePartsCount = nameSplitted.length;
+		bool allowUndef = false;
 		while( !nameSplitted.empty )
 		{
-			if( nodePtr.type == DataNodeType.AssocArray )
-			{
-				loger.write(`ExecutionFrame.findLocalValue. Search: `, nameSplitted.front, ` in assoc array`);
-				if( TDataNode* tmpNodePtr = nameSplitted.front in nodePtr.assocArray )
-				{
-					loger.write(`ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, ` found in assoc array`);
-					nodePtr = tmpNodePtr;
-				}
-				else
-				{
-					loger.write(`ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, ` NOT found in assoc array`);
-					static if( mode == FrameSearchMode.setWithParents ) {
-						nodePtr.assocArray[nameSplitted.front] = (TDataNode[string]).init;
-						nodePtr = nameSplitted.front in nodePtr.assocArray;
-						loger.write(`ExecutionFrame.findLocalValue(withParents=true). Creating node: `, nameSplitted.front);
-					} else static if( mode == FrameSearchMode.set ) {
-						if( nameSplitted.length == 1 ) {
-							nodePtr.assocArray[nameSplitted.front] = TDataNode.init;
-							loger.write(`ExecutionFrame.findLocalValue. Creating node: `, nameSplitted.front);
-							return nameSplitted.front in nodePtr.assocArray;
-						} else {
-							loger.error(`Cannot set value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
-						}
-					} else static if( mode == FrameSearchMode.tryGet ) {
-						return null;
-					} else {
-						if( nameSplitted.length == 1 && varName.canFind('.') ) {
-							return &UndefProperty;
-						} else {
-							//loger.write(`ExecutionFrame.findLocalValue, searchedNode: `, nodePtr.assocArray);
-							return null;
-							//loger.error(`Cannot find value with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
-						}
-						
-					}
-				}
-			}
-			else if( nodePtr.type == DataNodeType.ExecutionFrame )
-			{
-				loger.write(`ExecutionFrame.findLocalValue. Search: `, nameSplitted.front, ` in execution frame`);
-				if( !nodePtr.execFrame )
-				{
-					static if( mode == FrameSearchMode.tryGet ) {
-						return null;
-					} else {
-						loger.error(`Cannot find value, because execution frame is null!!!`);
-					}
-				}
+			// Determines if in get mode we can return undef without error
+			allowUndef = nameSplitted.length == 1 && namePartsCount > 1;
 
-				if( nodePtr.execFrame._dataDict.type != DataNodeType.AssocArray )
-				{
-					static if( mode == FrameSearchMode.tryGet ) {
-						return null;
-					} else {
-						loger.error(`Cannot find value, because execution frame data dict is not of assoc array type!!!`);
-					}
+			static if( mode == FrameSearchMode.set || mode == FrameSearchMode.setWithParents )
+			{
+				// In set mode we return parent node instead of target node when getting the last node in the path
+				if( nameSplitted.length == 1 ) {
+					return SearchResult(false, node);
 				}
+			}
+
+			switch( node.type )
+			{
+				case DataNodeType.AssocArray:
+				{
+					loger.write(`Searching for node: `, nameSplitted.front, ` in assoc array`);
+					if( TDataNode* nodePtr = nameSplitted.front in node.assocArray )
+					{
+						// If node exists in assoc array then push it as next parent node (or as a result if it's the last)
+						loger.write(`Node: `, nameSplitted.front, ` found in assoc array`);
+						node = *nodePtr;
+					}
+					else
+					{
+						loger.write(`Node: `, nameSplitted.front, ` is NOT found in assoc array`);
+						static if( mode == FrameSearchMode.setWithParents ) {
+							// In setWithParents mode we create parent nodes as assoc array if they are not exist
+							loger.write(`Creating node: `, nameSplitted.front, `, because mode is: `, mode);
+							TDataNode parentDict;
+							parentDict["__mentalModuleMagic_0451__"] = 451; // Allocating dict
+							parentDict.assocArray.remove("__mentalModuleMagic_0451__");
+							node.assocArray[nameSplitted.front] = parentDict;
+							node = node.assocArray[nameSplitted.front];
+						} else static if( mode == FrameSearchMode.set ) {
+							// Only parent node should get there. And if it's not exists then issue an error in the set mode 
+							loger.error(`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
+						} else {
+							return SearchResult(allowUndef, TDataNode.makeUndef());
+						}
+					}
+					break;
+				}
+				case DataNodeType.ExecutionFrame:
+				{
+					loger.write(`Searching for node: `, nameSplitted.front, ` in execution frame`);
+					if( !node.execFrame )
+					{
+						static if( mode == FrameSearchMode.tryGet ) {
+							return SearchResult(allowUndef, TDataNode.makeUndef());
+						} else {
+							loger.error(`Cannot find node, because execution frame is null!!!`);
+						}
+					}
+
+					if( node.execFrame._dataDict.type != DataNodeType.AssocArray )
+					{
+						static if( mode == FrameSearchMode.tryGet ) {
+							return SearchResult(allowUndef, TDataNode.makeUndef());
+						} else {
+							loger.error(`Cannot find node, because execution frame data dict is not of assoc array type!!!`);
+						}
+					}
 					
-				nodePtr = nameSplitted.front in nodePtr.execFrame._dataDict.assocArray;
-				loger.write(`ExecutionFrame.findLocalValue. Node: `, nameSplitted.front, (nodePtr ? ` found` : ` NOT found`) ,` in execution frame`);
+					if( TDataNode* nodePtr = nameSplitted.front in node.execFrame._dataDict.assocArray ) {
+						loger.write(`Node: `, nameSplitted.front, ` found in execution frame`);
+						node = *nodePtr;
+					} else {
+						loger.write(`Node: `, nameSplitted.front, ` is NOT found in execution frame`);
+						static if( mode == FrameSearchMode.setWithParents || mode == FrameSearchMode.set ) {
+							loger.error(
+								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text 
+								~ ` not exists or cannot set value in foreign execution frame!`
+							);
+						} else {
+							return SearchResult(allowUndef, TDataNode.makeUndef());
+						}
+					}
+					break;
+				}
+				case DataNodeType.ClassNode:
+				{
+					loger.write(`Searching for node: `, nameSplitted.front, ` in class node`);
+					if( !node.classNode )
+					{
+						static if( mode == FrameSearchMode.tryGet ) {
+							return SearchResult(allowUndef, TDataNode.makeUndef());
+						} else {
+							loger.error(`Cannot find node, because class node is null!!!`);
+						}
+					}
+
+					// If there is class nodes in the path to target path, so it's property this way
+					// No matter if it's set or get mode. The last node setting is handled by code at the start of loop
+					TDataNode tmpNode = node.classNode.__getAttr__(nameSplitted.front);
+					if( !node.isUndef )  {
+						node = tmpNode;
+					} else {
+						static if( mode == FrameSearchMode.setWithParents || mode == FrameSearchMode.set ) {
+							loger.error(
+								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text 
+								~ `not exist or cannot add new attribute to class node!`
+							);
+						} else {
+							return SearchResult(allowUndef, TDataNode.makeUndef());
+						}
+					}
+					break;
+				}
+				default:
+				{
+					loger.write(`Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type`);
+					return SearchResult(false, TDataNode.makeUndef());
+				}
 			}
-			else
-			{
-				loger.write(`ExecutionFrame.findLocalValue. Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type`);
-				return null;
-			}
-			
-			nameSplitted.popFront();
-			if( nodePtr is null )
-			{
-				loger.write(`ExecutionFrame.findlocalValue. Got empty node at end of iteration`);
-				return null;
-			}
+
+			nameSplitted.popFront();// Advance to the next section in the path
 		}
 
-		return nodePtr;
+		return SearchResult(allowUndef || node.isUndef, node);
 	}
 
-	TDataNode* findValue(FrameSearchMode mode)(string varName)
+	SearchResult findValue(FrameSearchMode mode)(string varName)
 	{
-		loger.write(`Call ExecutionFrame.findValue with varName: `, varName);
+		loger.write(`Searching for node with full path: `, varName);
 
-		TDataNode* nodePtr = findLocalValue!(mode)(varName);
-		if( nodePtr )
-			return nodePtr;
-		
-		loger.write(`Call ExecutionFrame.findValue. No varName: `, varName, ` in exec frame. Try to find in module frame`);
+		SearchResult result = findLocalValue!(mode)(varName);
+		if( !result.node.isUndef || (result.node.isUndef && result.allowUndef) )
+			return result;
+
+		loger.write(`Node: `, varName, ` NOT foind in exec frame. Try to find in module frame`);
 
 		if( _moduleFrame )
 			return _moduleFrame.findLocalValue!(mode)(varName);
 
-		loger.write(`Call ExecutionFrame.findValue. Cannot find: `, varName, ` in module exec frame. Module frame is null!`);
-		
-		return null;
+		loger.write(`Cannot find: `, varName, ` in module exec frame. Module frame is null!`);
+		return SearchResult(false, TDataNode.makeUndef());
+	}
+
+	private void _assignNodeAttribute(ref TDataNode parent, ref TDataNode value, string varName)
+	{
+		import std.array: split;
+		import std.range: back;
+		string attrName = varName.split.back;
+		switch( parent.type )
+		{
+			case DataNodeType.AssocArray:
+				parent.assocArray[attrName] = value;
+				break;
+			case DataNodeType.ClassNode:
+				if( !parent.classNode ) {
+					loger.error(`Cannot assign attribute, because class node is null`);
+				}
+				parent.classNode.__setAttr__(value, attrName);
+				break;
+			default:
+				loger.error(`Cannot assign atribute of node with type: `, parent.type);
+		}
 	}
 
 	void setValue(string varName, TDataNode value)
 	{
-		loger.write(`Call ExecutionFrame.setValue with varName: `, varName, ` and value: `, value);
-
-		TDataNode* valuePtr = findValue!(FrameSearchMode.set)(varName);
-		if( valuePtr is null )
-			loger.error(`Failed to set variable: ` ~ varName);
-
-		*valuePtr = value;
+		loger.write(`Attempt to set node with full path: `, varName, ` with value: `, value);
+		SearchResult result = findValue!(FrameSearchMode.set)(varName);
+		_assignNodeAttribute(result.node, value, varName);
 	}
 
 	void setValueWithParents(string varName, TDataNode value)
 	{
 		loger.write(`Call ExecutionFrame.setValueWithParents with varName: `, varName, ` and value: `, value);
-		
-		TDataNode* valuePtr = findValue!(FrameSearchMode.setWithParents)(varName);
-		if( valuePtr is null )
-			loger.error(`Failed to set variable: ` ~ varName);
-
-		*valuePtr = value;
+		SearchResult result = findValue!(FrameSearchMode.setWithParents)(varName);
+		_assignNodeAttribute(result.node, value, varName);
 	}
 
 	bool hasOwnScope() @property
@@ -636,16 +682,18 @@ public:
 		_moduleObjects = moduleObjects;
 		loger.internalAssert(mainModuleName in _moduleObjects, `Cannot get main module from module objects!`);
 
-		loger.write(`Iterpreter ctor: passed dataDict: `, dataDict);
+		loger.write(`Passed dataDict: `, dataDict);
 
 		CallableObject rootCallableObj = new CallableObject;
 		rootCallableObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
 		rootCallableObj._kind = CallableKind.Module;
 		rootCallableObj._name = "__main__";
-		loger.write(`Iterpreter ctor: rootCallableObj._codeObj._moduleObj: `, rootCallableObj._codeObj._moduleObj._name);
+		loger.write(`CallableObj._codeObj._moduleObj: `, rootCallableObj._codeObj._moduleObj._name);
 
-		_globalFrame = new ExecutionFrame(null, null, _logerMethod);
-		loger.write(`Iterpreter ctor 2: _globalFrame._dataDict: `, _globalFrame._dataDict);
+		TDataNode globalDataDict;
+		globalDataDict["__scopeName__"] = "__global__"; // Allocating dict
+		_globalFrame = new ExecutionFrame(null, null, globalDataDict, _logerMethod);
+		loger.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
 		_moduleFrames[mainModuleName] = _frameStack.back; // We need to add entry point module frame to storage manually
@@ -697,12 +745,6 @@ public:
 		_logerMethod = method;
 	}
 
-	void newFrame(CallableObject callableObj, ExecutionFrame modFrame)
-	{
-		_frameStack ~= new ExecutionFrame(callableObj, modFrame, _logerMethod);
-		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` without dataDict, and modFrame `, (modFrame? `is not null`: `is null`));
-	}
-
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
 	{
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict, _logerMethod);
@@ -737,7 +779,9 @@ public:
 		if( modName !in _moduleFrames )
 		{
 			loger.write(`There is no execution frame for module: `, modName, `, creating new one`);
-			_moduleFrames[modName] = new ExecutionFrame(null, _globalFrame, _logerMethod);
+			TDataNode dataDict;
+			dataDict["__scopeName__"] = modName;
+			_moduleFrames[modName] = new ExecutionFrame(null, _globalFrame, dataDict, _logerMethod);
 		} else {
 			loger.write(`Getting existing execution frame for module: `, modName);
 		}
@@ -745,56 +789,64 @@ public:
 		return _moduleFrames[modName];
 	}
 
-	bool canFindValue( string varName )
-	{
-		return cast(bool)( findValueImpl!(FrameSearchMode.tryGet)(varName, _frameStack[], _globalFrame) );
+	bool canFindValue(string varName) {
+		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
 	}
 
-	TDataNode* findValueImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
+	import std.typecons: Tuple;
+	alias SearchResult = Tuple!(bool, "allowUndef", TDataNode, "node");
+
+	SearchResult findValue(FrameSearchMode mode)(string varName)
 	{
 		import std.range: empty, back, popBack;
 
-		loger.write(`Interpreter.findValueImpl: Starting to search for varName: `, varName);
-		loger.internalAssert( !frameStackSlice.empty, `findValueImpl: frameStackSlice is empty` );
+		loger.write(`Starting to search for varName: `, varName);
+		ExecutionFrame[] frameStackSlice = _frameStack[];
+		loger.internalAssert( !frameStackSlice.empty, `frameStackSlice is empty` );
 
+		SearchResult result;
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
 			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
 			if( !frameStackSlice.back.hasOwnScope ) {
-				loger.write(`Interpreter.findValueImpl: Current level exec frame is noscope. Try find: `, varName, ` in parent`);
+				loger.write(`Current level exec frame is noscope. Try find: `, varName, ` in parent`);
 				continue; // Let's try to find in parent
 			}
 
-			loger.write(`Interpreter.findValueImpl: Trying to search in current execution frame for varName: `, varName);
-			if( TDataNode* valuePtr = frameStackSlice.back.findValue!(mode)(varName) ) {
-				loger.write(`Interpreter.findValueImpl: varName: `, varName, ` found in current execution frame`);
-				return valuePtr;
-			} else {
-				loger.write(`Interpreter.findValueImpl: varName: `, varName, ` NOT found in current execution frame`);
-				break;
+			loger.write(`Trying to search in current execution frame for varName: `, varName);
+			result = frameStackSlice.back.findValue!(mode)(varName);
+			if( !result.node.isUndef || (result.node.isUndef && result.allowUndef) ) {
+				loger.write(`varName: `, varName, ` found in current execution frame`);
+				return result;
 			}
+
+			loger.write(`varName: `, varName, ` NOT found in current execution frame`);
+			break;
 		}
 
-		loger.internalAssert(globalFrame, `Couldn't find variable: `, varName, ` value in global frame, because it is null!` );
-		loger.internalAssert(globalFrame.hasOwnScope, `Couldn't find variable: `, varName, ` value in global frame, because global frame doesn't have it's own scope!` );
+		loger.internalAssert(_globalFrame, `Couldn't find variable: `, varName, ` value in global frame, because it is null!` );
+		loger.internalAssert(_globalFrame.hasOwnScope, `Couldn't find variable: `, varName, ` value in global frame, because global frame doesn't have it's own scope!` );
 
 		static if( mode == FrameSearchMode.get || mode == FrameSearchMode.tryGet ) {
-			loger.write(`Interpreter.findValueImpl: Trying to search in global frame for varName: `, varName);
-			if( TDataNode* valuePtr = globalFrame.findValue!(mode)(varName) ) {
-				loger.write(`Interpreter.findValueImpl: varName: `, varName, ` found in global execution frame`);
-				return valuePtr;
+			loger.write(`Trying to search in global frame for varName: `, varName);
+			result = _globalFrame.findValue!(mode)(varName);
+			if( !result.node.isUndef ) {
+				loger.write(`varName: `, varName, ` found in global execution frame`);
+				return result;
 			}
 
-			loger.write(`Interpreter.findValueImpl: varName: `, varName, ` NOT found in global execution frame`);
+			loger.write(`varName: `, varName, ` NOT found in global execution frame`);
 		}
 
-		return null;
+		return result;
 	}
 
-	TDataNode* findValueLocalImpl(FrameSearchMode mode)( string varName, ExecutionFrame[] frameStackSlice )
+	SearchResult findValueLocal(FrameSearchMode mode)(string varName)
 	{
 		import std.range: empty, back, popBack;
 
+		ExecutionFrame[] frameStackSlice = _frameStack[];
+		SearchResult result;
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
 			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!`);
@@ -802,35 +854,23 @@ public:
 				continue; // Let's try to find first parent that have it's own scope
 			}
 
-			if( TDataNode* valuePtr = frameStackSlice.back.findLocalValue!(mode)(varName) )
-				return valuePtr;
-			else
-				return null;
+			result = frameStackSlice.back.findValue!(mode)(varName);
+			if( !result.node.isUndef ) {
+				loger.write(`varName: `, varName, ` found in current execution frame`);
+				return result;
+			}
+
+			loger.write(`varName: `, varName, ` NOT found in current execution frame`);
+			break;
 		}
 
-		return null;
+		return result;
 	}
 
-	void setValueImpl(FrameSearchMode mode)( string varName, TDataNode value, ExecutionFrame[] frameStackSlice, ExecutionFrame globalFrame )
-		if( mode == FrameSearchMode.set || mode == FrameSearchMode.setWithParents )
+	TDataNode getValue(string varName)
 	{
-		TDataNode* valuePtr = findValueImpl!(mode)(varName, frameStackSlice[], globalFrame);
-		if( valuePtr is null )
-			loger.error("Failed to set variable with name: ", varName);
-		
-		*valuePtr = value;
-	}
-
-	TDataNode* findValue(FrameSearchMode mode)( string varName )
-	{
-		return findValueImpl!(mode)(varName, _frameStack[], _globalFrame);
-	}
-
-	TDataNode getValue( string varName )
-	{
-		TDataNode* valuePtr = findValue!(FrameSearchMode.get)(varName);
-
-		if( valuePtr is null )
+		SearchResult result = findValue!(FrameSearchMode.get)(varName);
+		if( result.node.isUndef && !result.allowUndef )
 		{
 			debug {
 				foreach( i, frame; _frameStack[] )
@@ -847,45 +887,52 @@ public:
 			loger.error("Undefined variable with name '", varName, "'");
 		}
 
-		return *valuePtr;
+		return result.node;
 	}
 
-	void setValue( string varName, TDataNode value )
+	private void _assignNodeAttribute(ref TDataNode parent, ref TDataNode value, string varName)
 	{
-		TDataNode* valuePtr = findValue!(FrameSearchMode.set)(varName);
-		if( valuePtr is null )
-			loger.error(`Cannot set variable "`, varName, `", because cannot find it. Use setLocalValue to decare new variable!`);
-
-		*valuePtr = value;
+		import std.array: split;
+		import std.range: back;
+		string attrName = varName.split.back;
+		switch( parent.type )
+		{
+			case DataNodeType.AssocArray:
+				parent.assocArray[attrName] = value;
+				break;
+			case DataNodeType.ClassNode:
+				if( !parent.classNode ) {
+					loger.error(`Cannot assign attribute, because class node is null`);
+				}
+				parent.classNode.__setAttr__(value, attrName);
+				break;
+			default:
+				loger.error(`Cannot assign atribute of node with type: `, parent.type);
+		}
 	}
 
-	void setValueWithParents( string varName, TDataNode value )
+	void setValue(string varName, TDataNode value)
 	{
-		TDataNode* valuePtr = findValue!(FrameSearchMode.setWithParents)(varName);
-		if( valuePtr is null )
-			loger.error(`Cannot set variable "`, varName, `", because cannot find it. Use setLocalValueWithParents to decare new variable!`);
-
-		*valuePtr = value;
+		SearchResult result = findValue!(FrameSearchMode.set)(varName);
+		_assignNodeAttribute(result.node, value, varName);
 	}
 
-	void setLocalValue( string varName, TDataNode value )
+	void setValueWithParents(string varName, TDataNode value)
 	{
-		TDataNode* valuePtr = findValueLocalImpl!(FrameSearchMode.set)( varName, _frameStack[] );
-		
-		if( valuePtr is null )
-			loger.error(`Failed to set local variable: `, varName);
-
-		*valuePtr = value;
+		SearchResult result = findValue!(FrameSearchMode.setWithParents)(varName);
+		_assignNodeAttribute(result.node, value, varName);
 	}
 
-	void setLocalValueWithParents( string varName, TDataNode value )
+	void setLocalValue(string varName, TDataNode value)
 	{
-		TDataNode* valuePtr = findValueLocalImpl!(FrameSearchMode.setWithParents)( varName, _frameStack[] );
-		
-		if( valuePtr is null )
-			loger.error(`Failed to set local variable: `, varName);
+		SearchResult result = findValueLocal!(FrameSearchMode.set)(varName);
+		_assignNodeAttribute(result.node, value, varName);
+	}
 
-		*valuePtr = value;
+	void setLocalValueWithParents(string varName, TDataNode value)
+	{
+		SearchResult result = findValueLocal!(FrameSearchMode.setWithParents)(varName);
+		_assignNodeAttribute(result.node, value, varName);
 	}
 
 	TDataNode getModuleConst( size_t index )
@@ -1273,7 +1320,9 @@ public:
 						callableObj._kind = CallableKind.Module;
 						callableObj._codeObj = codeObject;
 
-						newFrame(callableObj, null); // Create entry point module frame
+						TDataNode dataDict;
+						dataDict["__scopeName__"] = moduleName;
+						newFrame(callableObj, null, dataDict); // Create entry point module frame
 						_moduleFrames[moduleName] = _frameStack.back; // We need to store module frame into storage
 						_stack ~= TDataNode(_frameStack.back); // Put module root frame into execution frame (it will be stored with StoreName)
 
@@ -1532,12 +1581,8 @@ public:
 						isNoscope = attrBlocks[$-1].bodyAttr.isNoscope;
 					}
 
-					ExecutionFrame moduleFrame;
-					if( callableObj._codeObj ) {
-						moduleFrame = getModuleFrame(callableObj._codeObj._moduleObj._name);
-					} else {
-						moduleFrame = getModuleFrame("__builtins__");
-					}
+					string moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__";
+					ExecutionFrame moduleFrame = getModuleFrame(moduleName);
 
 					loger.internalAssert( moduleFrame, `Module frame for callable is null` );
 					if( isNoscope )
@@ -1549,7 +1594,9 @@ public:
 					else
 					{
 						loger.write("RunCallable creating scoped execution frame...");
-						newFrame( callableObj, moduleFrame );
+						TDataNode dataDict;
+						dataDict["__scopeName__"] = callableObj._name; // Allocating scope
+						newFrame( callableObj, moduleFrame, dataDict );
 					}
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
