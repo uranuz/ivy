@@ -447,7 +447,7 @@ interface IClassNode
 }
 
 enum DataNodeType {
-	Null, Undef, Boolean, Integer, Floating, String, DateTime, Array, AssocArray, ClassNode,
+	Undef, Null, Boolean, Integer, Floating, String, DateTime, Array, AssocArray, ClassNode,
 	CodeObject, Callable, ExecutionFrame, DataNodeRange
 };
 

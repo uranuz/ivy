@@ -531,7 +531,7 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 			case DataNodeType.Undef, DataNodeType.Null:
 				interp._stack ~= TDataNode(true);
 				break;
-			case DataNodeType.Integer, DataNodeType.Floating:
+			case DataNodeType.Integer, DataNodeType.Floating, DataNodeType.DateTime:
 				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
 				// because in many cases they could be treated as significant values
 				interp._stack ~= TDataNode(false);
