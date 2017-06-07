@@ -531,9 +531,10 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 			case DataNodeType.Undef, DataNodeType.Null:
 				interp._stack ~= TDataNode(true);
 				break;
-			case DataNodeType.Integer, DataNodeType.Floating, DataNodeType.DateTime:
+			case DataNodeType.Integer, DataNodeType.Floating, DataNodeType.DateTime, DataNodeType.Boolean:
 				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
 				// because in many cases they could be treated as significant values
+				// DateTime and Boolean are not empty too, because we cannot say what value should be treated as empty
 				interp._stack ~= TDataNode(false);
 				break;
 			case DataNodeType.String:
@@ -548,6 +549,10 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 			case DataNodeType.DataNodeRange:
 				interp._stack ~= TDataNode(!value.dataRange || value.dataRange.empty);
 				break;
+			case DataNodeType.ClassNode:
+				// Basic check for ClassNode for emptyness is that it should not be null reference
+				// If some interface method will be introduced to check for empty then we shall consider to check it too
+				interp._stack ~= TDataNode(value.classNode is null);
 			default:
 				interp.loger.error(`Cannot test type: `, value.type, ` for emptyness`);
 				break;
@@ -1477,7 +1482,7 @@ public:
 					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 					TDataNode condNode = _stack.back;
 
-					bool jumpCond = DataNodeType.Boolean && condNode.boolean; // This is actual condition to test
+					bool jumpCond = (condNode.type == DataNodeType.Boolean && condNode.boolean); // This is actual condition to test
 					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].canFind(instr.opcode) ) {
 						jumpCond = !jumpCond; // Invert condition if False family is used
 					}
