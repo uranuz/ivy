@@ -37,7 +37,7 @@ public:
 
 	this(String source, string fileName, LogerMethod logerMethod = null)
 	{
-		this.lexer = LexerType(source);
+		this.lexer = LexerType(source, logerMethod);
 		this.fileName = fileName;
 		this.logerMethod = logerMethod;
 	}
@@ -84,8 +84,8 @@ public:
 				file,
 				line,
 				parser.fileName,
-				parser.lexer.front.loc.lineIndex,
-				parser.lexer.frontValue.array.to!string
+				(!parser.lexer.empty? parser.lexer.front.loc.lineIndex: 0),
+				(!parser.lexer.empty? parser.lexer.frontValue.array.to!string: null)
 			));
 		}
 	}

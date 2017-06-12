@@ -384,6 +384,46 @@ public:
 	}
 }
 
+// Mixin used to get approximate current position of compiler
+mixin template NodeVisitWrapperImpl()
+{
+	import ivy.common: ExtendedLocation;
+	import std.algorithm: map;
+	import std.string: join;
+
+	alias CustLocation = ExtendedLocation;
+
+	private CustLocation _currentLocation;
+
+	mixin(
+		[
+			`IvyNode`,
+			`IExpression`,
+			`ILiteralExpression`,
+			`INameExpression`,
+			`IOperatorExpression`,
+			`IUnaryExpression`,
+			`IBinaryExpression`,
+			`IAssocArrayPair`,
+
+			`IStatement`,
+			`IKeyValueAttribute`,
+			`IDirectiveStatement`,
+			`IDataFragmentStatement`,
+			`ICompoundStatement`,
+			`ICodeBlockStatement`,
+			`IMixedBlockStatement`
+		].map!(function(string typeStr) { 
+			return `override void visit(` ~ typeStr ~ ` node) {
+				this.loger.internalAssert(node, "node is null!");
+				this._currentLocation = node.extLocation;
+				this._visit(node);
+			}
+			`;
+		}).join()
+	);
+}
+
 class CompilerSymbolsCollector: AbstractNodeVisitor
 {
 	alias LogerMethod = void delegate(LogInfo);
@@ -416,7 +456,15 @@ public:
 			if( collector._logerMethod is null ) {
 				return; // There is no loger method, so get out of here
 			}
-			collector._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+			collector._logerMethod(LogInfo(
+				msg,
+				logInfoType,
+				getShortFuncName(func),
+				file,
+				line,
+				collector._currentLocation.fileName,
+				collector._currentLocation.lineIndex
+			));
 		}
 	}
 
@@ -424,237 +472,238 @@ public:
 		return LogerProxy(func, file, line, this);
 	}
 
-	alias visit = AbstractNodeVisitor.visit;
+	mixin NodeVisitWrapperImpl!();
 
-	public override {
-		// Most of these stuff is just empty implementation except directive statements parsing
-		void visit(IvyNode node) { assert(0); }
+	// Most of these stuff is just empty implementation except directive statements parsing
+	void _visit(IvyNode node) { assert(0); }
 
-		//Expressions
-		void visit(IExpression node) {  }
-		void visit(ILiteralExpression node) {  }
-		void visit(INameExpression node) {  }
-		void visit(IOperatorExpression node) {  }
-		void visit(IUnaryExpression node) {  }
-		void visit(IBinaryExpression node) {  }
-		void visit(IAssocArrayPair node) {  }
+	//Expressions
+	void _visit(IExpression node) {  }
+	void _visit(ILiteralExpression node) {  }
+	void _visit(INameExpression node) {  }
+	void _visit(IOperatorExpression node) {  }
+	void _visit(IUnaryExpression node) {  }
+	void _visit(IBinaryExpression node) {  }
+	void _visit(IAssocArrayPair node) {  }
 
-		//Statements
-		void visit(IStatement node) {  }
-		void visit(IKeyValueAttribute node) {  }
-		void visit(IDirectiveStatement node)
+	//Statements
+	void _visit(IStatement node) {  }
+	void _visit(IKeyValueAttribute node) {  }
+	void _visit(IDirectiveStatement node)
+	{
+		import std.range: popBack, empty, back;
+		import std.algorithm: canFind;
+
+		switch( node.name )
 		{
-			import std.range: popBack, empty, back;
-			import std.algorithm: canFind;
-
-			switch( node.name )
+			case "def":
 			{
-				case "def":
+				IAttributeRange defAttrsRange = node[];
+
+				INameExpression dirNameExpr = defAttrsRange.takeFrontAs!INameExpression("Expected directive name");
+				ICodeBlockStatement attrsDefBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
+
+				IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
+
+				bool isNoscope = false;
+				ICompoundStatement bodyStmt;
+
+				DirAttrsBlock!(true)[] attrBlocks;
+
+				alias TValueAttr = DirValueAttr!(true);
+
+				attr_def_stmts_loop:
+				while( !attrsDefStmtRange.empty )
 				{
-					IAttributeRange defAttrsRange = node[];
+					IDirectiveStatement attrsDefStmt = attrsDefStmtRange.front; // Current attributes definition statement
+					IAttributeRange attrsDefStmtAttrRange = attrsDefStmt[]; // Range on attributes of attributes definition statement
 
-					INameExpression dirNameExpr = defAttrsRange.takeFrontAs!INameExpression("Expected directive name");
-					ICodeBlockStatement attrsDefBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
-
-					IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
-
-					bool isNoscope = false;
-					ICompoundStatement bodyStmt;
-
-					DirAttrsBlock!(true)[] attrBlocks;
-
-					alias TValueAttr = DirValueAttr!(true);
-
-					attr_def_stmts_loop:
-					while( !attrsDefStmtRange.empty )
+					switch( attrsDefStmt.name )
 					{
-						IDirectiveStatement attrsDefStmt = attrsDefStmtRange.front; // Current attributes definition statement
-						IAttributeRange attrsDefStmtAttrRange = attrsDefStmt[]; // Range on attributes of attributes definition statement
-
-						switch( attrsDefStmt.name )
+						case "def.kv":
 						{
-							case "def.kv":
+							TValueAttr[string] namedAttrs;
+							while( !attrsDefStmtAttrRange.empty )
 							{
-								TValueAttr[string] namedAttrs;
-								while( !attrsDefStmtAttrRange.empty )
+								auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
+								if( parsed.empty )
 								{
-									auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
-									if( parsed.empty )
-									{
-										attrsDefStmtRange.popFront();
-										continue attr_def_stmts_loop;
-									}
-
-									TValueAttr attrDecl = parsed.attr;
-
-									if( attrDecl.name in namedAttrs )
-										loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
-
-									namedAttrs[attrDecl.name] = attrDecl;
+									attrsDefStmtRange.popFront();
+									continue attr_def_stmts_loop;
 								}
 
-								attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.NamedAttr, namedAttrs );
-								break;
+								TValueAttr attrDecl = parsed.attr;
+
+								if( attrDecl.name in namedAttrs )
+									loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
+
+								namedAttrs[attrDecl.name] = attrDecl;
 							}
-							case "def.pos":
+
+							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.NamedAttr, namedAttrs );
+							break;
+						}
+						case "def.pos":
+						{
+							TValueAttr[] exprAttrs;
+							while( !attrsDefStmtAttrRange.empty )
 							{
-								TValueAttr[] exprAttrs;
-								while( !attrsDefStmtAttrRange.empty )
+								auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
+								if( parsed.empty )
 								{
-									auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
-									if( parsed.empty )
-									{
-										attrsDefStmtRange.popFront();
-										continue attr_def_stmts_loop;
-									}
-
-									TValueAttr attrDecl = parsed.attr;
-
-									if( exprAttrs.canFind!( (it, needle) => it.name == needle )(attrDecl.name) )
-										loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
-
-									exprAttrs ~= attrDecl;
+									attrsDefStmtRange.popFront();
+									continue attr_def_stmts_loop;
 								}
 
-								attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.ExprAttr, exprAttrs );
-								break;
-							}
-							case "def.names":
-								assert( false, `Not implemented yet!` );
-								break;
-							case "def.kwd":
-								assert( false, `Not implemented yet!` );
-								break;
-							case "def.body":
-								if( bodyStmt )
-									loger.error(`Multiple body statements are not allowed!`);
+								TValueAttr attrDecl = parsed.attr;
 
+								if( exprAttrs.canFind!( (it, needle) => it.name == needle )(attrDecl.name) )
+									loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
+
+								exprAttrs ~= attrDecl;
+							}
+
+							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.ExprAttr, exprAttrs );
+							break;
+						}
+						case "def.names":
+							assert( false, `Not implemented yet!` );
+							break;
+						case "def.kwd":
+							assert( false, `Not implemented yet!` );
+							break;
+						case "def.body":
+							if( bodyStmt )
+								loger.error(`Multiple body statements are not allowed!`);
+
+							if( attrsDefStmtAttrRange.empty )
+								loger.error("Unexpected end of def.body directive!");
+							
+							// Try to parse noscope flag
+							INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
+							if( noscopeExpr && noscopeExpr.name == "noscope" )
+							{
+								isNoscope = true;
 								if( attrsDefStmtAttrRange.empty )
-									loger.error("Unexpected end of def.body directive!");
-								
-								// Try to parse noscope flag
-								INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
-								if( noscopeExpr && noscopeExpr.name == "noscope" )
-								{
-									isNoscope = true;
-									if( attrsDefStmtAttrRange.empty )
-										loger.error("Expected directive body, but end of def.body directive found!");
-									attrsDefStmtAttrRange.popFront();
-								}
+									loger.error("Expected directive body, but end of def.body directive found!");
+								attrsDefStmtAttrRange.popFront();
+							}
 
-								bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
-								if( !bodyStmt )
-									loger.error("Expected compound statement as directive body statement");
+							bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
+							if( !bodyStmt )
+								loger.error("Expected compound statement as directive body statement");
 
-								attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope) );
+							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope) );
 
-								break;
-							default:
-								break;
-						}
-
-						attrsDefStmtRange.popFront();
+							break;
+						default:
+							break;
 					}
 
-					if( _frameStack.empty )
-						loger.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
-					if( !_frameStack.back )
-						loger.error(`Cannot store symbol, because symbol table frame is null`);
-					// Add directive definition into existing frame
-					_frameStack.back.add( new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks) );
-
-					if( bodyStmt && !isNoscope )
-					{
-						// Create new frame for body if not forbidden
-						_frameStack ~= _frameStack.back.newChildFrame(bodyStmt.location.index);
-					}
-
-					scope(exit)
-					{
-						if( bodyStmt && !isNoscope ) {
-							_frameStack.popBack();
-						}
-					}
-
-					if( bodyStmt )
-					{
-						// Analyse nested tree
-						bodyStmt.accept(this);
-					}
-
-					if( !defAttrsRange.empty )
-						loger.error(`Expected end of directive definition statement. Maybe ; is missing`);
-					break;
+					attrsDefStmtRange.popFront();
 				}
-				case "import":
+
+				if( _frameStack.empty )
+					loger.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
+				if( !_frameStack.back )
+					loger.error(`Cannot store symbol, because symbol table frame is null`);
+				// Add directive definition into existing frame
+				_frameStack.back.add( new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks) );
+
+				if( bodyStmt && !isNoscope )
 				{
-					IAttributeRange attrRange = node[];
-					if( attrRange.empty )
-						loger.error(`Expected module name in import statement, but got end of directive`);
-
-					INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
-
-					if( !attrRange.empty )
-						loger.error(`Expected end of import directive, maybe ; is missing`);
-
-					// Add imported module symbol table as local symbol
-					_frameStack.back.add(new ModuleSymbol(
-						moduleNameExpr.name,
-						analyzeModuleSymbols(moduleNameExpr.name)
-					));
-					break;
+					// Create new frame for body if not forbidden
+					_frameStack ~= _frameStack.back.newChildFrame(bodyStmt.location.index);
 				}
-				case "from":
+
+				scope(exit)
 				{
-					IAttributeRange attrRange = node[];
-					if( attrRange.empty )
-						loger.error(`Expected module name in import statement, but got end of directive`);
-
-					INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
-					INameExpression importKwdExpr = attrRange.takeFrontAs!INameExpression("Expected 'import' keyword!");
-					if( importKwdExpr.name != "import" )
-						loger.error("Expected 'import' keyword!");
-
-					string[] symbolNames;
-					while( !attrRange.empty )
-					{
-						INameExpression symbolNameExpr = attrRange.takeFrontAs!INameExpression("Expected imported symbol name");
-						symbolNames ~= symbolNameExpr.name;
+					if( bodyStmt && !isNoscope ) {
+						_frameStack.popBack();
 					}
-
-					SymbolTableFrame moduleTable = analyzeModuleSymbols(moduleNameExpr.name);
-
-					foreach( symbolName; symbolNames )
-					{
-						// As long as variables currently shall be imported in runtime only and there is no compile-time
-						// symbols for it, so import symbol that currently exists
-						if( Symbol importedSymbol = moduleTable.localLookup(symbolName) ) {
-							_frameStack.back.add(importedSymbol);
-						}
-					}
-					break;
 				}
-				default:
-					foreach( childNode; node[] )
-					{
-						loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
-						loger.internalAssert(childNode, `Child node is null`);
-						childNode.accept(this);
-					}
+
+				if( bodyStmt )
+				{
+					// Analyse nested tree
+					bodyStmt.accept(this);
+				}
+
+				if( !defAttrsRange.empty )
+					loger.error(`Expected end of directive definition statement. Maybe ; is missing`);
+				break;
 			}
-			// TODO: Check if needed to analyse other directive attributes scopes
-		}
-		void visit(IDataFragmentStatement node) {  }
-		void visit(ICompoundStatement node)
-		{
-			foreach( childNode; node[] )
+			case "import":
 			{
-				loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind);
-				childNode.accept(this);
-			}
+				IAttributeRange attrRange = node[];
+				if( attrRange.empty )
+					loger.error(`Expected module name in import statement, but got end of directive`);
 
+				INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
+
+				if( !attrRange.empty )
+					loger.error(`Expected end of import directive, maybe ; is missing`);
+
+				// Add imported module symbol table as local symbol
+				_frameStack.back.add(new ModuleSymbol(
+					moduleNameExpr.name,
+					analyzeModuleSymbols(moduleNameExpr.name)
+				));
+				break;
+			}
+			case "from":
+			{
+				IAttributeRange attrRange = node[];
+				if( attrRange.empty )
+					loger.error(`Expected module name in import statement, but got end of directive`);
+
+				INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
+				INameExpression importKwdExpr = attrRange.takeFrontAs!INameExpression("Expected 'import' keyword!");
+				if( importKwdExpr.name != "import" )
+					loger.error("Expected 'import' keyword!");
+
+				string[] symbolNames;
+				while( !attrRange.empty )
+				{
+					INameExpression symbolNameExpr = attrRange.takeFrontAs!INameExpression("Expected imported symbol name");
+					symbolNames ~= symbolNameExpr.name;
+				}
+
+				SymbolTableFrame moduleTable = analyzeModuleSymbols(moduleNameExpr.name);
+
+				foreach( symbolName; symbolNames )
+				{
+					// As long as variables currently shall be imported in runtime only and there is no compile-time
+					// symbols for it, so import symbol that currently exists
+					if( Symbol importedSymbol = moduleTable.localLookup(symbolName) ) {
+						_frameStack.back.add(importedSymbol);
+					}
+				}
+				break;
+			}
+			default:
+				foreach( childNode; node[] )
+				{
+					loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
+					loger.internalAssert(childNode, `Child node is null`);
+					childNode.accept(this);
+				}
 		}
+		// TODO: Check if needed to analyse other directive attributes scopes
 	}
+	void _visit(IDataFragmentStatement node) {  }
+	void _visit(ICompoundStatement node)
+	{
+		foreach( childNode; node[] )
+		{
+			loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind);
+			childNode.accept(this);
+		}
+
+	}
+	
+	void _visit(ICodeBlockStatement node) { _visit(cast(ICompoundStatement) node); }
+	void _visit(IMixedBlockStatement node) { _visit(cast(ICompoundStatement) node); }
 
 	SymbolTableFrame analyzeModuleSymbols(string moduleName)
 	{
@@ -1495,6 +1544,8 @@ public:
 		enterNewCodeObject( newModuleObject(mainModuleName) );
 	}
 
+	mixin NodeVisitWrapperImpl!();
+
 	version(IvyCompilerDebug)
 		enum isDebugMode = true;
 	else
@@ -1508,7 +1559,15 @@ public:
 			if( compiler._logerMethod is null ) {
 				return; // There is no loger method, so get out of here
 			}
-			compiler._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+			compiler._logerMethod(LogInfo(
+				msg,
+				logInfoType,
+				getShortFuncName(func),
+				file,
+				line,
+				compiler._currentLocation.fileName,
+				compiler._currentLocation.lineIndex
+			));
 		}
 	}
 
@@ -1737,409 +1796,408 @@ public:
 		return _moduleObjects[moduleName];
 	}
 
-	override {
-		void visit(IvyNode node) { assert(0); }
 
-		//Expressions
-		void visit(IExpression node) { visit( cast(IvyNode) node ); }
+	void _visit(IvyNode node) { assert(0); }
 
-		void visit(ILiteralExpression node)
+	//Expressions
+	void _visit(IExpression node) { visit( cast(IvyNode) node ); }
+
+	void _visit(ILiteralExpression node)
+	{
+		LiteralType litType;
+		size_t constIndex;
+		switch( node.literalType )
 		{
-			LiteralType litType;
-			size_t constIndex;
-			switch( node.literalType )
-			{
-				case LiteralType.Undef:
-					constIndex = addConst( TDataNode.makeUndef() ); 
-					break;
-				case LiteralType.Null:
-					constIndex = addConst( TDataNode(null) );
-					break;
-				case LiteralType.Boolean:
-					constIndex = addConst( TDataNode( node.toBoolean() ) );
-					break;
-				case LiteralType.Integer:
-					constIndex = addConst( TDataNode( node.toInteger() ) );
-					break;
-				case LiteralType.Floating:
-					constIndex = addConst( TDataNode( node.toFloating() ) );
-					break;
-				case LiteralType.String:
-					constIndex = addConst( TDataNode( node.toStr() ) );
-					break;
-				case LiteralType.Array:
-					uint arrayLen = 0;
-					foreach( IvyNode elem; node.children )
-					{
-						elem.accept(this);
-						++arrayLen;
-					}
-					addInstr( OpCode.MakeArray, arrayLen );
-					return; // Return in order to not add extra instr
-				case LiteralType.AssocArray:
-					uint aaLen = 0;
-					foreach( IvyNode elem; node.children )
-					{
-						IAssocArrayPair aaPair = cast(IAssocArrayPair) elem;
-						if( !aaPair )
-							loger.error( "Expected assoc array pair!" );
-
-						size_t aaKeyConstIndex = addConst( TDataNode(aaPair.key) );
-						addInstr( OpCode.LoadConst, aaKeyConstIndex );
-
-						if( !aaPair.value )
-							loger.error( "Expected assoc array value!" );
-						aaPair.value.accept(this);
-
-						++aaLen;
-					}
-					addInstr( OpCode.MakeAssocArray, aaLen );
-					return;
-				default:
-					loger.internalAssert( false, "Expected literal expression node!" );
-					break;
-			}
-
-			addInstr( OpCode.LoadConst, constIndex );
-		}
-
-		void visit(INameExpression node)
-		{
-			size_t constIndex = addConst( TDataNode( node.name ) );
-			// Load name constant instruction
-			addInstr( OpCode.LoadName, constIndex );
-		}
-
-		void visit(IOperatorExpression node) { visit( cast(IExpression) node ); }
-		void visit(IUnaryExpression node)
-		{
-			loger.internalAssert( node.expr, "Expression expected!" );
-			node.expr.accept(this);
-
-			OpCode opcode;
-			switch( node.operatorIndex )
-			{
-				case Operator.UnaryPlus: opcode = OpCode.UnaryPlus; break;
-				case Operator.UnaryMin: opcode = OpCode.UnaryMin; break;
-				case Operator.Not: opcode = OpCode.UnaryNot; break;
-				default:
-					loger.internalAssert( false, "Unexpected unary operator type!" );
-			}
-
-			addInstr( opcode );
-		}
-		void visit(IBinaryExpression node)
-		{
-			import std.range: back;
-			import std.conv: to;
-
-			// Generate code that evaluates left and right parts of binary expression and get result on the stack
-			loger.internalAssert( node.leftExpr, "Left expr expected!" );
-			loger.internalAssert( node.rightExpr, "Right expr expected!" );
-
-			switch( node.operatorIndex )
-			{
-				case Operator.And, Operator.Or:
+			case LiteralType.Undef:
+				constIndex = addConst( TDataNode.makeUndef() ); 
+				break;
+			case LiteralType.Null:
+				constIndex = addConst( TDataNode(null) );
+				break;
+			case LiteralType.Boolean:
+				constIndex = addConst( TDataNode( node.toBoolean() ) );
+				break;
+			case LiteralType.Integer:
+				constIndex = addConst( TDataNode( node.toInteger() ) );
+				break;
+			case LiteralType.Floating:
+				constIndex = addConst( TDataNode( node.toFloating() ) );
+				break;
+			case LiteralType.String:
+				constIndex = addConst( TDataNode( node.toStr() ) );
+				break;
+			case LiteralType.Array:
+				uint arrayLen = 0;
+				foreach( IvyNode elem; node.children )
 				{
-					node.leftExpr.accept(this);
-					size_t jumpInstrIndex = addInstr(
-						node.operatorIndex == Operator.And? OpCode.JumpIfFalseOrPop: OpCode.JumpIfTrueOrPop
-					);
-					node.rightExpr.accept(this);
-
-					setInstrArg(jumpInstrIndex, _codeObjStack.back._instrs.length);
-					return;
+					elem.accept(this);
+					++arrayLen;
 				}
-				default:
-					break; // Check out other operators
-			}
+				addInstr( OpCode.MakeArray, arrayLen );
+				return; // Return in order to not add extra instr
+			case LiteralType.AssocArray:
+				uint aaLen = 0;
+				foreach( IvyNode elem; node.children )
+				{
+					IAssocArrayPair aaPair = cast(IAssocArrayPair) elem;
+					if( !aaPair )
+						loger.error( "Expected assoc array pair!" );
 
-			node.leftExpr.accept(this);
-			node.rightExpr.accept(this);
+					size_t aaKeyConstIndex = addConst( TDataNode(aaPair.key) );
+					addInstr( OpCode.LoadConst, aaKeyConstIndex );
 
-			OpCode opcode;
-			switch( node.operatorIndex )
-			{
-				case Operator.Add: opcode = OpCode.Add; break;
-				case Operator.Sub: opcode = OpCode.Sub; break;
-				case Operator.Mul: opcode = OpCode.Mul; break;
-				case Operator.Div: opcode = OpCode.Div; break;
-				case Operator.Mod: opcode = OpCode.Mod; break;
-				case Operator.Concat: opcode = OpCode.Concat; break;
-				case Operator.Equal: opcode = OpCode.Equal; break;
-				case Operator.NotEqual: opcode = OpCode.NotEqual; break;
-				case Operator.LT: opcode = OpCode.LT; break;
-				case Operator.GT: opcode = OpCode.GT; break;
-				case Operator.LTEqual: opcode = OpCode.LTEqual; break;
-				case Operator.GTEqual: opcode = OpCode.GTEqual; break;
-				default:
-					loger.internalAssert( false, "Unexpected binary operator type: ", (cast(Operator) node.operatorIndex) );
-			}
+					if( !aaPair.value )
+						loger.error( "Expected assoc array value!" );
+					aaPair.value.accept(this);
 
-			addInstr( opcode );
+					++aaLen;
+				}
+				addInstr( OpCode.MakeAssocArray, aaLen );
+				return;
+			default:
+				loger.internalAssert( false, "Expected literal expression node!" );
+				break;
 		}
 
-		void visit(IAssocArrayPair node) { visit( cast(IExpression) node ); }
+		addInstr( OpCode.LoadConst, constIndex );
+	}
 
-		//Statements
-		void visit(IStatement node) { visit( cast(IvyNode) node ); }
-		void visit(IKeyValueAttribute node) { visit( cast(IvyNode) node ); }
+	void _visit(INameExpression node)
+	{
+		size_t constIndex = addConst( TDataNode( node.name ) );
+		// Load name constant instruction
+		addInstr( OpCode.LoadName, constIndex );
+	}
 
-		void visit(IDirectiveStatement node)
+	void _visit(IOperatorExpression node) { visit( cast(IExpression) node ); }
+	void _visit(IUnaryExpression node)
+	{
+		loger.internalAssert( node.expr, "Expression expected!" );
+		node.expr.accept(this);
+
+		OpCode opcode;
+		switch( node.operatorIndex )
 		{
-			import std.range: empty, front, popFront;
+			case Operator.UnaryPlus: opcode = OpCode.UnaryPlus; break;
+			case Operator.UnaryMin: opcode = OpCode.UnaryMin; break;
+			case Operator.Not: opcode = OpCode.UnaryNot; break;
+			default:
+				loger.internalAssert( false, "Unexpected unary operator type!" );
+		}
 
-			if( auto comp = node.name in _dirCompilers )
+		addInstr( opcode );
+	}
+	void _visit(IBinaryExpression node)
+	{
+		import std.range: back;
+		import std.conv: to;
+
+		// Generate code that evaluates left and right parts of binary expression and get result on the stack
+		loger.internalAssert( node.leftExpr, "Left expr expected!" );
+		loger.internalAssert( node.rightExpr, "Right expr expected!" );
+
+		switch( node.operatorIndex )
+		{
+			case Operator.And, Operator.Or:
 			{
-				comp.compile( node, this );
+				node.leftExpr.accept(this);
+				size_t jumpInstrIndex = addInstr(
+					node.operatorIndex == Operator.And? OpCode.JumpIfFalseOrPop: OpCode.JumpIfTrueOrPop
+				);
+				node.rightExpr.accept(this);
+
+				setInstrArg(jumpInstrIndex, _codeObjStack.back._instrs.length);
+				return;
 			}
-			else
+			default:
+				break; // Check out other operators
+		}
+
+		node.leftExpr.accept(this);
+		node.rightExpr.accept(this);
+
+		OpCode opcode;
+		switch( node.operatorIndex )
+		{
+			case Operator.Add: opcode = OpCode.Add; break;
+			case Operator.Sub: opcode = OpCode.Sub; break;
+			case Operator.Mul: opcode = OpCode.Mul; break;
+			case Operator.Div: opcode = OpCode.Div; break;
+			case Operator.Mod: opcode = OpCode.Mod; break;
+			case Operator.Concat: opcode = OpCode.Concat; break;
+			case Operator.Equal: opcode = OpCode.Equal; break;
+			case Operator.NotEqual: opcode = OpCode.NotEqual; break;
+			case Operator.LT: opcode = OpCode.LT; break;
+			case Operator.GT: opcode = OpCode.GT; break;
+			case Operator.LTEqual: opcode = OpCode.LTEqual; break;
+			case Operator.GTEqual: opcode = OpCode.GTEqual; break;
+			default:
+				loger.internalAssert( false, "Unexpected binary operator type: ", (cast(Operator) node.operatorIndex) );
+		}
+
+		addInstr( opcode );
+	}
+
+	void _visit(IAssocArrayPair node) { visit( cast(IExpression) node ); }
+
+	//Statements
+	void _visit(IStatement node) { visit( cast(IvyNode) node ); }
+	void _visit(IKeyValueAttribute node) { visit( cast(IvyNode) node ); }
+
+	void _visit(IDirectiveStatement node)
+	{
+		import std.range: empty, front, popFront;
+
+		if( auto comp = node.name in _dirCompilers )
+		{
+			comp.compile( node, this );
+		}
+		else
+		{
+			auto attrRange = node[];
+
+			Symbol symb = this.symbolLookup( node.name );
+			if( symb.kind != SymbolKind.DirectiveDefinition )
+				loger.error(`Expected directive definition symbol kind`);
+
+			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
+			loger.internalAssert( dirSymbol, `Directive definition symbol is null` );
+
+			DirAttrsBlock!(true)[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
+
+			// Add instruction to load directive object from context by name
+			size_t dirNameConstIndex = addConst( TDataNode(node.name) );
+			addInstr( OpCode.LoadName, dirNameConstIndex );
+
+			// Keeps count of stack arguments actualy used by this call. First is directive object
+			size_t stackItemsCount = 1;
+
+			loger.write(`Entering directive attrs blocks loop`);
+			while( !dirAttrBlocks.empty )
 			{
-				auto attrRange = node[];
-
-				Symbol symb = this.symbolLookup( node.name );
-				if( symb.kind != SymbolKind.DirectiveDefinition )
-					loger.error(`Expected directive definition symbol kind`);
-
-				DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-				loger.internalAssert( dirSymbol, `Directive definition symbol is null` );
-
-				DirAttrsBlock!(true)[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
-
-				// Add instruction to load directive object from context by name
-				size_t dirNameConstIndex = addConst( TDataNode(node.name) );
-				addInstr( OpCode.LoadName, dirNameConstIndex );
-
-				// Keeps count of stack arguments actualy used by this call. First is directive object
-				size_t stackItemsCount = 1;
-
-				loger.write(`Entering directive attrs blocks loop`);
-				while( !dirAttrBlocks.empty )
+				final switch( dirAttrBlocks.front.kind )
 				{
-					final switch( dirAttrBlocks.front.kind )
+					case DirAttrKind.NamedAttr:
 					{
-						case DirAttrKind.NamedAttr:
+						size_t argCount = 0;
+						bool[string] argsSet;
+
+						DirAttrsBlock!(true) namedAttrsDef = dirAttrBlocks.front;
+						while( !attrRange.empty )
 						{
-							size_t argCount = 0;
-							bool[string] argsSet;
-
-							DirAttrsBlock!(true) namedAttrsDef = dirAttrBlocks.front;
-							while( !attrRange.empty )
-							{
-								IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
-								if( !keyValueAttr ) {
-									break; // We finished with key-value attributes
-								}
-
-								if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
-									loger.error(`Unexpected named attribute "` ~ keyValueAttr.name ~ `"`);
-								
-								if( keyValueAttr.name in argsSet )
-									loger.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
-
-								// Add name of named argument into stack
-								size_t nameConstIndex = addConst( TDataNode(keyValueAttr.name) );
-								addInstr( OpCode.LoadConst, nameConstIndex );
-								++stackItemsCount;
-
-								// Compile value expression (it should put result value on the stack)
-								keyValueAttr.value.accept(this);
-								++stackItemsCount;
-
-								++argCount;
-								argsSet[keyValueAttr.name] = true;
-								attrRange.popFront();
+							IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
+							if( !keyValueAttr ) {
+								break; // We finished with key-value attributes
 							}
 
-							foreach( name, attrDecl; namedAttrsDef.namedAttrs )
+							if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
+								loger.error(`Unexpected named attribute "` ~ keyValueAttr.name ~ `"`);
+							
+							if( keyValueAttr.name in argsSet )
+								loger.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
+
+							// Add name of named argument into stack
+							size_t nameConstIndex = addConst( TDataNode(keyValueAttr.name) );
+							addInstr( OpCode.LoadConst, nameConstIndex );
+							++stackItemsCount;
+
+							// Compile value expression (it should put result value on the stack)
+							keyValueAttr.value.accept(this);
+							++stackItemsCount;
+
+							++argCount;
+							argsSet[keyValueAttr.name] = true;
+							attrRange.popFront();
+						}
+
+						foreach( name, attrDecl; namedAttrsDef.namedAttrs )
+						{
+							if( name !in argsSet )
 							{
-								if( name !in argsSet )
+								IExpression defVal = namedAttrsDef.namedAttrs[name].defaultValueExpr;
+
+								if( defVal )
 								{
-									IExpression defVal = namedAttrsDef.namedAttrs[name].defaultValueExpr;
+									// Add name of named argument into stack
+									size_t nameConstIndex = addConst( TDataNode(name) );
+									addInstr(OpCode.LoadConst, nameConstIndex);
+									++stackItemsCount;
 
-									if( defVal )
-									{
-										// Add name of named argument into stack
-										size_t nameConstIndex = addConst( TDataNode(name) );
-										addInstr(OpCode.LoadConst, nameConstIndex);
-										++stackItemsCount;
-
-										// Generate code to set default values
-										defVal.accept(this);
-										++stackItemsCount;
-										++argCount;
-									}
+									// Generate code to set default values
+									defVal.accept(this);
+									++stackItemsCount;
+									++argCount;
 								}
 							}
-
-							// Add instruction to load value that consists of number of pairs in block and type of block
-							size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
-							size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) );
-							addInstr(OpCode.LoadConst, blockHeaderConstIndex);
-							++stackItemsCount; // We should count args block header
-							break;
 						}
-						case DirAttrKind.ExprAttr:
-						{
-							size_t argCount = 0;
 
-							auto exprAttrDefs = dirAttrBlocks.front.exprAttrs[];
-							while( !attrRange.empty )
-							{
-								IExpression exprAttr = cast(IExpression) attrRange.front;
-								if( !exprAttr ) {
-									break; // We finished with positional attributes
-								}
-
-								if( exprAttrDefs.empty ) {
-									loger.error(`Got more positional arguments than expected!`);
-								}
-
-								exprAttr.accept(this);
-								++stackItemsCount;
-								++argCount;
-
-								attrRange.popFront(); exprAttrDefs.popFront();
-							}
-
-							while( !exprAttrDefs.empty )
-							{
-								IExpression defVal = exprAttrDefs.front.defaultValueExpr;
-								if( !defVal )
-									loger.error(`Positional attribute is not passed explicitly and has no default value`);
-
-								defVal.accept(this);
-								++stackItemsCount;
-								++argCount;
-								exprAttrDefs.popFront();
-							}
-
-							// Add instruction to load value that consists of number of positional arguments in block and type of block
-							size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
-							size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) );
-							addInstr(OpCode.LoadConst, blockHeaderConstIndex);
-							++stackItemsCount; // We should count args block header
-							break;
-						}
-						case DirAttrKind.IdentAttr:
-						{
-							loger.internalAssert( false );
-							// TODO: We should take number of identifiers passed in directive definition
-							while( !attrRange.empty ) {
-								IExpression identAttr = cast(INameExpression) attrRange.front;
-								if( !identAttr ) {
-									break;
-								}
-
-								attrRange.popFront();
-							}
-							break;
-						}
-						case DirAttrKind.KwdAttr:
-						{
-							loger.internalAssert( false );
-							DirAttrsBlock!(true) kwdDef = dirAttrBlocks.front;
-							INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression( `Expected keyword attribute` );
-							if( kwdDef.keyword != kwdAttr.name )
-								loger.error( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
-							break;
-						}
-						case DirAttrKind.BodyAttr:
-							break;
+						// Add instruction to load value that consists of number of pairs in block and type of block
+						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
+						size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) );
+						addInstr(OpCode.LoadConst, blockHeaderConstIndex);
+						++stackItemsCount; // We should count args block header
+						break;
 					}
-					dirAttrBlocks.popFront();
-				}
-				loger.write(`Exited directive attrs blocks loop`);
+					case DirAttrKind.ExprAttr:
+					{
+						size_t argCount = 0;
 
-				if( !attrRange.empty ) {
-					loger.error( `Not all directive attributes processed correctly. Seems that there are unexpected attributes or missing ;` );
-				}
+						auto exprAttrDefs = dirAttrBlocks.front.exprAttrs[];
+						while( !attrRange.empty )
+						{
+							IExpression exprAttr = cast(IExpression) attrRange.front;
+							if( !exprAttr ) {
+								break; // We finished with positional attributes
+							}
 
-				// After all preparations add instruction to call directive
-				addInstr( OpCode.RunCallable, stackItemsCount );
+							if( exprAttrDefs.empty ) {
+								loger.error(`Got more positional arguments than expected!`);
+							}
+
+							exprAttr.accept(this);
+							++stackItemsCount;
+							++argCount;
+
+							attrRange.popFront(); exprAttrDefs.popFront();
+						}
+
+						while( !exprAttrDefs.empty )
+						{
+							IExpression defVal = exprAttrDefs.front.defaultValueExpr;
+							if( !defVal )
+								loger.error(`Positional attribute is not passed explicitly and has no default value`);
+
+							defVal.accept(this);
+							++stackItemsCount;
+							++argCount;
+							exprAttrDefs.popFront();
+						}
+
+						// Add instruction to load value that consists of number of positional arguments in block and type of block
+						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
+						size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) );
+						addInstr(OpCode.LoadConst, blockHeaderConstIndex);
+						++stackItemsCount; // We should count args block header
+						break;
+					}
+					case DirAttrKind.IdentAttr:
+					{
+						loger.internalAssert( false );
+						// TODO: We should take number of identifiers passed in directive definition
+						while( !attrRange.empty ) {
+							IExpression identAttr = cast(INameExpression) attrRange.front;
+							if( !identAttr ) {
+								break;
+							}
+
+							attrRange.popFront();
+						}
+						break;
+					}
+					case DirAttrKind.KwdAttr:
+					{
+						loger.internalAssert( false );
+						DirAttrsBlock!(true) kwdDef = dirAttrBlocks.front;
+						INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression( `Expected keyword attribute` );
+						if( kwdDef.keyword != kwdAttr.name )
+							loger.error( `Expected "` ~ kwdDef.keyword ~ `" keyword attribute` );
+						break;
+					}
+					case DirAttrKind.BodyAttr:
+						break;
+				}
+				dirAttrBlocks.popFront();
 			}
-		}
+			loger.write(`Exited directive attrs blocks loop`);
 
-		void visit(IDataFragmentStatement node)
-		{
-			// Nothing special. Just store this piece of data into table
-			size_t constIndex = addConst( TDataNode(node.data) );
-			addInstr( OpCode.LoadConst, constIndex );
-		}
-
-		void visit(ICompoundStatement node)
-		{
-			loger.internalAssert( false, `Shouldn't fall into this!` );
-		}
-
-		void visit(ICodeBlockStatement node)
-		{
-			if( !node )
-				loger.error( "Code block statement node is null!" );
-			
-			if( node.isListBlock )
-			{
-				TDataNode emptyArray = TDataNode[].init;
-				size_t emptyArrayConstIndex = addConst(emptyArray);
-				addInstr( OpCode.LoadConst, emptyArrayConstIndex );
+			if( !attrRange.empty ) {
+				loger.error( `Not all directive attributes processed correctly. Seems that there are unexpected attributes or missing ;` );
 			}
-			
-			auto stmtRange = node[];
-			while( !stmtRange.empty )
-			{
-				stmtRange.front.accept( this );
-				stmtRange.popFront();
 
-				if( node.isListBlock )
-				{
-					addInstr( OpCode.Append ); // Append result to result array
-				}
-				else if( !stmtRange.empty )
-				{
-					addInstr( OpCode.PopTop );
-				}
-			}
+			// After all preparations add instruction to call directive
+			addInstr( OpCode.RunCallable, stackItemsCount );
 		}
+	}
 
-		void visit(IMixedBlockStatement node)
+	void _visit(IDataFragmentStatement node)
+	{
+		// Nothing special. Just store this piece of data into table
+		size_t constIndex = addConst( TDataNode(node.data) );
+		addInstr( OpCode.LoadConst, constIndex );
+	}
+
+	void _visit(ICompoundStatement node)
+	{
+		loger.internalAssert( false, `Shouldn't fall into this!` );
+	}
+
+	void _visit(ICodeBlockStatement node)
+	{
+		if( !node )
+			loger.error( "Code block statement node is null!" );
+		
+		if( node.isListBlock )
 		{
-			if( !node )
-				loger.error( "Mixed block statement node is null!" );
-
 			TDataNode emptyArray = TDataNode[].init;
 			size_t emptyArrayConstIndex = addConst(emptyArray);
 			addInstr( OpCode.LoadConst, emptyArrayConstIndex );
+		}
+		
+		auto stmtRange = node[];
+		while( !stmtRange.empty )
+		{
+			stmtRange.front.accept( this );
+			stmtRange.popFront();
 
-			size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
-			size_t resultNameConstIndex = addConst( TDataNode("__result__") );
-
-			// In order to make call to __render__ creating block header for one positional argument
-			// witch is currently at the TOP of the execution stack
-			size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr; //TODO: Change block type magic constant to enum!
-			size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
-
-			auto stmtRange = node[];
-			while( !stmtRange.empty )
+			if( node.isListBlock )
 			{
-				addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
-				
-				// Add name for key-value argument
-				addInstr( OpCode.LoadConst, resultNameConstIndex );
-				
-				stmtRange.front.accept( this );
-				stmtRange.popFront();
-
-				addInstr( OpCode.LoadConst, blockHeaderConstIndex ); // Add argument block header
-
-				// Stack layout is:
-				// TOP: argument block header
-				// TOP - 1: Current result argument
-				// TOP - 2: Current result var name argument
-				// TOP - 3: Callable object for __render__
-				addInstr( OpCode.RunCallable, 4 );
-				
 				addInstr( OpCode.Append ); // Append result to result array
 			}
+			else if( !stmtRange.empty )
+			{
+				addInstr( OpCode.PopTop );
+			}
+		}
+	}
+
+	void _visit(IMixedBlockStatement node)
+	{
+		if( !node )
+			loger.error( "Mixed block statement node is null!" );
+
+		TDataNode emptyArray = TDataNode[].init;
+		size_t emptyArrayConstIndex = addConst(emptyArray);
+		addInstr( OpCode.LoadConst, emptyArrayConstIndex );
+
+		size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
+		size_t resultNameConstIndex = addConst( TDataNode("__result__") );
+
+		// In order to make call to __render__ creating block header for one positional argument
+		// witch is currently at the TOP of the execution stack
+		size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr; //TODO: Change block type magic constant to enum!
+		size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
+
+		auto stmtRange = node[];
+		while( !stmtRange.empty )
+		{
+			addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
+			
+			// Add name for key-value argument
+			addInstr( OpCode.LoadConst, resultNameConstIndex );
+			
+			stmtRange.front.accept( this );
+			stmtRange.popFront();
+
+			addInstr( OpCode.LoadConst, blockHeaderConstIndex ); // Add argument block header
+
+			// Stack layout is:
+			// TOP: argument block header
+			// TOP - 1: Current result argument
+			// TOP - 2: Current result var name argument
+			// TOP - 3: Callable object for __render__
+			addInstr( OpCode.RunCallable, 4 );
+			
+			addInstr( OpCode.Append ); // Append result to result array
 		}
 	}
 

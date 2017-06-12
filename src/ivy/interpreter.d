@@ -553,6 +553,7 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 				// Basic check for ClassNode for emptyness is that it should not be null reference
 				// If some interface method will be introduced to check for empty then we shall consider to check it too
 				interp._stack ~= TDataNode(value.classNode is null);
+				break;
 			default:
 				interp.loger.error(`Cannot test type: `, value.type, ` for emptyness`);
 				break;

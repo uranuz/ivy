@@ -4,7 +4,10 @@ import std.range, std.algorithm, std.conv, std.stdio;
 
 import ivy.lexer_tools, ivy.common;
 
-class IvyLexerException: Exception
+// If IvyTotalDebug is defined then enable parser debug
+version(IvyTotalDebug) version = IvyLexerDebug;
+
+class IvyLexerException: IvyException
 {
 public:
 	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
@@ -433,6 +436,8 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	alias Char = SourceRange.Char;
 	alias String = S;
 	enum LocationConfig config = c;
+	alias LogerMethod = void delegate(LogInfo);
+	alias LexerT = Lexer!(String, config);
 
 	static auto staticRule(Flags...)(String str, LexemeType lexType, Flags extraFlags)
 	{
@@ -567,21 +572,59 @@ public:
 	SourceRange sourceRange; //Source range. Don't modify it!
 	SourceRange currentRange;
 	LexerContext _ctx;
+	LogerMethod logerMethod;
 		
 	/+private+/ LexemeT _front;
 	
 	@disable this(this);
-	
-	this( String src )
+
+	version(IvyLexerDebug)
+		enum isDebugMode = true;
+	else
+		enum isDebugMode = false;
+
+	static struct LogerProxy
 	{
-		auto newRange = SourceRange(src);
-		this( newRange );
+		mixin LogerProxyImpl!(IvyLexerException, isDebugMode);
+		LexerT lexer;
+
+		void sendLogInfo(LogInfoType logInfoType, string msg)
+		{
+			import std.array: array;
+			import std.conv: to;
+
+			if( lexer.logerMethod is null ) {
+				return; // There is no loger method, so get out of here
+			}
+
+			lexer.logerMethod(LogInfo(
+				msg,
+				logInfoType,
+				func.splitter('.').retro.take(2).array.retro.join("."),
+				file,
+				line,
+				(!lexer.empty? lexer.front.loc.fileName: null),
+				(!lexer.empty? lexer.front.loc.lineIndex: 0),
+				(!lexer.empty? lexer.frontValue.array.to!string: null)
+			));
+		}
+	}
+
+	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+		return LogerProxy(func, file, line, this.save);
 	}
 	
-	this( ref const(SourceRange) srcRange )
+	this(String src, LogerMethod logMeth = null)
+	{
+		auto newRange = SourceRange(src);
+		this(newRange, logMeth);
+	}
+	
+	this(ref const(SourceRange) srcRange, LogerMethod logMeth = null)
 	{
 		sourceRange = srcRange.save;
 		currentRange = sourceRange.save;
+		logerMethod = logMeth;
 
 		// In order to make lexer initialized at startup - we parse first lexeme
 		if( !this.empty )
@@ -605,7 +648,7 @@ public:
 		if( source.empty )
 		{
 			if( !ctx.parenStack.empty )
-				assert( 0,
+				assert(false,
 					"Expected matching parenthesis for " 
 					~ (cast(LexemeType) ctx.parenStack.back.typeIndex).to!string
 					~ ", but unexpected end of input found!!!" 
@@ -626,7 +669,7 @@ public:
 		}
 		else
 		{
-			assert( false, "No lexer context detected!" );
+			assert(false, "No lexer context detected!");
 			rules = null;
 		}
 
@@ -767,13 +810,13 @@ public:
 		if( !value.empty )
 			whatExpected ~= ` with value "` ~ value ~ `"`;
 
-		assert( !this.empty, `Expected ` ~ whatExpected ~ ` but end of input found!!!` );
+		loger.error( !this.empty, `Expected `, whatExpected,` but end of input found!!!` );
 		
 		String whatGot = `lexeme of typeIndex "` ~ front.info.typeIndex.to!String ~ `"`;
 		if( !front.getSlice(sourceRange).empty )
 			whatGot ~= ` with value "` ~ front.getSlice(sourceRange).array ~ `"`;
 		
-		assert( false,  `[` ~ line.to!String ~ `] Expected ` ~ whatExpected ~ ` but got ` ~ whatGot ~ `!!!` );
+		loger.error(`[`, line.to!String, `] Expected `, whatExpected, ` but got `, whatGot, `!!!` );
 	}
 	
 	// TODO: Unused method - consider to remove
@@ -792,7 +835,8 @@ public:
 		}
 		
 		fail_expectation(lexType, line, value);
-		assert(0);
+		loger.internalAssert(false);
+		assert(false);
 	}
 
 	// TODO: Unused method - consider to remove
@@ -809,7 +853,8 @@ public:
 		}
 		
 		fail_expectation(lexType, line);
-		assert(0);
+		loger.internalAssert(false);
+		assert(false);
 	}
 	
 	// TODO: Unused method - consider to remove
@@ -849,7 +894,7 @@ public:
 		//Creates copy of currentRange in order to not modify original one
 		SourceRange parsedRange = currentRange.save; 
 		if( this.empty )
-			assert( false, "Cannot peek lexeme, because currentRange is empty!!!" );
+			loger.error("Cannot peek lexeme, because currentRange is empty!!!");
 		
 		return parseFront(parsedRange, _ctx);
 	}
@@ -900,7 +945,7 @@ public:
 				source.popFront();
 		}
 		
-		assert(0, `Expected <` ~ quoteLex.to!string ~ `> but end of input found!!!` );
+		assert(false, `Expected <` ~ quoteLex.to!string ~ `> at the end of string literal, but end of input found!!!` );
 	}
 
 	static bool parseInteger(ref SourceRange source, ref const(LexRule) rule)
