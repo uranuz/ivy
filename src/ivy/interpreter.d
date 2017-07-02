@@ -524,7 +524,6 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 {
 	override void interpret(Interpreter interp)
 	{
-		import std.conv: text;
 		TDataNode value = interp.getValue("value");
 		switch(value.type)
 		{
@@ -957,6 +956,33 @@ public:
 	TDataNode getModuleConstCopy( size_t index )
 	{
 		return deeperCopy( getModuleConst(index) );
+	}
+
+	bool evalAsBoolean(ref TDataNode value)
+	{
+		switch(value.type)
+		{
+			case DataNodeType.Undef, DataNodeType.Null: return false;
+			case DataNodeType.Boolean: return value.boolean;
+			case DataNodeType.Integer, DataNodeType.Floating, DataNodeType.DateTime:
+				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
+				// because in many cases they could be treated as significant values
+				// DateTime and Boolean are not empty too, because we cannot say what value should be treated as empty
+				return true;
+			case DataNodeType.String: return !!value.str.length;
+			case DataNodeType.Array: return !!value.array.length;
+			case DataNodeType.AssocArray: return !!value.assocArray.length;
+			case DataNodeType.DataNodeRange:
+				return !!value.dataRange && !value.dataRange.empty;
+			case DataNodeType.ClassNode:
+				// Basic check for ClassNode for emptyness is that it should not be null reference
+				// If some interface method will be introduced to check for empty then we shall consider to check it too
+				return value.classNode !is null;
+			default:
+				loger.error(`Cannot evaluate type: `, value.type, ` in logical context!`);
+				break;
+		}
+		assert(false);
 	}
 
 	void execLoop()
@@ -1478,12 +1504,9 @@ public:
 				{
 					import std.algorithm: canFind;
 					loger.internalAssert(!_stack.empty, `Cannot evaluate logical value, because stack is empty`);
-					loger.internalAssert([ DataNodeType.Boolean, DataNodeType.Undef, DataNodeType.Null ].canFind(_stack.back.type),
-						`Expected null, undef or boolean in logical context as jump condition`);
-					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
-					TDataNode condNode = _stack.back;
 
-					bool jumpCond = (condNode.type == DataNodeType.Boolean && condNode.boolean); // This is actual condition to test
+					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
+					bool jumpCond = evalAsBoolean(_stack.back); // This is actual condition to test
 					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].canFind(instr.opcode) ) {
 						jumpCond = !jumpCond; // Invert condition if False family is used
 					}
