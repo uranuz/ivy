@@ -444,6 +444,7 @@ interface IClassNode
 	TDataNode opIndex(size_t);
 	TDataNode __getAttr__(string);
 	void __setAttr__(TDataNode, string);
+	TDataNode __serialize__();
 }
 
 enum DataNodeType {
@@ -965,19 +966,28 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			outRange.put("}");
 			break;
 		case ClassNode:
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
-
 			import std.conv: text;
-			if( node.classNode ) {
-				outRange.put("<class node>");
-			} else {
-				outRange.put("<class node (null)>");
-			}
-
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
+			if( node.classNode )
+			{
+				TDataNode serialized = node.classNode.__serialize__();
+				if( serialized.isUndef )
+				{
+					static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+						outRange.put("\"<class node>\"");
+					} else {
+						outRange.put("<class node>");
+					}
+				} else {
+					renderDataNode!(renderType)(serialized, outRange, maxRecursion - 1);
+				}
+			} 
+			else
+			{
+				static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
+					outRange.put("\"<class node (null)>\"");
+				} else {
+					outRange.put("<class node (null)>");
+				}
 			}
 			break;
 		case CodeObject:

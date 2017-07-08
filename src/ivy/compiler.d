@@ -2169,33 +2169,33 @@ public:
 		size_t emptyArrayConstIndex = addConst(emptyArray);
 		addInstr( OpCode.LoadConst, emptyArrayConstIndex );
 
-		size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
-		size_t resultNameConstIndex = addConst( TDataNode("__result__") );
+		//size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
+		//size_t resultNameConstIndex = addConst( TDataNode("__result__") );
 
 		// In order to make call to __render__ creating block header for one positional argument
 		// witch is currently at the TOP of the execution stack
-		size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr; //TODO: Change block type magic constant to enum!
-		size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
+		//size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr; //TODO: Change block type magic constant to enum!
+		//size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
 
 		auto stmtRange = node[];
 		while( !stmtRange.empty )
 		{
-			addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
+			//addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
 			
 			// Add name for key-value argument
-			addInstr( OpCode.LoadConst, resultNameConstIndex );
+			//addInstr( OpCode.LoadConst, resultNameConstIndex );
 			
 			stmtRange.front.accept( this );
 			stmtRange.popFront();
 
-			addInstr( OpCode.LoadConst, blockHeaderConstIndex ); // Add argument block header
+			//addInstr( OpCode.LoadConst, blockHeaderConstIndex ); // Add argument block header
 
 			// Stack layout is:
 			// TOP: argument block header
 			// TOP - 1: Current result argument
 			// TOP - 2: Current result var name argument
 			// TOP - 3: Callable object for __render__
-			addInstr( OpCode.RunCallable, 4 );
+			//addInstr( OpCode.RunCallable, 4 );
 			
 			addInstr( OpCode.Append ); // Append result to result array
 		}
