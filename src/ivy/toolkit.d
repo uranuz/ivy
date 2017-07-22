@@ -100,6 +100,7 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	dirInterps["scope"] = new ScopeDirInterpreter();
 	dirInterps["toJSONBase64"] = new ToJSONBase64DirInterpreter();
 	dirInterps["dtGet"] = new DateTimeGetDirInterpreter();
+	dirInterps["range"] = new RangeDirInterpreter();
 
 	// Main compiler phase that generates bytecode for modules
 	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config.compilerLoger);

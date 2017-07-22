@@ -436,6 +436,41 @@ public:
 	}
 }
 
+class IntegerRange: IDataNodeRange
+{
+	alias TDataNode = DataNode!string;
+private:
+	long _current;
+	long _end;
+
+public:
+	this( long begin, long end )
+	{
+		assert( begin <= end, `Begin cannot be greather than end in integer range` );
+		_current = begin;
+		_end = end;
+	}
+
+	override {
+		bool empty() @property {
+			return _current >= _end;
+		}
+
+		TDataNode front() {
+			return TDataNode(_current);
+		}
+
+		void popFront() {
+			++_current;
+		}
+
+		DataNodeType aggrType() @property
+		{
+			return DataNodeType.Array;
+		}
+	}
+}
+
 interface IClassNode
 {
 	alias TDataNode = DataNode!string;

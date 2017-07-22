@@ -651,6 +651,35 @@ class DateTimeGetDirInterpreter: INativeDirectiveInterpreter
 	mixin BaseNativeDirInterpreterImpl!("dtGet");
 }
 
+class RangeDirInterpreter: INativeDirectiveInterpreter
+{
+	import std.typecons: Tuple;
+
+	override void interpret(Interpreter interp) {
+		TDataNode begin = interp.getValue("begin");
+		TDataNode end = interp.getValue("end");
+
+		if( begin.type !=  DataNodeType.Integer ) {
+			interp.loger.error(`Expected integer as 'begin' argument!`);
+		}
+		if( end.type !=  DataNodeType.Integer ) {
+			interp.loger.error(`Expected integer as 'end' argument!`);
+		}
+
+		interp._stack ~= TDataNode(new IntegerRange(begin.integer, end.integer));
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("begin", "any"),
+			DirValueAttr!(true)("end", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("range");
+}
+
 import ivy.bytecode;
 
 class Interpreter
