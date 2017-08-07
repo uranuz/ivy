@@ -900,10 +900,17 @@ private void _writeEscapedString(OutRange)(string str, ref OutRange outRange)
 	import std.range: put;
 	foreach( char symb; str )
 	{
-		if( symb != '\"') {
-			outRange.put(symb);
-		} else {
-			outRange.put("\\\"");
+		switch( symb )
+		{
+			case '\"': outRange.put("\\\""); break;
+			case '\\': outRange.put("\\\\"); break;
+			case '/': outRange.put("\\/"); break;
+			case '\b': outRange.put("\\b"); break;
+			case '\f': outRange.put("\\f"); break;
+			case '\n': outRange.put("\\n"); break;
+			case '\r': outRange.put("\\r"); break;
+			case '\t': outRange.put("\\t"); break;
+			default:	outRange.put(symb);
 		}
 	}
 }
