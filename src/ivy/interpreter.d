@@ -37,7 +37,7 @@ class ExecutionFrame
 
 	// Loger method for used to send error and debug messages
 	LogerMethod _logerMethod;
-	
+
 public:
 	this(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, LogerMethod logerMethod)
 	{
@@ -76,11 +76,11 @@ public:
 			loger.error("Cannot find variable with name: " ~ varName );
 		return result.node;
 	}
-	
+
 	bool canFindValue(string varName) {
 		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
 	}
-	
+
 	DataNodeType getDataNodeType(string varName)
 	{
 		SearchResult result = findValue!(FrameSearchMode.get)(varName);
@@ -154,7 +154,7 @@ public:
 							node.assocArray[nameSplitted.front] = parentDict;
 							node = node.assocArray[nameSplitted.front];
 						} else static if( mode == FrameSearchMode.set ) {
-							// Only parent node should get there. And if it's not exists then issue an error in the set mode 
+							// Only parent node should get there. And if it's not exists then issue an error in the set mode
 							loger.error(`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
 						} else {
 							return SearchResult(allowUndef, TDataNode.makeUndef());
@@ -182,7 +182,7 @@ public:
 							loger.error(`Cannot find node, because execution frame data dict is not of assoc array type!!!`);
 						}
 					}
-					
+
 					if( TDataNode* nodePtr = nameSplitted.front in node.execFrame._dataDict.assocArray ) {
 						loger.write(`Node: `, nameSplitted.front, ` found in execution frame`);
 						node = *nodePtr;
@@ -190,7 +190,7 @@ public:
 						loger.write(`Node: `, nameSplitted.front, ` is NOT found in execution frame`);
 						static if( mode == FrameSearchMode.setWithParents || mode == FrameSearchMode.set ) {
 							loger.error(
-								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text 
+								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text
 								~ ` not exists or cannot set value in foreign execution frame!`
 							);
 						} else {
@@ -219,7 +219,7 @@ public:
 					} else {
 						static if( mode == FrameSearchMode.setWithParents || mode == FrameSearchMode.set ) {
 							loger.error(
-								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text 
+								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text
 								~ `not exist or cannot add new attribute to class node!`
 							);
 						} else {
@@ -297,7 +297,7 @@ public:
 	{
 		return _dataDict.type == DataNodeType.AssocArray;
 	}
-	
+
 	CallableKind callableKind() @property
 	{
 		return _callableObj._kind;
@@ -316,7 +316,7 @@ mixin template BaseNativeDirInterpreterImpl(string symbolName)
 
 	private __gshared DirAttrsBlock!(false)[] _interpAttrBlocks;
 	private __gshared DirectiveDefinitionSymbol _symbol;
-	
+
 	shared static this()
 	{
 		import std.algorithm: map;
@@ -788,7 +788,7 @@ public:
 	ExecutionFrame currentFrame() @property
 	{
 		import std.range: empty, back, popBack;
-		
+
 		auto frameStackSlice = _frameStack[];
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
@@ -805,7 +805,7 @@ public:
 		import std.range: back, popBack;
 		loger.write(`Exit execution frame for callable: `, _frameStack.back._callableObj._name, ` with dataDict: `, _frameStack.back._dataDict);
 		_frameStack.popBack();
-		
+
 	}
 
 	ExecutionFrame getModuleFrame(string modName)
@@ -1202,7 +1202,7 @@ public:
 						case DataNodeType.String:
 							loger.internalAssert(indexValue.type == DataNodeType.Integer,
 								"Cannot execute LoadSubscr instruction. Index value for string aggregate must be integer!");
-							
+
 							// Index operation for string in D is little more complicated
 							 size_t startIndex = aggr.str.toUTFindex(indexValue.integer); // Get code unit index by index of symbol
 							 size_t endIndex = startIndex;
@@ -1286,6 +1286,52 @@ public:
 					break;
 				}
 
+				case OpCode.Insert:
+				{
+					import std.array: insertInPlace;
+
+					loger.write("OpCode.Append _stack: ", _stack);
+					loger.internalAssert(!_stack.empty, "Cannot execute Insert instruction. Expected right operand, but exec stack is empty!");
+					TDataNode positionNode = _stack.back;
+					_stack.popBack();
+					loger.internalAssert(
+						positionNode.type == DataNodeType.Integer,
+						"Cannot execute Insert instruction. Position argument expected to be an integer, but got: ", positionNode.type
+					);
+
+					loger.internalAssert(!_stack.empty, "Cannot execute Append instruction. Expected left operand, but exec stack is empty!");
+					TDataNode valueNode = _stack.back;
+					_stack.popBack();
+
+					loger.internalAssert(!_stack.empty, "Cannot execute Append instruction. Expected left operand, but exec stack is empty!");
+					TDataNode listNode = _stack.back;
+					_stack.popBack();
+					loger.internalAssert(
+						listNode.type == DataNodeType.Array,
+						"Cannot execute Insert instruction. Aggregate must be an array, but got: ", listNode.type
+					);
+					auto pos = positionNode.integer;
+					if (pos < 0) {
+						pos = listNode.array.length + pos;
+					}
+					loger.internalAssert(
+						pos >= 0 && pos < listNode.array.length,
+						"Cannot execute Insert instruction. Computed position is wrong: ", pos
+					);
+					listNode.array.insertInPlace(pos, valueNode);
+
+					_stack ~= listNode; // Put list at the stack as the result
+					break;
+				}
+
+				case OpCode.InsertMass:
+				{
+					loger.write("OpCode.Append _stack: ", _stack);
+					loger.internalAssert(!_stack.empty, "Cannot execute ListInsert instruction. Expected right operand, but exec stack is empty!");
+					assert(false, `Not implemented yet!`);
+					break;
+				}
+
 				// Useless unary plus operation
 				case OpCode.UnaryPlus:
 				{
@@ -1338,7 +1384,7 @@ public:
 					TDataNode varNameNode = getModuleConstCopy(instr.arg);
 					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute `, instr.opcode, ` instruction. Variable name const must have string type!`);
 
-					
+
 					switch(instr.opcode) {
 						case OpCode.StoreName: setValue(varNameNode.str, varValue); break;
 						case OpCode.StoreLocalName: setLocalValue(varNameNode.str, varValue); break;
@@ -1413,10 +1459,10 @@ public:
 					loger.internalAssert(_stack.back.type == DataNodeType.Array, "Cannot execute FromImport instruction. Expected list of symbol names");
 					string[] symbolNames = _stack.back.array.map!( it => it.str ).array;
 					_stack.popBack();
-					
+
 					loger.internalAssert(!_stack.empty, "Cannot execute FromImport instruction, because exec stack is empty!");
 					loger.internalAssert(_stack.back.type == DataNodeType.ExecutionFrame, "Cannot execute FromImport instruction. Expected execution frame argument");
-					
+
 					ExecutionFrame moduleFrame = _stack.back.execFrame;
 					loger.internalAssert(moduleFrame, "Cannot execute FromImport instruction, because module frame argument is null");
 					_stack.popBack();
@@ -1561,7 +1607,7 @@ public:
 					break;
 				}
 
-				// Swaps two top items on the stack 
+				// Swaps two top items on the stack
 				case OpCode.SwapTwo:
 				{
 					loger.internalAssert(_stack.length > 1, "Stack must have at least two items to swap");
@@ -1628,7 +1674,7 @@ public:
 					CallableObject callableObj = _stack[_stack.length - stackArgCount].callable;
 					loger.internalAssert(callableObj, `Callable object is null!` );
 					loger.write("RunCallable name: ", callableObj._name);
-					
+
 					DirAttrsBlock!(false)[] attrBlocks = callableObj.attrBlocks;
 					loger.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
 
@@ -1660,7 +1706,7 @@ public:
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{
 						size_t blockCounter = 0;
-						
+
 						for( size_t i = 0; i < (stackArgCount - 1); )
 						{
 							loger.internalAssert(!_stack.empty, `Expected integer as arguments block header, but got empty exec stack!`);
@@ -1703,7 +1749,7 @@ public:
 									size_t currBlockIndex = attrBlocks.length - blockCounter - 2; // 2 is: 1, because of length PLUS 1 for body attr in the end
 
 									loger.write(`Interpret pos arg, currBlockIndex: `, currBlockIndex );
-									
+
 									if( currBlockIndex >= attrBlocks.length ) {
 										loger.error(`Current attr block index is out of current bounds of declared blocks!`);
 									}
@@ -1754,7 +1800,7 @@ public:
 					{
 						loger.internalAssert(callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!`);
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
-						
+
 						this.removeFrame(); // Drop frame from stack after end of execution
 					}
 
@@ -1793,7 +1839,7 @@ public:
 
 						loger.internalAssert(!_stack.empty, `Expected assoc array key, but got empty stack`);
 						loger.internalAssert(_stack.back.type == DataNodeType.String, `Expected string as assoc array key`);
-						
+
 						newAssocArray[_stack.back.str] = val;
 						_stack.popBack();
 					}

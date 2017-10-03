@@ -147,7 +147,7 @@ public:
 		{
 			if( !isAbsolute(importPath) )
 				continue;
-			
+
 			string fileNameNoExt = buildNormalizedPath( only(importPath).chain( moduleName.splitter('.') ).array );
 			// The module name is given. Try to build path to it
 			fileName = fileNameNoExt ~ _fileExtension;
@@ -413,7 +413,7 @@ mixin template NodeVisitWrapperImpl()
 			`ICompoundStatement`,
 			`ICodeBlockStatement`,
 			`IMixedBlockStatement`
-		].map!(function(string typeStr) { 
+		].map!(function(string typeStr) {
 			return `override void visit(` ~ typeStr ~ ` node) {
 				this.loger.internalAssert(node, "node is null!");
 				this._currentLocation = node.extLocation;
@@ -578,7 +578,7 @@ public:
 
 							if( attrsDefStmtAttrRange.empty )
 								loger.error("Unexpected end of def.body directive!");
-							
+
 							// Try to parse noscope flag
 							INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
 							if( noscopeExpr && noscopeExpr.name == "noscope" )
@@ -701,7 +701,7 @@ public:
 		}
 
 	}
-	
+
 	void _visit(ICodeBlockStatement node) { _visit(cast(ICompoundStatement) node); }
 	void _visit(IMixedBlockStatement node) { _visit(cast(ICompoundStatement) node); }
 
@@ -736,7 +736,7 @@ public:
 	{
 		import std.typecons: Tuple;
 		alias Result = Tuple!( DirValueAttr!(true), `attr`, bool, `empty` );
-		
+
 		string attrName;
 		string attrType;
 		IExpression defaultValueExpr;
@@ -987,7 +987,7 @@ class IfCompiler: IDirectiveCompiler
 
 		// Array used to store instr indexes of jump instructions after each
 		// if, elif block, used to jump to the end of directive after block
-		// has been executed 
+		// has been executed
 		size_t[] jumpInstrIndexes;
 		jumpInstrIndexes.length = ifSects.length;
 
@@ -1005,7 +1005,7 @@ class IfCompiler: IDirectiveCompiler
 			// Instruction to jump after the end of if directive when
 			// current body finished
 			jumpInstrIndexes[i] = compiler.addInstr( OpCode.Jump );
-			
+
 			// Getting address of instruction following after if body
 			size_t jumpElseIndex = compiler.getInstrCount();
 
@@ -1029,7 +1029,7 @@ class IfCompiler: IDirectiveCompiler
 
 		foreach( currIndex; jumpInstrIndexes )
 		{
-			// Fill all generated jump instructions with address of instr after directive end 
+			// Fill all generated jump instructions with address of instr after directive end
 			compiler.setInstrArg( currIndex, afterEndInstrIndex );
 		}
 
@@ -1182,7 +1182,7 @@ public:
 		// Creating node for string result on stack
 		size_t emptyStrConstIndex = compiler.addConst( TDataNode(TDataNode[].init) );
 		compiler.addInstr( OpCode.LoadConst, emptyStrConstIndex );
-		
+
 		// RunLoop expects  data node range on the top, but result aggregator
 		// can be left on (TOP - 1), so swap these...
 		compiler.addInstr( OpCode.SwapTwo );
@@ -1193,22 +1193,22 @@ public:
 		// Issue command to store current loop item in local context with specified name
 		size_t varNameConstIndex = compiler.addConst( TDataNode(varName) );
 		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
-		
+
 		// Swap data node range with result, so that we have it on (TOP - 1) when loop body finished
-		compiler.addInstr( OpCode.SwapTwo ); 
+		compiler.addInstr( OpCode.SwapTwo );
 
 		bodyStmt.accept(compiler);
 
 		// Apend current result to previous
 		compiler.addInstr( OpCode.Append );
 
-		// Put data node range at the TOP and result on (TOP - 1) 
+		// Put data node range at the TOP and result on (TOP - 1)
 		compiler.addInstr( OpCode.SwapTwo );
 
 		size_t loopEndInstrIndex = compiler.addInstr( OpCode.Jump, loopStartInstrIndex );
 		// We need to say RunLoop where to jump when range become empty
 		compiler.setInstrArg( loopStartInstrIndex, loopEndInstrIndex );
-		
+
 		// Data range is dropped by RunLoop already
 	}
 }
@@ -1243,56 +1243,8 @@ class ExprCompiler: IDirectiveCompiler
 			compiler.loger.write("ExprCompiler. At end. stmtRange.front.kind: ", ( cast(INameExpression) stmtRange.front ).name);
 			compiler.loger.error(`Expected end of "expr" directive. Maybe ';' is missing`);
 		}
-			
 	}
-
 }
-
-/+
-class TextBlockInterpreter: IDirectiveCompiler
-{
-public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
-	{
-		if( !statement || statement.name != "text"  )
-			interpretError( "Expected 'var' directive" );
-
-		auto stmtRange = statement[];
-
-		if( stmtRange.empty )
-			throw new ASTNodeTypeException("Expected compound statement or expression, but got end of directive");
-
-		interp.opnd = TDataNode.init;
-
-		if( auto expr = cast(IExpression) stmtRange.front )
-		{
-			expr.accept(interp);
-		}
-		else if( auto block = cast(ICompoundStatement) stmtRange.front )
-		{
-			block.accept(interp);
-		}
-		else
-			new ASTNodeTypeException("Expected compound statement or expression");
-
-		stmtRange.popFront(); //Skip attribute of directive
-
-		if( !stmtRange.empty )
-			interpretError("Expected only one attribute in 'text' directive");
-
-		import std.array: appender;
-
-		auto result = appender!string();
-
-		writeDataNodeLines( interp.opnd, result, 15 );
-
-		string dat = result.data;
-
-		interp.opnd = result.data;
-	}
-
-}
-+/
 
 /// Compiles module into module object and saves it into dictionary
 class ImportCompiler: IDirectiveCompiler
@@ -1378,8 +1330,7 @@ class DefCompiler: IDirectiveCompiler
 		while( !stmtRange.empty )
 		{
 			ICodeBlockStatement attrsDefBlockStmt = cast(ICodeBlockStatement) stmtRange.front;
-			if( !attrsDefBlockStmt )
-			{
+			if( !attrsDefBlockStmt ) {
 				break; // Expected to see some attribute declaration
 			}
 
@@ -1410,7 +1361,7 @@ class DefCompiler: IDirectiveCompiler
 
 						if( attrsDefStmtAttrRange.empty )
 							compiler.loger.error("Unexpected end of def.body directive!");
-						
+
 						// Try to parse noscope flag
 						INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
 						if( noscopeExpr && noscopeExpr.name == "noscope" )
@@ -1488,6 +1439,40 @@ class DefCompiler: IDirectiveCompiler
 	}
 }
 
+class InsertCompiler: IDirectiveCompiler
+{
+	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
+	{
+		if( !stmt || stmt.name != "insert" )
+			compiler.loger.error(`Expected "insert" directive statement!`);
+
+		auto stmtRange = stmt[];
+
+		if( stmtRange.empty )
+			compiler.loger.error(`Expected node as "insert"s "aggregate" argument!`);
+		stmtRange.front.accept(compiler);
+		stmtRange.popFront();
+
+		if( stmtRange.empty )
+			compiler.loger.error(`Expected node as "insert"s "value" argument!`);
+		stmtRange.front.accept(compiler);
+		stmtRange.popFront();
+
+		if( stmtRange.empty )
+			compiler.loger.error(`Expected node as "insert"s "index" argument!`);
+		stmtRange.front.accept(compiler);
+		stmtRange.popFront();
+
+		compiler.addInstr(OpCode.Insert);
+
+		if( !stmtRange.empty )
+		{
+			compiler.loger.write("InsertCompiler. At end. stmtRange.front.kind: ", stmtRange.front.kind);
+			compiler.loger.error(`Expected end of "expr" directive. Maybe ';' is missing`);
+		}
+	}
+}
+
 class ByteCodeCompiler: AbstractNodeVisitor
 {
 	alias LogerMethod = void delegate(LogInfo);
@@ -1538,6 +1523,7 @@ public:
 		_dirCompilers["import"] = new ImportCompiler();
 		_dirCompilers["from"] = new FromImportCompiler();
 		_dirCompilers["at"] = new AtCompiler();
+		_dirCompilers["insert"] = new InsertCompiler();
 
 		_mainModuleName = mainModuleName;
 		enterModuleScope(mainModuleName);
@@ -1809,7 +1795,7 @@ public:
 		switch( node.literalType )
 		{
 			case LiteralType.Undef:
-				constIndex = addConst( TDataNode.makeUndef() ); 
+				constIndex = addConst( TDataNode.makeUndef() );
 				break;
 			case LiteralType.Null:
 				constIndex = addConst( TDataNode(null) );
@@ -1992,7 +1978,7 @@ public:
 
 							if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
 								loger.error(`Unexpected named attribute "` ~ keyValueAttr.name ~ `"`);
-							
+
 							if( keyValueAttr.name in argsSet )
 								loger.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
 
@@ -2135,26 +2121,23 @@ public:
 	{
 		if( !node )
 			loger.error( "Code block statement node is null!" );
-		
+
 		if( node.isListBlock )
 		{
 			TDataNode emptyArray = TDataNode[].init;
 			size_t emptyArrayConstIndex = addConst(emptyArray);
 			addInstr( OpCode.LoadConst, emptyArrayConstIndex );
 		}
-		
+
 		auto stmtRange = node[];
 		while( !stmtRange.empty )
 		{
 			stmtRange.front.accept( this );
 			stmtRange.popFront();
 
-			if( node.isListBlock )
-			{
+			if( node.isListBlock ) {
 				addInstr( OpCode.Append ); // Append result to result array
-			}
-			else if( !stmtRange.empty )
-			{
+			} else if( !stmtRange.empty ) {
 				addInstr( OpCode.PopTop );
 			}
 		}
@@ -2181,10 +2164,10 @@ public:
 		while( !stmtRange.empty )
 		{
 			//addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
-			
+
 			// Add name for key-value argument
 			//addInstr( OpCode.LoadConst, resultNameConstIndex );
-			
+
 			stmtRange.front.accept( this );
 			stmtRange.popFront();
 
@@ -2196,13 +2179,12 @@ public:
 			// TOP - 2: Current result var name argument
 			// TOP - 3: Callable object for __render__
 			//addInstr( OpCode.RunCallable, 4 );
-			
+
 			addInstr( OpCode.Append ); // Append result to result array
 		}
 	}
 
-	ModuleObject[string] moduleObjects() @property
-	{
+	ModuleObject[string] moduleObjects() @property {
 		return _moduleObjects;
 	}
 
@@ -2210,7 +2192,7 @@ public:
 	void run()
 	{
 		// We create __render__ invocation on the result of module execution !!!
-		
+
 		IvyNode mainModuleAST = _moduleRepo.getModuleTree(_mainModuleName);
 
 		size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
@@ -2222,10 +2204,10 @@ public:
 		size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
 
 		addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
-				
+
 		// Add name for key-value argument
 		addInstr( OpCode.LoadConst, resultNameConstIndex );
-		
+
 		mainModuleAST.accept(this);
 
 		addInstr( OpCode.LoadConst, blockHeaderConstIndex ); // Add argument block header
