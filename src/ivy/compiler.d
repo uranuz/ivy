@@ -831,9 +831,6 @@ public:
 	{
 		import std.range: empty, back, empty;
 
-		if( !stmt || stmt.name != "var" )
-			compiler.loger.error(`Expected "var" directive statement!`);
-
 		auto stmtRange = stmt[];
 		while( !stmtRange.empty )
 		{
@@ -912,9 +909,6 @@ class SetCompiler : IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "set" )
-			compiler.loger.error("Expected 'set' directive");
-
 		auto stmtRange = statement[];
 
 		while( !stmtRange.empty )
@@ -944,9 +938,6 @@ class IfCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "if" )
-			compiler.loger.error(`Expected "if" directive statement!`);
-
 		import std.typecons: Tuple;
 		import std.range: back, empty;
 		alias IfSect = Tuple!(IExpression, "cond", IExpression, "stmt");
@@ -1046,11 +1037,7 @@ class ForCompiler : IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "for" )
-			compiler.loger.error("Expected 'for' directive");
-
 		auto stmtRange = statement[];
-
 		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("For loop variable name expected");
 
 		string varName = varNameExpr.name;
@@ -1102,9 +1089,6 @@ class AtCompiler : IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "at" )
-			compiler.loger.error("Expected 'at' directive");
-
 		auto stmtRange = statement[];
 
 		IvyNode aggregate = stmtRange.takeFrontAs!IvyNode(`Expected "at" aggregate argument`);
@@ -1125,9 +1109,6 @@ class SetAtCompiler : IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "setat" )
-			compiler.loger.error("Expected 'setat' directive");
-
 		auto stmtRange = statement[];
 
 		IExpression aggregate = stmtRange.takeFrontAs!IExpression(`Expected expression as "at" aggregate argument`);
@@ -1150,9 +1131,6 @@ class RepeatCompiler : IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "repeat" )
-			compiler.loger.error("Expected 'repeat' directive");
-
 		auto stmtRange = statement[];
 
 		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("Loop variable name expected");
@@ -1228,9 +1206,6 @@ class ExprCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
 	{
-		if( !stmt || stmt.name != "expr" )
-			compiler.loger.error(`Expected "expr" directive statement!`);
-
 		auto stmtRange = stmt[];
 		if( stmtRange.empty )
 			compiler.loger.error(`Expected node as "expr" argument!`);
@@ -1252,9 +1227,6 @@ class ImportCompiler: IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "import" )
-			compiler.loger.error("Expected 'import' directive");
-
 		auto stmtRange = statement[];
 
 		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
@@ -1278,9 +1250,6 @@ class FromImportCompiler: IDirectiveCompiler
 public:
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "from" )
-			compiler.loger.error("Expected 'from' directive");
-
 		auto stmtRange = statement[];
 
 		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
@@ -1318,9 +1287,6 @@ class DefCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
 	{
-		if( !statement || statement.name != "def" )
-			compiler.loger.error("Expected 'def' directive");
-
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
 
@@ -1443,9 +1409,6 @@ class InsertCompiler: IDirectiveCompiler
 {
 	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
 	{
-		if( !stmt || stmt.name != "insert" )
-			compiler.loger.error(`Expected "insert" directive statement!`);
-
 		auto stmtRange = stmt[];
 
 		if( stmtRange.empty )
@@ -1463,7 +1426,7 @@ class InsertCompiler: IDirectiveCompiler
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
-		compiler.addInstr(OpCode.Insert);
+		compiler.addInstr(OpCode.Insert); // Add Insert instruction that works with 3 passed arguments
 
 		if( !stmtRange.empty )
 		{
@@ -1936,7 +1899,7 @@ public:
 
 		if( auto comp = node.name in _dirCompilers )
 		{
-			comp.compile( node, this );
+			comp.compile(node, this);
 		}
 		else
 		{

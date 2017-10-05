@@ -59,7 +59,7 @@ struct DirValueAttr(bool isForCompiler = false)
 	static if( isForCompiler )
 	{
 		import ivy.node: IExpression;
-		
+
 		IExpression defaultValueExpr;
 		this( string name, string typeName, IExpression defValue = null )
 		{
@@ -129,7 +129,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 	this( DirAttrKind attrKind, TValueAttr[string] attrs )
 	{
 		assert( attrKind == DirAttrKind.NamedAttr, `Expected NamedAttr kind for attr block` );
-		
+
 		_kind = attrKind;
 		_storage.namedAttrs = attrs;
 	}
@@ -137,7 +137,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 	this( DirAttrKind attrKind, TValueAttr[] attrs )
 	{
 		assert( attrKind == DirAttrKind.ExprAttr, `Expected ExprAttr kind for attr block` );
-		
+
 		_kind = attrKind;
 		_storage.exprAttrs = attrs;
 	}
@@ -145,7 +145,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 	this( DirAttrKind attrKind, string[] names )
 	{
 		assert( attrKind == DirAttrKind.IdentAttr, `Expected IdentAttr kind for attr block` );
-		
+
 		_kind = attrKind;
 		_storage.names = names;
 	}
@@ -153,7 +153,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 	this( DirAttrKind attrKind, string kwd )
 	{
 		assert( attrKind == DirAttrKind.KwdAttr, `Expected Keyword kind for attr block` );
-		
+
 		_kind = attrKind;
 		_storage.keyword = kwd;
 	}
@@ -161,7 +161,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 	this( DirAttrKind attrKind, TBodyTuple value )
 	{
 		assert( attrKind == DirAttrKind.BodyAttr, `Expected BodyAttr kind for attr block` );
-		
+
 		_kind = attrKind;
 		_storage.bodyAttr = value;
 	}
@@ -330,7 +330,7 @@ class CallableObject
 	string _name; // Name of directive
 	CallableKind _kind; // Used to know whether is's directive or module, or package module
 	CodeObject _codeObj; // Code object related to this directive
-	
+
 	// If this is natively implemented directive then _codeObj is null, but this must not be null
 	INativeDirectiveInterpreter _dirInterp;
 
@@ -482,7 +482,7 @@ interface IClassNode
 	TDataNode __serialize__();
 }
 
-enum DataNodeType {
+enum DataNodeType: ubyte {
 	Undef, Null, Boolean, Integer, Floating, String, DateTime, Array, AssocArray, ClassNode,
 	CodeObject, Callable, ExecutionFrame, DataNodeRange
 };
@@ -535,37 +535,37 @@ struct DataNode(S)
 		enforceEx!DataNodeException(type == DataNodeType.Boolean, "DataNode is not boolean");
 		return storage.boolean;
 	}
-	
+
 	void boolean(bool val) @property {
 		assign(val);
 	}
-	
+
 	long integer() @property
 	{
 		enforceEx!DataNodeException(type == DataNodeType.Integer, "DataNode is not integer");
 		return storage.integer;
 	}
-	
+
 	void integer(long val) @property {
 		assign(val);
 	}
-	
+
 	double floating() @property
 	{
 		enforceEx!DataNodeException(type == DataNodeType.Floating, "DataNode is not floating");
 		return storage.floating;
 	}
-	
+
 	void floating(double val) @property {
 		assign(val);
 	}
-	
+
 	String str() @property
 	{
 		enforceEx!DataNodeException(type == DataNodeType.String, "DataNode is not string");
 		return storage.str;
 	}
-	
+
 	void str(String val) @property {
 		assign(val);
 	}
@@ -585,17 +585,17 @@ struct DataNode(S)
 		enforceEx!DataNodeException(type == DataNodeType.Array, "DataNode is not array");
 		return storage.array;
 	}
-	
+
 	void array(DataNode[] val) @property {
 		assign(val);
 	}
-	
+
 	ref DataNode[String] assocArray() @property
 	{
 		enforceEx!DataNodeException( type == DataNodeType.AssocArray, "DataNode is not dict");
 		return storage.assocArray;
 	}
-	
+
 	void assocArray(DataNode[String] val) @property {
 		assign(val);
 	}
@@ -648,11 +648,11 @@ struct DataNode(S)
 	void dataRange(IDataNodeRange val) @property {
 		assign(val);
 	}
-	
+
 	DataNodeType type() @property {
 		return typeTag;
 	}
-	
+
 	bool empty() @property {
 		return type == DataNodeType.Undef || type == DataNodeType.Null;
 	}
@@ -664,7 +664,7 @@ struct DataNode(S)
 	bool isNull() @property {
 		return type == DataNodeType.Null;
 	}
-	
+
 	private void assign(T)(auto ref T arg)
 	{
 		static if( is(T : typeof(null)) )
@@ -724,7 +724,7 @@ struct DataNode(S)
 		else static if( is(T : Value[Key], Key, Value) )
 		{
 			static assert(is(Key : String), "AA key must be string");
-			
+
 			typeTag = DataNodeType.AssocArray;
 			static if(is(Value : DataNode)) {
 				storage.assocArray = arg;
@@ -774,35 +774,35 @@ struct DataNode(S)
 		else
 			static assert(false, `unable to convert type "` ~ T.stringof ~ `" to parse node`);
 	}
-	
+
 	void opAssign(T)(auto ref T value)
 	{
 		assign(value);
 	}
-	
+
 	void opIndexAssign(T)(auto ref T value, size_t index)
 	{
 		enforceEx!DataNodeException( type == DataNodeType.Array, "DataNode is not an array");
 		enforceEx!DataNodeException( index < storage.array.length , "DataNode array index is out of range");
-		
+
 		storage.array[index] = value;
 	}
-	
+
 	ref DataNode opIndex(size_t index)
 	{
 		enforceEx!DataNodeException( type == DataNodeType.Array, "DataNode is not an array");
 		enforceEx!DataNodeException( index < storage.array.length, "DataNode array index is out of range");
-		
+
 		return storage.array[index];
 	}
-	
+
 	void opOpAssign(string op : "~", T)(auto ref T arg)
 	{
 		enforceEx!DataNodeException( type == DataNodeType.Array || type == DataNodeType.Null, "DataNode is not an array");
-		
+
 		if( type == DataNodeType.Null )
 			this = (DataNode[]).init;
-			
+
 		static if( isArray!T )
 		{
 			static if( is( ElementType!T == DataNode ) )
@@ -824,38 +824,38 @@ struct DataNode(S)
 			storage.array ~= DataNode(arg);
 		}
 	}
-	
+
 	void opIndexAssign(T)(auto ref T value, String key)
 	{
 		enforceEx!DataNodeException( type == DataNodeType.AssocArray || type == DataNodeType.Null || type == DataNodeType.Undef, "DataNode is not a dict, null or undef");
-		
+
 		if( type != DataNodeType.AssocArray )
 			this = (DataNode[String]).init;
-		
+
 		storage.assocArray[key] = value;
 	}
-	
+
 	ref DataNode opIndex(String key)
 	{
 		enforceEx!DataNodeException( type == DataNodeType.AssocArray, "DataNode is not a dict");
 		enforceEx!DataNodeException( key in storage.assocArray, "DataNode dict has no such key");
-		
+
 		return storage.assocArray[key];
 	}
-	
+
 	auto opBinaryRight(string op: "in")(String key)
 	{
 		enforceEx!DataNodeException( type == DataNodeType.AssocArray || type == DataNodeType.Null, "DataNode is not a dict, null or undef");
-		
+
 		if( type == DataNodeType.Undef || type == DataNodeType.Null )
 			return null;
-		
+
 		return key in storage.assocArray;
 	}
-	
+
 	import std.array;
 	import std.conv;
-	
+
 	static string indentText(string text, size_t times = 1)
 	{
 		string ind;
@@ -869,12 +869,12 @@ struct DataNode(S)
 		undef.typeTag = DataNodeType.Undef;
 		return undef;
 	}
-	
+
 	string toString()
 	{
 		import std.array: appender;
 		auto result = appender!string();
-		renderDataNode!(DataRenderType.Text)(this, result);		
+		renderDataNode!(DataRenderType.Text)(this, result);
 		return result.data;
 	}
 
@@ -882,7 +882,7 @@ struct DataNode(S)
 	{
 		import std.array: appender;
 		auto result = appender!string();
-		renderDataNode!(DataRenderType.JSON)(this, result);		
+		renderDataNode!(DataRenderType.JSON)(this, result);
 		return result.data;
 	}
 }
@@ -893,7 +893,7 @@ struct DataNode(S)
 /// JSON - вывод узлов, которые соответствуют типам в JSON в формате собственно JSON (остальные типы узлов выводим как null)
 /// JSONFull - выводим всё максимально в JSON, сериализуя узлы внутренних типов в JSON
 enum DataRenderType { Text, TextDebug, JSON, JSONFull };
-/// Думаю, нужен ещё флаг isPrettyPrint 
+/// Думаю, нужен ещё флаг isPrettyPrint
 
 private void _writeEscapedString(OutRange)(string str, ref OutRange outRange)
 {
@@ -917,12 +917,12 @@ private void _writeEscapedString(OutRange)(string str, ref OutRange outRange)
 
 void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 	ref TDataNode node, ref OutRange outRange, size_t maxRecursion = size_t.max)
-{	
+{
 	import std.range: put;
 	import std.conv: to;
-	
+
 	assert( maxRecursion, "Recursion is too deep!" );
-	
+
 	final switch(node.type) with(DataNodeType)
 	{
 		case Undef:
@@ -996,7 +996,7 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			{
 				if( i != 0 )
 					outRange.put(", ");
-				
+
 				outRange.put("\"");
 				_writeEscapedString(key, outRange);
 				outRange.put("\"");
@@ -1022,7 +1022,7 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 				} else {
 					renderDataNode!(renderType)(serialized, outRange, maxRecursion - 1);
 				}
-			} 
+			}
 			else
 			{
 				static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
