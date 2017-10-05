@@ -2,7 +2,7 @@ module ivy.interpreter_test;
 
 import std.stdio, std.json, std.file;
 
-import ivy.compiler, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer;
+import ivy.compiler, ivy.interpreter_data, ivy.node, ivy.parser.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer;
 
 
 

@@ -1,14 +1,14 @@
-module ivy.node;
+module ivy.parser.node;
 
 import ivy.common;
-import ivy.node_visitor;
+import ivy.parser.node_visitor;
 
 interface IvyNode
 {
 	@property {
 		IvyNode parent();
 		IvyNode[] children();
-		
+
 		Location location() const;             // Location info for internal usage
 		PlainLocation plainLocation() const;   // Location for user info
 		ExtendedLocation extLocation() const;  // Extended location info
@@ -16,11 +16,11 @@ interface IvyNode
 
 		string kind();
 	}
-	
+
 	@property {
 		void parent(IvyNode node);
 	}
-	
+
 	void accept(AbstractNodeVisitor visitor);
 
 	// string toString();
@@ -33,9 +33,9 @@ interface IExpression: IvyNode
 
 	@property {
 		IStatement asStatement();
-		
+
 		LiteralType literalType();
-		
+
 		bool isScalar();
 		bool isNullExpr();
 	}
@@ -60,27 +60,27 @@ interface ILiteralExpression: IPlainExpression
 
 enum Operator {
 	None = 0,
-	
+
 	//Unary arithmetic
 	UnaryPlus = 1,
 	UnaryMin,
-	
+
 	//Binary arithmetic
 	Add,
 	Sub,
 	Mul,
 	Div,
 	Mod,
-	
+
 	//Concatenation
 	Concat,
-	
+
 	//Logical operators
 	Not, //Unary
 	And,
 	Or,
 	Xor,
-	
+
 	//Compare operators
 	Equal,
 	NotEqual,
@@ -128,14 +128,14 @@ class Identifier: IIdentifier
 
 private:
 	string _fullName;
-	
-	
+
+
 public:
 	this( string fullName )
 	{
 		_fullName = fullName;
 	}
-	
+
 	override @property {
 		string name()
 		{
@@ -187,13 +187,13 @@ interface IDataFragmentStatement: IStatement
 interface ICompoundStatement: IStatement
 {
 	//@property size_t length();
-	
+
 	//@property IStatement first();
 	//@property IStatement last();
-	
+
 	IStatementRange opSlice();
 	IStatementRange opSlice(size_t begin, size_t end);
-	
+
 	//IStatement opIndex(size_t index);
 }
 
@@ -201,15 +201,15 @@ interface IvyNodeRange
 {
 	@property IvyNode front();
 	void popFront();
-	
+
 	@property IvyNode back();
 	void popBack();
-	
+
 	@property bool empty();
 	//@property size_t length();
-	
+
 	@property IvyNodeRange save();
-	
+
 	IvyNode opIndex(size_t index);
 }
 

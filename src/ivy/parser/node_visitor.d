@@ -1,12 +1,11 @@
-module ivy.node_visitor;
+module ivy.parser.node_visitor;
 
-import ivy.node;
-
+import ivy.parser.node;
 
 class AbstractNodeVisitor
 {
 	void visit(IvyNode node) { assert(0); }
-	
+
 	//Expressions
 	void visit(IExpression node) { visit( cast(IvyNode) node ); }
 	void visit(ILiteralExpression node) { visit( cast(IExpression) node ); }
@@ -15,7 +14,7 @@ class AbstractNodeVisitor
 	void visit(IUnaryExpression node) { visit( cast(IExpression) node ); }
 	void visit(IBinaryExpression node) { visit( cast(IExpression) node ); }
 	void visit(IAssocArrayPair node) { visit( cast(IExpression) node ); }
-	
+
 	//Statements
 	void visit(IStatement node) { visit( cast(IvyNode) node ); }
 	void visit(IKeyValueAttribute node) { visit( cast(IvyNode) node ); }

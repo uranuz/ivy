@@ -1,11 +1,14 @@
-module ivy.expression;
+module ivy.parser.expression;
 
-import ivy.node, ivy.common, ivy.node_visitor;
+import ivy.common;
+import ivy.parser.common;
+import ivy.parser.node;
+import ivy.parser.node_visitor;
 
 mixin template BaseExpressionImpl(LocationConfig c)
 {
 	mixin BaseDeclNodeImpl!c;
-	
+
 	public @property override
 	{
 		IStatement asStatement() {
@@ -24,20 +27,20 @@ mixin template BaseExpressionImpl(LocationConfig c)
 			assert( 0, "Expression is not null expr!" );
 		}
 	}
-	
+
 	public override {
 		bool toBoolean() {
 			assert( 0, "Expression is not boolean!" );
 		}
-		
+
 		int toInteger() {
 			assert( 0, "Expression is not integer!" );
 		}
-		
+
 		double toFloating() {
 			assert( 0, "Expression is not floating!" );
 		}
-		
+
 		string toStr() {
 			assert( 0, "Expression is not string!" );
 		}
@@ -49,20 +52,20 @@ mixin template BinaryArithmeticExpressionImpl()
 	private int _operatorIndex;
 	private IExpression _leftExpr;
 	private IExpression _rightExpr;
-	
+
 	public @property const override {
 		int operatorIndex()
 		{
 			return _operatorIndex;
 		}
 	}
-	
+
 	public @property override {
 		IExpression leftExpr()
 		{
 			return _leftExpr;
 		}
-		
+
 		IExpression rightExpr()
 		{
 			return _rightExpr;
@@ -107,23 +110,23 @@ public:
 class NullExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
-	
+
 public:
 	this(CustLocation loc)
 	{
 		_location = loc;
 	}
-	
+
 	override @property string kind()
 	{
 		return "null";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return null;
 	}
-	
+
 	override @property LiteralType literalType()
 	{
 		return LiteralType.Null;
@@ -141,7 +144,7 @@ public:
 class BooleanExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
-	
+
 private:
 	bool _value;
 
@@ -151,22 +154,22 @@ public:
 		_location = loc;
 		_value = val;
 	}
-	
+
 	override @property string kind()
 	{
 		return "boolean";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return null;
 	}
-	
+
 	override @property LiteralType literalType()
 	{
 		return LiteralType.Boolean;
 	}
-	
+
 	override bool toBoolean()
 	{
 		return _value;
@@ -185,10 +188,10 @@ alias IntegerType = int;
 class IntegerExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
-	
+
 private:
 	IntegerType _value;
-	
+
 public:
 	this(CustLocation loc, IntegerType val)
 	{
@@ -200,12 +203,12 @@ public:
 	{
 		return "integer";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return null;
 	}
-	
+
 	override @property LiteralType literalType()
 	{
 		return LiteralType.Integer;
@@ -220,7 +223,7 @@ public:
 	string toString() override
 	{
 		import std.conv: to;
-		
+
 		return _value.to!string;
 	}
 +/
@@ -231,7 +234,7 @@ alias FloatType = double;
 class FloatExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
-	
+
 private:
 	FloatType _value;
 
@@ -241,32 +244,32 @@ public:
 		_location = loc;
 		_value = val;
 	}
-	
+
 	override @property string kind()
 	{
 		return "floating";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return null;
 	}
-	
+
 	override @property LiteralType literalType()
 	{
 		return LiteralType.Floating;
 	}
-	
+
 	override double toFloating()
 	{
 		return _value;
 	}
-	
+
 /+
 	string toString() override
 	{
 		import std.conv: to;
-		
+
 		return _value.to!string;
 	}
 +/
@@ -291,18 +294,18 @@ public:
 	{
 		return "string";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return null;
 	}
-	
+
 	override @property LiteralType literalType()
 	{
 		return LiteralType.String;
 	}
-	
-	override string toStr() 
+
+	override string toStr()
 	{
 		return _str;
 	}
@@ -312,26 +315,26 @@ class ArrayLiteralExp(LocationConfig c): ILiteralExpression
 {
 	mixin BaseExpressionImpl!c;
 
-private: 
+private:
 	IExpression[] _elements;
-	
+
 public:
 	this(CustLocation loc, IExpression[] elements)
 	{
 		_location = loc;
 		_elements = elements;
 	}
-	
+
 	override @property string kind()
 	{
 		return "array literal";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return cast(IvyNode[])  _elements.dup;
 	}
-	
+
 	override @property LiteralType literalType()
 	{
 		return LiteralType.Array;
@@ -433,17 +436,17 @@ public:
 		_location = loc;
 		_pairs = pairs;
 	}
-	
+
 	override @property string kind()
 	{
 		return "assoc array literal";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return cast(IvyNode[]) _pairs;
 	}
-	
+
 	override @property LiteralType literalType()
 	{
 		return LiteralType.AssocArray;
@@ -471,7 +474,7 @@ class UnaryArithmeticExp(LocationConfig c): IUnaryExpression
 private:
 	IExpression _expr;
 	int _operatorIndex;
-	
+
 public:
 	this(CustLocation loc, int op, IExpression expression)
 	{
@@ -479,7 +482,7 @@ public:
 		_operatorIndex = op;
 		_expr = expression;
 	}
-	
+
 	@property override
 	{
 		IExpression expr()
@@ -487,29 +490,29 @@ public:
 			return _expr;
 		}
 	}
-	
+
 	@property const override{
 		int operatorIndex()
 		{
 			return _operatorIndex;
 		}
 	}
-	
+
 	override @property string kind()
 	{
 		return "unary arithmetic expr";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return [_expr];
 	}
-	
+
 /+
 	string toString() override
 	{
 		import std.conv: to;
-		
+
 		return _leftExpr.toString() ~ " " ~ _operatorIndex.to!string ~ " " ~ _leftExpr.toString();
 	}
 +/
@@ -521,7 +524,7 @@ class BinaryArithmeticExp(LocationConfig c): IBinaryExpression
 	mixin BinaryArithmeticExpressionImpl;
 
 private:
-	
+
 
 public:
 	this(CustLocation loc, int op, IExpression left, IExpression right)
@@ -531,12 +534,12 @@ public:
 		_leftExpr = left;
 		_rightExpr = right;
 	}
-	
+
 	override @property string kind()
 	{
 		return "binary arithmetic expr";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return [_leftExpr, _rightExpr];
@@ -546,10 +549,10 @@ public:
 class LogicalNotExp(LocationConfig c): IUnaryExpression
 {
 	mixin BaseExpressionImpl!c;
-	
+
 private:
 	IExpression _expr;
-	
+
 public:
 	this(CustLocation loc, IExpression expression)
 	{
@@ -564,7 +567,7 @@ public:
 			return _expr;
 		}
 	}
-	
+
 	@property const override{
 		int operatorIndex()
 		{
@@ -576,7 +579,7 @@ public:
 	{
 		return "logical not expr";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return [_expr];
@@ -596,12 +599,12 @@ public:
 		_leftExpr = left;
 		_rightExpr = right;
 	}
-	
+
 	override @property string kind()
 	{
 		return "binary logical expr";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return [_leftExpr, _rightExpr];
@@ -620,14 +623,14 @@ public:
 		_location = loc;
 		_operatorIndex = op;
 		_leftExpr = left;
-		_rightExpr = right;	
+		_rightExpr = right;
 	}
-	
+
 	override @property string kind()
 	{
 		return "compare expr";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return [_leftExpr, _rightExpr];
@@ -637,7 +640,7 @@ public:
 	string toString() override
 	{
 		import std.conv: to;
-		
+
 		return _leftExpr.toString() ~ " " ~ _operatorIndex.to!string ~ " " ~ _leftExpr.toString();
 	}
 +/
@@ -649,24 +652,24 @@ class IdentifierExp(LocationConfig c): INameExpression
 	mixin BaseExpressionImpl!c;
 private:
 	IIdentifier _id;
-	
+
 public:
 	this( CustLocation loc, IIdentifier id )
 	{
 		_location = loc;
 		_id = id;
 	}
-	
+
 	override @property string kind()
 	{
 		return "identifier expr";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return null;
 	}
-	
+
 	override @property string name()
 	{
 		return _id.name;
@@ -689,12 +692,12 @@ public:
 		_callable = callable;
 		_argList = argList;
 	}
-	
+
 	override @property string kind()
 	{
 		return "call expr";
 	}
-	
+
 	override @property IvyNode[] children()
 	{
 		return (cast(IvyNode) _callable) ~ _argList;
@@ -707,22 +710,22 @@ class BlockExp(LocationConfig c): IExpression
 	mixin BaseExpressionImpl!c;
 private:
 	ICompoundStatement _blockStatement;
-	
+
 public:
 	this( CustLocation loc, ICompoundStatement blockStmt )
 	{
 		_location = loc;
 		_blockStatement = blockStmt;
 	}
-	
+
 	override @property {
 		ICompoundStatement statement()
 		{
 			return _blockStatement;
 		}
-		
+
 	}
 
-	
+
 }
 

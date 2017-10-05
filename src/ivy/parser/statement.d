@@ -1,6 +1,10 @@
-module ivy.statement;
+module ivy.parser.statement;
 
-import ivy.common, ivy.node, ivy.node_visitor;
+import ivy.common;
+import ivy.parser.common;
+import ivy.parser.node;
+import ivy.parser.node_visitor;
+import ivy.parser.expression;
 
 mixin template PlainStatementImpl(LocationConfig c)
 {
@@ -11,17 +15,17 @@ mixin template PlainStatementImpl(LocationConfig c)
 		{
 			return false;
 		}
-		
+
 		ICompoundStatement asCompoundStatement()
 		{
 			return null;
 		}
-		
+
 		bool isDirectiveStatement()
 		{
 			return false;
 		}
-		
+
 		IDirectiveStatement asDirectiveStatement()
 		{
 			return null;
@@ -36,7 +40,7 @@ class DirectiveStatement(LocationConfig c): IDirectiveStatement
 private:
 	string _name;
 	IvyNode[] _attrs;
-	
+
 public:
 
 	this( CustLocation loc, string name, IvyNode[] attributes )
@@ -51,47 +55,47 @@ public:
 		{
 			return _attrs;
 		}
-		
+
 		string kind()
 		{
 			return "directive statement";
 		}
 	}
-	
+
 	// string toString();
-	
+
 	public @property override {
 		string name()
 		{
 			return _name;
 		}
 	}
-	
+
 	public @property override {
 		bool isDirectiveStatement()
 		{
 			return true;
 		}
-		
+
 		IDirectiveStatement asDirectiveStatement()
 		{
 			return this;
 		}
 	}
-	
+
 	public override {
 		IAttributeRange opSlice()
 		{
 			return new Range(this);
 		}
-		
+
 		IAttributeRange opSlice(size_t begin, size_t end)
 		{
 			return new Range(this, begin, end);
 		}
-	
+
 	}
-	
+
 	static class Range: IAttributeRange
 	{
 	private:
@@ -106,49 +110,49 @@ public:
 			_statement = statement;
 			_end = _statement._attrs.length - 1;
 		}
-		
+
 		this(DirectiveStatement!c statement, size_t begin, size_t end)
 		{
 			_statement = statement;
 			_begin = begin;
 			_end = end;
 		}
-		
+
 		public override {
 			@property IvyNode front()
 			{
 				return _statement._attrs[_begin];
 			}
-			
-			void popFront() 
+
+			void popFront()
 			{
 				++_begin;
 			}
-			
+
 			@property IvyNode back()
-			{ 
+			{
 				return _statement._attrs[_end];
 			}
-			
+
 			void popBack()
 			{
 				--_end;
 			}
-			
+
 			bool empty()
 			{
 				if( _begin <= _end && _end < _statement._attrs.length )
 					return false;
-					
+
 				return true;
 			}
 			//@property size_t length();
-			
+
 			@property IAttributeRange save()
 			{
 				return new Range(_statement, _begin, _end);
 			}
-			
+
 			IvyNode opIndex(size_t index)
 			{
 				return _statement._attrs[index];
@@ -164,42 +168,40 @@ class KeyValueAttribute(LocationConfig c): IKeyValueAttribute
 private:
 	string _name;
 	IvyNode _value;
-	
+
 public:
-	
+
 	this(CustLocation loc, string attrName, IvyNode val )
 	{
 		_location = loc;
 		_name = attrName;
 		_value = val;
 	}
-	
+
 	override @property {
 		string kind()
 		{
 			return "key-value attribute";
 		}
-	
+
 		IvyNode[] children()
 		{
 			return  [ cast(IvyNode) _value ];
 		}
 	}
-	
+
 	override @property {
 		string name()
 		{
 			return _name;
 		}
-		
+
 		IvyNode value()
 		{
 			return _value;
 		}
 	}
 }
-
-import ivy.expression;
 
 mixin template BaseBlockStatementImpl(LocationConfig c, alias IRange = IStatementRange)
 {
@@ -215,42 +217,42 @@ public:
 		{
 			return true;
 		}
-		
+
 		ICompoundStatement asCompoundStatement()
 		{
 			return this;
 		}
-		
+
 		bool isDirectiveStatement()
 		{
 			return false;
 		}
-		
+
 		IDirectiveStatement asDirectiveStatement()
 		{
 			return null;
 		}
 	}
-	
+
 	public @property override {
 		IvyNode[] children()
 		{
 			return cast(IvyNode[]) _statements.dup;
 		}
 	}
-	
+
 	IRange opSlice()
 	{
 		return new Range(this);
 	}
-	
+
 	IRange opSlice(size_t begin, size_t end)
 	{
 		return new Range(this, begin, end);
 	}
-	
+
 	alias TStatement = typeof(this);
-	
+
 	static class Range: IRange
 	{
 	private:
@@ -265,49 +267,49 @@ public:
 			_statement = statement;
 			_end = _statement._statements.length - 1;
 		}
-		
+
 		this(TStatement statement, size_t begin, size_t end)
 		{
 			_statement = statement;
 			_begin = begin;
 			_end = end;
 		}
-		
+
 		public override {
 			@property IStmt front()
 			{
 				return _statement._statements[_begin];
 			}
-			
-			void popFront() 
+
+			void popFront()
 			{
 				++_begin;
 			}
-			
+
 			@property IStmt back()
-			{ 
+			{
 				return _statement._statements[_end];
 			}
-			
+
 			void popBack()
 			{
 				--_end;
 			}
-			
+
 			bool empty()
 			{
 				if( _begin <= _end && _end < _statement._statements.length )
 					return false;
-					
+
 				return true;
 			}
 			//@property size_t length();
-			
+
 			@property IRange save()
 			{
 				return new Range(_statement, _begin, _end);
 			}
-			
+
 			IStmt opIndex(size_t index)
 			{
 				return _statement._statements[index];
@@ -328,7 +330,7 @@ public:
 		_statements = stmts;
 		_isListBlock = isList;
 	}
-	
+
 	public @property override {
 		string kind()
 		{
@@ -353,7 +355,7 @@ public:
 		_location = loc;
 		_statements = stmts;
 	}
-	
+
 	public @property override {
 		string kind()
 		{
@@ -375,19 +377,19 @@ public:
 		_location = loc;
 		_data = data;
 	}
-	
+
 	public @property override {
 		IvyNode[] children()
 		{
 			return null;
 		}
-		
+
 		string kind()
 		{
 			return "data fragment statement";
 		}
 	}
-	
+
 	public @property override {
 		string data()
 		{
@@ -407,13 +409,13 @@ public:
 		_location = loc;
 		_statements = stmts;
 	}
-	
+
 	public @property override {
 		IvyNode[] children()
 		{
 			return null;
 		}
-		
+
 		string kind()
 		{
 			return "raw data block statement";

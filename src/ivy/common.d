@@ -100,33 +100,33 @@ enum LocationFlag
 private string generateLocationConfigProperties(string[] propNames)
 {
 	string codeString;
-	codeString ~= 
-"	@property const 
+	codeString ~=
+"	@property const
 	{
 ";
-	
+
 	foreach( name; propNames )
 	{
-		codeString ~= 
+		codeString ~=
 "		bool with" ~ name ~ "()
 		{
 			return cast(bool)( flags & LocationFlag.With" ~ name ~ " );
 		}
 ";
 	}
-	
-	codeString ~= 
+
+	codeString ~=
 "	}
 
 ";
 
-	codeString ~= 
-"	@property 
+	codeString ~=
+"	@property
 	{
 ";
 	foreach( name; propNames )
 	{
-		codeString ~= 
+		codeString ~=
 "		void with" ~ name ~ "(bool value)
 		{
 			flags = flags & ~LocationFlag.With" ~ name ~ ";
@@ -136,7 +136,7 @@ private string generateLocationConfigProperties(string[] propNames)
 
 ";
 	}
-	codeString ~= 
+	codeString ~=
 "	}
 ";
 	return codeString;
@@ -145,13 +145,13 @@ private string generateLocationConfigProperties(string[] propNames)
 struct LocationConfig
 {
 	import std.typecons: BitFlags;
-	
+
 	BitFlags!LocationFlag flags;
-	
+
 	enum propCode = generateLocationConfigProperties(
 		[ "GraphemeIndex", "LineIndex", "ColumnIndex", "GraphemeColumnIndex", "Size" ]
 	);
-	
+
 	mixin( propCode );
 }
 
@@ -202,39 +202,39 @@ struct ExtendedLocation
 struct CustomizedLocation(LocationConfig c)
 {
 	enum config = c;
-	
+
 	string fileName;
-	
+
 	size_t index;
-	
+
 	static if( config.withSize )
 		size_t length;
-		
+
 	static if( config.withGraphemeIndex )
 	{
 		size_t graphemeIndex;
-		
+
 		static if( config.withSize )
 			size_t graphemeLength;
 	}
-	
+
 	static if( config.withLineIndex )
 	{
 		size_t lineIndex;
-		
+
 		static if( config.withSize )
 			size_t lineCount;
-		
+
 		static if( config.withColumnIndex )
 			size_t columnIndex;
-		
+
 		static if( config.withGraphemeColumnIndex )
 			size_t graphemeColumnIndex;
 	}
-	
+
 	size_t indentCount;
 	IndentStyle indentStyle;
-	
+
 	Location toLocation() const
 	{
 		Location loc;
@@ -242,21 +242,21 @@ struct CustomizedLocation(LocationConfig c)
 		loc.index = index;
 		loc.indentCount = indentCount;
 		loc.indentStyle = indentStyle;
-		
+
 		static if( config.withSize )
 			loc.length = length;
-			
+
 		return loc;
 	}
-	
+
 	PlainLocation toPlainLocation() const
 	{
 		PlainLocation loc;
 		loc.fileName = fileName;
-		
+
 		static if( config.withLineIndex )
 			loc.lineIndex = lineIndex;
-	
+
 		static if( config.withLineIndex && config.withGraphemeColumnIndex )
 			loc.columnIndex = graphemeColumnIndex;
 		else static if( config.withLineIndex && config.withColumnIndex )
@@ -265,100 +265,46 @@ struct CustomizedLocation(LocationConfig c)
 			loc.columnIndex = graphemeIndex;
 		else
 			loc.columnIndex = index;
-			
+
 		return loc;
 	}
-	
+
 	ExtendedLocation toExtendedLocation() const
 	{
 		ExtendedLocation loc;
-		
+
 		loc.fileName = fileName;
-		loc.index = index;		
-		
+		loc.index = index;
+
 		static if( config.withSize )
 			loc.length = length;
-		
+
 		static if( config.withGraphemeIndex )
 		{
 			loc.graphemeIndex = graphemeIndex;
-			
+
 			static if( config.withSize )
 				loc.graphemeLength = graphemeLength;
 		}
-		
+
 		static if( config.withLineIndex )
 		{
 			loc.lineIndex = lineIndex;
-			
+
 			static if( config.withSize )
 				loc.lineCount = lineCount;
-			
+
 			static if( config.withColumnIndex )
 				loc.columnIndex = columnIndex;
-			
+
 			static if( config.withGraphemeColumnIndex )
 				loc.graphemeColumnIndex = graphemeColumnIndex;
 		}
-		
+
 		loc.indentCount = indentCount;
 		loc.indentStyle = indentStyle;
-		
+
 		return loc;
 	}
-	
+
 }
-
-import ivy.node : IvyNode;
-import ivy.node_visitor : AbstractNodeVisitor;
-
-mixin template BaseDeclNodeImpl(LocationConfig c)
-{
-	enum locConfig = c;
-	alias CustLocation = CustomizedLocation!locConfig;
-	
-	private IvyNode _parentNode;
-	private CustLocation _location;
-	
-	public @property override
-	{ 
-		IvyNode parent()
-		{
-			return _parentNode;
-		}
-	
-		Location location() const
-		{
-			return _location.toLocation();
-		}
-		
-		PlainLocation plainLocation() const
-		{
-			return _location.toPlainLocation();
-		}
-		
-		ExtendedLocation extLocation() const
-		{
-			return _location.toExtendedLocation();
-		}
-		
-		LocationConfig locationConfig() const
-		{
-			return _location.config;
-		}
-	}
-	
-	public @property override
-	{
-		void parent(IvyNode node)
-		{
-			_parentNode = node;
-		}
-	}
-	
-	public override void accept(AbstractNodeVisitor visitor)
-	{
-		visitor.visit(this);
-	}
-}
-

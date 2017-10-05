@@ -2,34 +2,34 @@ module ivy.interpreter_test;
 
 import std.stdio, std.json, std.file;
 
-import ivy.interpreter, ivy.interpreter_data, ivy.node, ivy.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer, ivy.compiler;
+import ivy.interpreter, ivy.interpreter_data, ivy.node, ivy.parser.lexer_tools, ivy.lexer, ivy.common, ivy.parser, ivy.ast_writer, ivy.compiler;
 
 
 
 void main()
 {
 	import std.path;
-	
+
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 	alias TDataNode = DataNode!string;
 
 	string sourceFileName = "test/compiler_test_template.html";
 	string source = cast(string) std.file.read(sourceFileName);
-	
+
 	auto parser = new Parser!(TextRange)(source, sourceFileName);
-	
+
 	IvyNode ast;
-	
+
 	try {
 		ast = parser.parse();
 	} catch(Throwable e) {
 		throw e;
 	}
-	
+
 	JSONValue astJSON;
-	
+
 	writeASTasJSON(parser.lexer.sourceRange, ast, astJSON);
-	
+
 	stdout.writeln(toJSON(astJSON, true));
 
 	auto compilerModuleRepo = new CompilerModuleRepository([buildNormalizedPath(getcwd())], ".html");

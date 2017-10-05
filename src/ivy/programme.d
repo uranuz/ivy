@@ -1,9 +1,13 @@
-module ivy.toolkit;
+module ivy.programme;
 
 import ivy.common;
-import ivy.compiler;
-import ivy.interpreter_data;
-import ivy.interpreter;
+import ivy.code_object: ModuleObject;
+import ivy.compiler.compiler;
+import ivy.compiler.symbol_collector;
+import ivy.compiler.module_repository;
+import ivy.interpreter.data_node;
+import ivy.interpreter.interpreter;
+import ivy.interpreter.directives;
 
 alias TDataNode = DataNode!string;
 
@@ -57,7 +61,7 @@ public:
 		mainModuleScope["__scopeName__"] = "__main__"; // Allocating a dict if it's not
 		import std.range: back;
 
-		import ivy.interpreter: Interpreter;
+		import ivy.interpreter.interpreter: Interpreter;
 		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
 		interp.addDirInterpreters(_dirInterpreters);
 		interp.execLoop();

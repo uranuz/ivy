@@ -1,8 +1,8 @@
 /// This module serves to parse JSON data directly into Ivy internal data format
 module ivy.json;
 
-import ivy.interpreter_data;
-import ivy.lexer_tools;
+import ivy.interpreter.data_node;
+import ivy.parser.lexer_tools;
 import ivy.common;
 
 class IvyJSONException: Exception
@@ -46,10 +46,10 @@ public:
 	String parseString()
 	{
 		import std.array: appender;
-		
+
 		assert( getChar() == '\"', "Expected \"" );
 		_source.popFront(); // Skip "
-		
+
 		auto buf = appender!String();
 
 		while( !_source.empty )
@@ -72,7 +72,7 @@ public:
 					default:
 						error( "Unexpected escape sequence..." );
 				}
-				
+
 				_source.popFront(); // Skip escaped character
 			}
 			else if( _source.front == '\"' )
@@ -129,7 +129,7 @@ public:
 		auto beginRange = _source.save;
 		if( getChar() == '-' )
 			_source.popFront();
-		
+
 		parseInteger();
 		bool isFloat = false;
 		if( _source.front == '.' )
@@ -163,15 +163,15 @@ public:
 
 						if( !_source.empty && getChar() != ':' )
 							error( "Expected :" );
-						
+
 						_source.popFront(); // Skip :
 
 						TDataNode value = parseValue();
 						assocArray[key] = value;
-						
+
 						if( getChar() == '}' )
 							break;
-						
+
 						if( _source.empty || getChar() != ',' )
 							error( `Expected ,` );
 						_source.popFront(); // Skip ,
@@ -192,7 +192,7 @@ public:
 						nodeArray ~= parseValue();
 						if( getChar() == ']' )
 							break;
-						
+
 						if( getChar() != ',' )
 							error( `Expected ,` );
 						_source.popFront(); // Skip ,

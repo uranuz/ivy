@@ -1,8 +1,8 @@
-module ivy.lexer;
+module ivy.parser.lexer;
 
-import std.range, std.algorithm, std.conv, std.stdio;
+import std.range, std.algorithm, std.conv;
 
-import ivy.lexer_tools, ivy.common;
+import ivy.parser.lexer_tools, ivy.common;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyLexerDebug;
@@ -78,8 +78,8 @@ enum LexemeType {
 	DataBlock,
 	Invalid,
 	EndOfFile,
-	
-	
+
+
 	CoreTypesEnd,
 	ExtensionTypesStart = 100,
 
@@ -110,91 +110,91 @@ struct LexemeInfo
 	int typeIndex = 0; // LexemeType for this lexeme
 	BitFlags!LexemeFlag flags;
 	int pairTypeIndex = 0; // LexemeType for pair of this lexeme
-		
+
 	@property const
 	{
 		bool isLiteral()
 		{
 			return cast(bool)( flags & LexemeFlag.Literal );
 		}
-		
+
 		bool isDynamic()
 		{
 			return cast(bool)( flags & LexemeFlag.Dynamic );
 		}
-		
+
 		bool isStatic()
 		{
 			return !( flags & LexemeFlag.Dynamic );
 		}
-		
+
 		bool isOperator()
 		{
 			return cast(bool)( flags & LexemeFlag.Operator );
 		}
-		
+
 		bool isParen()
 		{
 			return cast(bool)( flags & LexemeFlag.Paren );
 		}
-		
+
 		bool isLeftParen()
 		{
-			return cast(bool)( 
+			return cast(bool)(
 				( flags & LexemeFlag.Paren )
-				&& ( flags & LexemeFlag.Left ) 
+				&& ( flags & LexemeFlag.Left )
 			);
 		}
-		
+
 		bool isRightParen()
 		{
-			return cast(bool)( 
+			return cast(bool)(
 				( flags & LexemeFlag.Paren )
-				&& ( flags & LexemeFlag.Right ) 
+				&& ( flags & LexemeFlag.Right )
 			);
 		}
-		
+
 		bool isArithmeticOperator()
 		{
-			return cast(bool)( 
+			return cast(bool)(
 				( flags & LexemeFlag.Operator )
-				&& ( flags & LexemeFlag.Arithmetic ) 
+				&& ( flags & LexemeFlag.Arithmetic )
 			);
 		}
-		
+
 		bool isCompareOperator()
 		{
-			return cast(bool)( 
+			return cast(bool)(
 				( flags & LexemeFlag.Operator )
-				&& ( flags & LexemeFlag.Compare ) 
+				&& ( flags & LexemeFlag.Compare )
 			);
 		}
-		
+
 		bool isValidCoreType()
 		{
 			return LexemeType.Unknown < typeIndex && typeIndex < LexemeType.Invalid;
 		}
-		
+
 		bool isExtensionType()
 		{
 			return typeIndex >= LexemeType.ExtensionTypesStart;
 		}
-		
+
 		bool isValidType()
 		{
 			return typeIndex != LexemeType.Unknown && typeIndex != LexemeType.EndOfFile && typeIndex != LexemeType.Invalid;
 		}
-		
+
 		bool isUnknown()
 		{
 			return typeIndex == LexemeType.Unknown;
 		}
-		
+
 		bool isInvalid()
 		{
 			return typeIndex == LexemeType.Invalid;
 		}
-		
+
 		bool isEndOfFile()
 		{
 			return typeIndex == LexemeType.EndOfFile;
@@ -244,7 +244,7 @@ template GetSourceRangeConfig(R)
 	{
 		enum GetSourceRangeConfig = ( () {
 			LocationConfig c;
-			
+
 			return c;
 		} )();
 	}
@@ -262,25 +262,25 @@ template createLexemeAt(SourceRange)
 		lex.info = LexemeInfo(lexType);
 		lex.loc.index = source.index;
 		lex.loc.length = 0;
-		
+
 		static if( config.withGraphemeIndex )
 		{
 			lex.loc.graphemeIndex = source.graphemeIndex;
 			lex.loc.graphemeLength = 0;
 		}
-		
+
 		static if( config.withLineIndex )
 		{
 			lex.loc.lineIndex = source.lineIndex;
 			lex.loc.lineCount = 0;
-		
+
 			static if( config.withColumnIndex )
 				lex.loc.columnIndex = source.columnIndex;
-			
+
 			static if( config.withGraphemeColumnIndex )
 				lex.loc.graphemeColumnIndex = source.graphemeColumnIndex;
 		}
-		
+
 		return lex;
 	}
 }
@@ -289,7 +289,7 @@ template createLexemeAt(SourceRange)
 auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRange) endRange, ref const(LexemeInfo) lexemeInfo)
 {
 	enum LocationConfig config = GetSourceRangeConfig!SourceRange;
-	
+
 	Lexeme!(config) lex;
 	lex.info = lexemeInfo;
 
@@ -301,7 +301,7 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 	);
 	// Not idiomatic range maybe approach, but effective
 	lex.loc.length = endRange.index - beginRange.index;
-	
+
 	static if( config.withGraphemeIndex )
 	{
 		lex.loc.graphemeIndex = beginRange.graphemeIndex;
@@ -311,7 +311,7 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 		);
 		lex.loc.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
 	}
-	
+
 	static if( config.withLineIndex )
 	{
 		lex.loc.lineIndex = beginRange.lineIndex;
@@ -320,10 +320,10 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 			"Line index for end range must not be less than for begin range!"
 		);
 		lex.loc.lineCount = endRange.lineIndex - beginRange.lineIndex;
-	
+
 		static if( config.withColumnIndex )
 			lex.loc.columnIndex = beginRange.columnIndex;
-		
+
 		static if( config.withGraphemeColumnIndex )
 			lex.loc.graphemeColumnIndex = beginRange.graphemeColumnIndex;
 	}
@@ -369,7 +369,7 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 	}
 	lex.loc.indentCount = minIndentCount;
 	lex.loc.indentStyle = indentStyle;
-	
+
 	beginRange = endRange.save; //Move start currentRange to point of end currentRange
 	return lex;
 }
@@ -389,7 +389,7 @@ struct LexicalRule(R)
 	if( isForwardRange!R )
 {
 	import std.traits: Unqual;
-	
+
 	alias SourceRange = R;
 	enum config = GetSourceRangeConfig!R;
 	alias Char = Unqual!( ElementEncodingType!R );
@@ -400,7 +400,7 @@ struct LexicalRule(R)
 	// and consume this part. Otherwise it should return false
 	alias ParseMethodType = bool function(ref SourceRange source, ref const(LexicalRule!R) rule);
 	alias parseStaticMethod = parseStaticLexeme!( SourceRange, LexicalRule!R );
-	
+
 	String val;
 	ParseMethodType parseMethod;
 	LexemeInfo lexemeInfo;
@@ -409,14 +409,14 @@ struct LexicalRule(R)
 	{
 		return parseMethod(currentRange, this);
 	}
-	
+
 	@property const
 	{
 		bool isDynamic()
 		{
 			return lexemeInfo.isDynamic;
 		}
-		
+
 		bool isStatic()
 		{
 			return lexemeInfo.isStatic;
@@ -429,7 +429,7 @@ enum ContextState { CodeContext, MixedContext };
 struct Lexer(S, LocationConfig c = LocationConfig.init)
 {
 	import std.typecons: BitFlags;
-	
+
 	alias SourceRange = TextForwardRange!(String, c);
 	alias LexRule = LexicalRule!(SourceRange);
 	alias LexemeT = LexRule.LexemeT;
@@ -443,7 +443,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	{
 		BitFlags!LexemeFlag newFlags;
 		int pairTypeIndex;
-		
+
 		foreach(flag; extraFlags)
 		{
 			static if( is( typeof(flag) == LexemeFlag ) )
@@ -463,15 +463,15 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 		newFlags &= ~LexemeFlag.Dynamic;
 		assert( !( cast(bool)(newFlags & LexemeFlag.Paren) && pairTypeIndex == 0 ), "Lexeme with LexemeFlag.Paren expected to have pair lexeme" );
-		
+
 		return LexRule( str, &parseStaticLexeme!(SourceRange, LexRule), LexemeInfo( lexType, newFlags, pairTypeIndex ) );
 	}
-	
+
 	static auto dynamicRule(Flags...)(LexRule.ParseMethodType method, LexemeType lexType, Flags extraFlags)
 	{
 		BitFlags!LexemeFlag newFlags;
 		int pairTypeIndex;
-		
+
 		foreach(flag; extraFlags)
 		{
 			static if( is( typeof(flag) == LexemeFlag ) )
@@ -491,7 +491,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 		newFlags |= LexemeFlag.Dynamic;
 		assert( !( cast(bool)(newFlags & LexemeFlag.Paren) && pairTypeIndex == 0 ), "Lexeme with LexemeFlag.Paren expected to have pair lexeme" );
-		
+
 		return LexRule( null, method, LexemeInfo( lexType, newFlags ) );
 	}
 
@@ -504,7 +504,7 @@ public:
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
 		dynamicRule( &parseData, LexemeType.Data, LexemeFlag.Literal )
 	];
-	
+
 	__gshared LexRule[] codeContextRules = [
 		dynamicRule( &parseDataBlock, LexemeType.DataBlock, LexemeFlag.Literal ),
 
@@ -514,7 +514,7 @@ public:
 		staticRule( codeListBegin, LexemeType.CodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
 		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
-		
+
 		staticRule( "+", LexemeType.Add, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "==", LexemeType.Equal, LexemeFlag.Operator, LexemeFlag.Compare ),
 		staticRule( ":", LexemeType.Colon, LexemeFlag.Operator ),
@@ -544,38 +544,38 @@ public:
 		dynamicRule( &parseName, LexemeType.Name ),
 		dynamicRule( &parseString, LexemeType.String, LexemeFlag.Literal )
 	];
-	
+
 	struct LexerContext
 	{
 		ContextState[] statesStack;
 		LexemeInfo[] parenStack;
-		
+
 		this(this)
 		{
 			parenStack = parenStack.dup;
 		}
-		
+
 		ref LexerContext opAssign(ref LexerContext rhs)
 		{
 			statesStack = rhs.statesStack.dup;
 			parenStack = rhs.parenStack.dup;
 			return this;
 		}
-		
+
 		@property ContextState state()
 		{
-			return statesStack.empty ? ContextState.CodeContext : statesStack.back;	
+			return statesStack.empty ? ContextState.CodeContext : statesStack.back;
 		}
-		
+
 	}
 
 	SourceRange sourceRange; //Source range. Don't modify it!
 	SourceRange currentRange;
 	LexerContext _ctx;
 	LogerMethod logerMethod;
-		
+
 	/+private+/ LexemeT _front;
-	
+
 	@disable this(this);
 
 	version(IvyLexerDebug)
@@ -613,13 +613,13 @@ public:
 	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this.save);
 	}
-	
+
 	this(String src, LogerMethod logMeth = null)
 	{
 		auto newRange = SourceRange(src);
 		this(newRange, logMeth);
 	}
-	
+
 	this(ref const(SourceRange) srcRange, LogerMethod logMeth = null)
 	{
 		sourceRange = srcRange.save;
@@ -630,7 +630,7 @@ public:
 		if( !this.empty )
 			this.popFront();
 	}
-	
+
 	void parse()
 	{
 		while( !currentRange.empty )
@@ -649,16 +649,16 @@ public:
 		{
 			if( !ctx.parenStack.empty )
 				assert(false,
-					"Expected matching parenthesis for " 
+					"Expected matching parenthesis for "
 					~ (cast(LexemeType) ctx.parenStack.back.typeIndex).to!string
-					~ ", but unexpected end of input found!!!" 
+					~ ", but unexpected end of input found!!!"
 				);
-			
+
 			return createLexemeAt(source, LexemeType.EndOfFile);
 		}
-		
+
 		LexRule[] rules;
-		
+
 		if( ctx.state == ContextState.CodeContext )
 		{
 			rules = codeContextRules;
@@ -696,7 +696,7 @@ public:
 	{
 		import std.array: array;
 		import std.conv: to;
-		
+
 		_front = parseFront(currentRange, _ctx);
 
 		// Checking paren balance
@@ -777,21 +777,21 @@ public:
 			_ctx.parenStack ~= _front.info;
 		}
 	}
-	
+
 	bool empty()
 	{	return currentRange.empty || _front.info.isEndOfFile;
 	}
-	
+
 	LexemeT front() @property
 	{
 		return _front;
 	}
-	
+
 	auto frontValue() @property
 	{
 		return front.getSlice(sourceRange);
 	}
-	
+
 	@property auto save()
 	{
 		auto thisCopy = Lexer!(S, c)(sourceRange);
@@ -799,10 +799,10 @@ public:
 
 		thisCopy._ctx = this._ctx;
 		thisCopy._front = this._front;
-		
+
 		return thisCopy;
 	}
-	
+
 	// TODO: Unused method - consider to remove
 	void fail_expectation(LexemeType lexType, size_t line, String value = String.init )
 	{
@@ -811,29 +811,29 @@ public:
 			whatExpected ~= ` with value "` ~ value ~ `"`;
 
 		loger.error( !this.empty, `Expected `, whatExpected,` but end of input found!!!` );
-		
+
 		String whatGot = `lexeme of typeIndex "` ~ front.info.typeIndex.to!String ~ `"`;
 		if( !front.getSlice(sourceRange).empty )
 			whatGot ~= ` with value "` ~ front.getSlice(sourceRange).array ~ `"`;
-		
+
 		loger.error(`[`, line.to!String, `] Expected `, whatExpected, ` but got `, whatGot, `!!!` );
 	}
-	
+
 	// TODO: Unused method - consider to remove
 	LexemeT expect(LexemeType lexType, String value, size_t line = __LINE__)
 	{
 		import std.algorithm: equal;
-		
+
 		if( this.empty )
 			fail_expectation(lexType, line, value);
-		
+
 		LexemeT lex = this.front;
 		if( lex.info.typeIndex == lexType && lex.getSlice(sourceRange).equal(value) )
 		{
 			this.popFront();
 			return lex;
 		}
-		
+
 		fail_expectation(lexType, line, value);
 		loger.internalAssert(false);
 		assert(false);
@@ -844,25 +844,25 @@ public:
 	{
 		if( this.empty )
 			fail_expectation(lexType, line);
-		
+
 		LexemeT lex = this.front;
 		if( lex.info.typeIndex == lexType )
 		{
 			this.popFront();
 			return lex;
 		}
-		
+
 		fail_expectation(lexType, line);
 		loger.internalAssert(false);
 		assert(false);
 	}
-	
+
 	// TODO: Unused method - consider to remove
 	bool skipIf(LexemeType lexType)
 	{
 		if( this.empty )
 			return false;
-		
+
 		auto lex = this.front;
 		if( lex.info.typeIndex == lexType )
 		{
@@ -871,15 +871,15 @@ public:
 		}
 		return false;
 	}
-	
+
 	// TODO: Unused method - consider to remove
 	bool skipIf(LexemeType typeIndex, String value)
 	{
 		import std.algorithm: equal;
-		
+
 		if( this.empty )
 			return false;
-		
+
 		auto lex = this.front;
 		if( lex.info.typeIndex == typeIndex && lex.getSlice(sourceRange).equal(value) )
 		{
@@ -888,19 +888,19 @@ public:
 		}
 		return false;
 	}
-	
+
 	LexemeT next() @property
 	{
 		//Creates copy of currentRange in order to not modify original one
-		SourceRange parsedRange = currentRange.save; 
+		SourceRange parsedRange = currentRange.save;
 		if( this.empty )
 			loger.error("Cannot peek lexeme, because currentRange is empty!!!");
-		
+
 		return parseFront(parsedRange, _ctx);
 	}
 
 	static immutable whitespaceChars = " \n\t\r";
-	
+
 	static void skipWhiteSpaces(ref SourceRange source)
 	{
 		Char ch;
@@ -921,8 +921,6 @@ public:
 
 	static bool parseString(ref SourceRange source, ref const(LexRule) rule)
 	{
-		//writeln("lexer.parseString");
-		
 		String quoteLex;
 
 		foreach( ref quote; stringQuotes )
@@ -933,10 +931,10 @@ public:
 				break;
 			}
 		}
-		
+
 		if( quoteLex.empty )
 			return false;
-		
+
 		while( !source.empty )
 		{
 			if( source.match(quoteLex) ) // Test and consume
@@ -944,24 +942,22 @@ public:
 			else
 				source.popFront();
 		}
-		
+
 		assert(false, `Expected <` ~ quoteLex.to!string ~ `> at the end of string literal, but end of input found!!!` );
 	}
 
 	static bool parseInteger(ref SourceRange source, ref const(LexRule) rule)
 	{
-		//writeln("lexer.parseInteger");
-
 		Char ch;
-		
+
 		if( source.empty )
 			return false;
-		
+
 		ch = source.front;
 		if( !('0' <= ch && ch <= '9') )
 			return false;
 		source.popFront();
-		
+
 		while( !source.empty )
 		{
 			ch = source.front;
@@ -969,24 +965,22 @@ public:
 				break;
 			source.popFront();
 		}
-		
+
 		return true;
 	}
 
 	static bool parseFloat(ref SourceRange source, ref const(LexRule) rule)
 	{
-		//writeln("lexer.parseFloat");
-
 		Char ch;
-		
+
 		if( source.empty )
 			return false;
-		
+
 		ch = source.front;
 		if( !('0' <= ch && ch <= '9') )
 			return false;
 		source.popFront();
-		
+
 		while( !source.empty )
 		{
 			ch = source.front;
@@ -994,23 +988,23 @@ public:
 				break;
 			source.popFront();
 		}
-		
+
 		if( source.empty )
 			return false;
-		
+
 		ch = source.front;
 		if( ch != '.' )
 			return false;
 		source.popFront();
-		
+
 		if( source.empty )
 			assert( false, `Expected decimal part of float!!!` );
-		
+
 		ch = source.front;
 		if( !('0' <= ch && ch <= '9') )
 			assert( false, `Expected decimal part of float!!!` );
 		source.popFront();
-		
+
 		while( !source.empty )
 		{
 			ch = source.front;
@@ -1018,10 +1012,10 @@ public:
 				break;
 			source.popFront();
 		}
-		
+
 		return true;
 	}
-	
+
 	static immutable notTextLexemes = [
 		exprBlockBegin,
 		codeBlockBegin,
@@ -1032,8 +1026,6 @@ public:
 
 	static bool parseData(ref SourceRange source, ref const(LexRule) rule)
 	{
-		//writeln("lexer.parseData");
-
 		while( !source.empty )
 		{
 			foreach( ref notText; notTextLexemes )
@@ -1045,63 +1037,61 @@ public:
 			}
 			source.popFront();
 		}
-		
+
 		return true;
 	}
-	
+
 	static bool parseDataBlock(ref SourceRange source, ref const(LexRule) rule)
 	{
 		if( source.empty )
 			return false;
-		
+
 		if( !source.match(dataBlockBegin) )
 			return false;
-		
+
 		while( !source.empty )
 		{
 			if( source.match(dataBlockEnd) )
 				return true;
-				
+
 			source.popFront();
 		}
-	
+
 		return true;
 	}
-	
+
 	static bool parseName(ref SourceRange source, ref const(LexRule) rule)
 	{
-		//writeln("lexer.parseName");
-
 		Char ch;
 		dchar dch;
 		ubyte len;
-		
+
 		if( source.empty )
 			return false;
-		
+
 		ch = source.front();
-		
+
 		if( !isStartCodeUnit(ch) )
 			return false;
-		
+
 		dch = source.decodeFront();
 		len = source.frontUnitLength();
 		if( !isNameChar(dch) || isNumberChar(dch) )
 			return false;
-		
+
 		source.popFrontN(len);
-		
+
 		while( !source.empty )
 		{
 			len = source.frontUnitLength();
 			dch = source.decodeFront();
-			
+
 			if( !isNameChar(dch) )
 				break;
-			
+
 			source.popFrontN(len);
 		}
-		
+
 		return true;
 	}
 }
