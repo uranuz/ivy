@@ -92,6 +92,7 @@ public:
 				IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
 
 				bool isNoscope = false;
+				bool isEscape = false;
 				ICompoundStatement bodyStmt;
 
 				DirAttrsBlock!(true)[] attrBlocks;
@@ -165,21 +166,35 @@ public:
 							if( attrsDefStmtAttrRange.empty )
 								loger.error("Unexpected end of def.body directive!");
 
-							// Try to parse noscope flag
-							INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
-							if( noscopeExpr && noscopeExpr.name == "noscope" )
+							// Try to parse noscope and escape flags
+							body_flags_loop:
+							while( !attrsDefStmtAttrRange.empty )
 							{
-								isNoscope = true;
-								if( attrsDefStmtAttrRange.empty )
-									loger.error("Expected directive body, but end of def.body directive found!");
+								INameExpression flagExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
+								if( !flagExpr ) {
+									break;
+								}
+								switch( flagExpr.name )
+								{
+									case "noscope":
+										isNoscope = true;
+										break;
+									case "escape":
+										isEscape = true;
+										break;
+									default: break body_flags_loop;
+								}
 								attrsDefStmtAttrRange.popFront();
 							}
+
+							if( attrsDefStmtAttrRange.empty )
+								loger.error("Expected directive body, but end of def.body directive found!");
 
 							bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
 							if( !bodyStmt )
 								loger.error("Expected compound statement as directive body statement");
 
-							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope) );
+							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope, isEscape) );
 
 							break;
 						default:

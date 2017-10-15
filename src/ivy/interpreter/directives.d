@@ -39,10 +39,14 @@ class RenderDirInterpreter: INativeDirectiveInterpreter
 	override void interpret(Interpreter interp)
 	{
 		import std.array: appender;
+		debug import std.stdio;
 		TDataNode result = interp.getValue("__result__");
 
 		auto renderedResult = appender!string();
-		renderDataNode!(DataRenderType.Text)(result, renderedResult);
+		renderDataNode!(DataRenderType.HTML)(result, renderedResult);
+		auto safetyResult = appender!string();
+		renderDataNode!(DataRenderType.TextDebug)(result, safetyResult);
+		writeln(`safetyResult: `, safetyResult.data);
 		interp._stack ~= TDataNode(renderedResult.data);
 	}
 
@@ -291,13 +295,16 @@ class ScopeDirInterpreter: INativeDirectiveInterpreter
 {
 	import std.typecons: Tuple;
 
-	override void interpret(Interpreter interp) {
+	override void interpret(Interpreter interp)
+	{
 		interp.loger.internalAssert(interp.currentFrame, `Current frame is null!`);
 		interp._stack ~= interp.currentFrame._dataDict;
 	}
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.BodyAttr, Tuple!(ICompoundStatement, "ast", bool, "isNoscope")(null, true))
+		DirAttrsBlock!true(DirAttrKind.BodyAttr,
+			Tuple!(ICompoundStatement, "ast", bool, "isNoscope", bool, "isEscape")(null, true, false)
+		)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("scope");
@@ -308,7 +315,8 @@ class DateTimeGetDirInterpreter: INativeDirectiveInterpreter
 	import std.typecons: Tuple;
 	import std.datetime: SysTime;
 
-	override void interpret(Interpreter interp) {
+	override void interpret(Interpreter interp)
+	{
 		TDataNode value = interp.getValue("value");
 		TDataNode field = interp.getValue("field");
 
@@ -352,7 +360,8 @@ class RangeDirInterpreter: INativeDirectiveInterpreter
 {
 	import std.typecons: Tuple;
 
-	override void interpret(Interpreter interp) {
+	override void interpret(Interpreter interp)
+	{
 		TDataNode begin = interp.getValue("begin");
 		TDataNode end = interp.getValue("end");
 
@@ -376,3 +385,32 @@ class RangeDirInterpreter: INativeDirectiveInterpreter
 
 	mixin BaseNativeDirInterpreterImpl!("range");
 }
+
+
+/++
+class EscapeDirInterpreter: INativeDirectiveInterpreter
+{
+	import std.typecons: Tuple;
+
+	override void interpret(Interpreter interp)
+	{
+		TDataNode begin = interp.getValue("begin");
+		TDataNode end = interp.getValue("end");
+
+		if( begin.type !=  DataNodeType.Integer ) {
+			interp.loger.error(`Expected integer as 'begin' argument!`);
+		}
+
+		interp._stack ~= TDataNode(new IntegerRange(begin.integer, end.integer));
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("escape");
+}
++/

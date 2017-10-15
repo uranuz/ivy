@@ -71,7 +71,9 @@ enum OpCode: ubyte {
 
 	// Data construction opcodes
 	MakeArray,
-	MakeAssocArray
+	MakeAssocArray,
+
+	MarkForEscape
 }
 
 // Minimal element of bytecode is instruction opcode with optional arg

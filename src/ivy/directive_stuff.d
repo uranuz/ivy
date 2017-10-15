@@ -52,14 +52,18 @@ static this()
 struct DirAttrsBlock(bool isForCompiler = false)
 {
 	import std.typecons: Tuple, tuple;
+	import std.meta: AliasSeq;
 	alias TValueAttr = DirValueAttr!(isForCompiler);
+	alias BodyAttrs = AliasSeq!(
+		bool, "isNoscope",
+		bool, "isEscape"
+	);
 
 	static if( isForCompiler ) {
 		import ivy.parser.node: ICompoundStatement;
-		alias TBodyTuple = Tuple!(ICompoundStatement, "ast", bool, "isNoscope");
-	}
-	else {
-		alias TBodyTuple = Tuple!(bool, "isNoscope");
+		alias TBodyTuple = Tuple!(ICompoundStatement, "ast", BodyAttrs);
+	}	else {
+		alias TBodyTuple = Tuple!(BodyAttrs);
 	}
 
 	static struct Storage {
@@ -190,16 +194,18 @@ struct DirAttrsBlock(bool isForCompiler = false)
 				foreach( key, ref currAttr; _storage.namedAttrs ) {
 					attrs[key] = currAttr.toInterpreterValue();
 				}
-				return DirAttrsBlock!(false)( _kind, attrs );
+				return DirAttrsBlock!(false)(_kind, attrs);
 			}
 			case DirAttrKind.ExprAttr:
-				return DirAttrsBlock!(false)( _kind, _storage.exprAttrs.map!( a => a.toInterpreterValue() ).array );
+				return DirAttrsBlock!(false)(_kind, _storage.exprAttrs.map!( a => a.toInterpreterValue() ).array);
 			case DirAttrKind.IdentAttr:
-				return DirAttrsBlock!(false)( _kind, _storage.names );
+				return DirAttrsBlock!(false)(_kind, _storage.names);
 			case DirAttrKind.KwdAttr:
-				return DirAttrsBlock!(false)( _kind, _storage.keyword );
+				return DirAttrsBlock!(false)(_kind, _storage.keyword);
 			case DirAttrKind.BodyAttr:
-				return DirAttrsBlock!(false)( _kind, tuple!("isNoscope")(_storage.bodyAttr.isNoscope) );
+				return DirAttrsBlock!(false)(_kind,
+					tuple!("isNoscope", "isEscape")(_storage.bodyAttr.isNoscope, _storage.bodyAttr.isEscape)
+				);
 		}
 		assert( false, `This should never happen` );
 	}

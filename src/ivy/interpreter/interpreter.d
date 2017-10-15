@@ -1201,6 +1201,12 @@ public:
 					break;
 				}
 
+				case OpCode.MarkForEscape: {
+					loger.internalAssert(!_stack.empty, "Cannot execute MarkForEscape instruction. Expected operand for mark, but exec stack is empty!");
+					_stack.back.escapeState = cast(NodeEscapeState) instr.arg;
+					break;
+				}
+
 				default:
 				{
 					loger.internalAssert(false, "Unexpected code of operation: ", instr.opcode);

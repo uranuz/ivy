@@ -32,7 +32,7 @@ alias TDataNode = DataNode!string;
 class VarCompiler: IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		import std.range: empty, back, empty;
 
@@ -62,7 +62,7 @@ public:
 			}
 			else
 			{
-				compiler.loger.error( `Expected named attribute or name as variable declarator!` );
+				compiler.loger.error(`Expected named attribute or name as variable declarator!`);
 			}
 
 			if( !stmtRange.empty )
@@ -84,12 +84,11 @@ public:
 				}
 			}
 
-			compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
+			compiler.addInstr(OpCode.StoreLocalName, varNameConstIndex);
 		}
 
 		// For now we expect that directive should return some value on the stack
-		size_t fakeValueConstIndex = compiler.addConst( TDataNode() );
-		compiler.addInstr( OpCode.LoadConst, fakeValueConstIndex );
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
 
 		if( !stmtRange.empty )
 			compiler.loger.error("Expected end of directive after key-value pair. Maybe ';' is missing");
@@ -112,7 +111,7 @@ public:
 class SetCompiler : IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = statement[];
 
@@ -125,13 +124,11 @@ public:
 
 			kwPair.value.accept(compiler); //Evaluating expression
 
-			size_t varNameConstIndex = compiler.addConst( TDataNode( kwPair.name ) );
-			compiler.addInstr( OpCode.StoreName, varNameConstIndex );
+			compiler.addInstr(OpCode.StoreName, compiler.addConst( TDataNode(kwPair.name) ));
 		}
 
 		// For now we expect that directive should return some value on the stack
-		size_t fakeValueConstIndex = compiler.addConst( TDataNode() );
-		compiler.addInstr( OpCode.LoadConst, fakeValueConstIndex );
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
 
 		if( !stmtRange.empty )
 			compiler.loger.error("Expected end of directive after key-value pair. Maybe ';' is missing");
@@ -141,7 +138,7 @@ public:
 
 class IfCompiler: IDirectiveCompiler
 {
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		import std.typecons: Tuple;
 		import std.range: back, empty;
@@ -152,8 +149,8 @@ class IfCompiler: IDirectiveCompiler
 
 		auto stmtRange = statement[];
 
-		IExpression condExpr = stmtRange.takeFrontAs!IExpression( "Conditional expression expected" );
-		IExpression bodyStmt = stmtRange.takeFrontAs!IExpression( "'If' directive body statement expected" );
+		IExpression condExpr = stmtRange.takeFrontAs!IExpression("Conditional expression expected" );
+		IExpression bodyStmt = stmtRange.takeFrontAs!IExpression("'If' directive body statement expected");
 
 		ifSects ~= IfSect(condExpr, bodyStmt);
 
@@ -163,14 +160,14 @@ class IfCompiler: IDirectiveCompiler
 			INameExpression keywordExpr = stmtRange.takeFrontAs!INameExpression("'elif' or 'else' keyword expected");
 			if( keywordExpr.name == "elif" )
 			{
-				condExpr = stmtRange.takeFrontAs!IExpression( "'elif' conditional expression expected" );
-				bodyStmt = stmtRange.takeFrontAs!IExpression( "'elif' body statement expected" );
+				condExpr = stmtRange.takeFrontAs!IExpression("'elif' conditional expression expected");
+				bodyStmt = stmtRange.takeFrontAs!IExpression("'elif' body statement expected");
 
 				ifSects ~= IfSect(condExpr, bodyStmt);
 			}
 			else if( keywordExpr.name == "else" )
 			{
-				elseBody = stmtRange.takeFrontAs!IExpression( "'else' body statement expected" );
+				elseBody = stmtRange.takeFrontAs!IExpression("'else' body statement expected");
 				if( !stmtRange.empty )
 					compiler.loger.error("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
 				break;
@@ -193,19 +190,17 @@ class IfCompiler: IDirectiveCompiler
 
 			// Add conditional jump instruction
 			// Remember address of jump instruction
-			size_t jumpInstrIndex = compiler.addInstr( OpCode.JumpIfFalse );
+			size_t jumpInstrIndex = compiler.addInstr(OpCode.JumpIfFalse);
 
 			// Add `if body` code
 			ifSect.stmt.accept(compiler);
 
 			// Instruction to jump after the end of if directive when
 			// current body finished
-			jumpInstrIndexes[i] = compiler.addInstr( OpCode.Jump );
+			jumpInstrIndexes[i] = compiler.addInstr(OpCode.Jump);
 
 			// Getting address of instruction following after if body
-			size_t jumpElseIndex = compiler.getInstrCount();
-
-			compiler.setInstrArg( jumpInstrIndex, jumpElseIndex );
+			compiler.setInstrArg(jumpInstrIndex, compiler.getInstrCount());
 		}
 
 		if( elseBody )
@@ -216,31 +211,28 @@ class IfCompiler: IDirectiveCompiler
 		else
 		{
 			// It's fake elseBody used to push fake return value onto stack
-			size_t emptyNodeConstIndex = compiler.addConst( TDataNode() );
-			compiler.addInstr( OpCode.LoadConst, emptyNodeConstIndex );
+			compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
 		}
 
 		size_t afterEndInstrIndex = compiler.getInstrCount();
-		compiler.addInstr( OpCode.Nop ); // Need some fake to jump if it's end of code object
+		compiler.addInstr(OpCode.Nop); // Need some fake to jump if it's end of code object
 
 		foreach( currIndex; jumpInstrIndexes )
 		{
 			// Fill all generated jump instructions with address of instr after directive end
-			compiler.setInstrArg( currIndex, afterEndInstrIndex );
+			compiler.setInstrArg(currIndex, afterEndInstrIndex);
 		}
 
 		if( !stmtRange.empty )
 			compiler.loger.error(`Expected end of "if" directive. Maybe ';' is missing`);
-
 	}
-
 }
 
 
 class ForCompiler : IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = statement[];
 		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("For loop variable name expected");
@@ -259,7 +251,7 @@ public:
 		// Compile code to calculate aggregate value
 		aggregateExpr.accept(compiler);
 
-		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement( "Expected loop body statement" );
+		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement("Expected loop body statement");
 
 		if( !stmtRange.empty )
 			compiler.loger.error("Expected end of directive after loop body. Maybe ';' is missing");
@@ -269,30 +261,28 @@ public:
 		// Issue instruction to get iterator from aggregate in execution stack
 		compiler.addInstr( OpCode.GetDataRange );
 
-		size_t loopStartInstrIndex = compiler.addInstr( OpCode.RunLoop );
-		size_t varNameConstIndex = compiler.addConst( TDataNode(varName) );
+		size_t loopStartInstrIndex = compiler.addInstr(OpCode.RunLoop);
 
 		// Issue command to store current loop item in local context with specified name
-		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
+		compiler.addInstr(OpCode.StoreLocalName, compiler.addConst( TDataNode(varName) ));
 
 		bodyStmt.accept(compiler);
 
 		// Drop result that we don't care about in this loop type
-		compiler.addInstr( OpCode.PopTop );
+		compiler.addInstr(OpCode.PopTop);
 
-		size_t loopEndInstrIndex = compiler.addInstr( OpCode.Jump, loopStartInstrIndex );
-		compiler.setInstrArg( loopStartInstrIndex, loopEndInstrIndex );
+		size_t loopEndInstrIndex = compiler.addInstr(OpCode.Jump, loopStartInstrIndex);
+		compiler.setInstrArg(loopStartInstrIndex, loopEndInstrIndex);
 
 		// Push fake result to "make all happy" ;)
-		size_t fakeResultConstIndex = compiler.addConst( TDataNode() );
-		compiler.addInstr( OpCode.LoadConst, fakeResultConstIndex );
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
 	}
 }
 
 class AtCompiler : IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = statement[];
 
@@ -312,7 +302,7 @@ public:
 class SetAtCompiler : IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = statement[];
 
@@ -334,7 +324,7 @@ public:
 class RepeatCompiler : IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = statement[];
 
@@ -360,37 +350,35 @@ public:
 			compiler.loger.error("Expected end of directive after loop body. Maybe ';' is missing");
 
 		// Issue instruction to get iterator from aggregate in execution stack
-		compiler.addInstr( OpCode.GetDataRange );
+		compiler.addInstr(OpCode.GetDataRange);
 
 		// Creating node for string result on stack
-		size_t emptyStrConstIndex = compiler.addConst( TDataNode(TDataNode[].init) );
-		compiler.addInstr( OpCode.LoadConst, emptyStrConstIndex );
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(TDataNode[].init) ));
 
 		// RunLoop expects  data node range on the top, but result aggregator
 		// can be left on (TOP - 1), so swap these...
-		compiler.addInstr( OpCode.SwapTwo );
+		compiler.addInstr(OpCode.SwapTwo);
 
 		// Run our super-duper loop
-		size_t loopStartInstrIndex = compiler.addInstr( OpCode.RunLoop );
+		size_t loopStartInstrIndex = compiler.addInstr(OpCode.RunLoop);
 
 		// Issue command to store current loop item in local context with specified name
-		size_t varNameConstIndex = compiler.addConst( TDataNode(varName) );
-		compiler.addInstr( OpCode.StoreLocalName, varNameConstIndex );
+		compiler.addInstr(OpCode.StoreLocalName, compiler.addConst( TDataNode(varName) ));
 
 		// Swap data node range with result, so that we have it on (TOP - 1) when loop body finished
-		compiler.addInstr( OpCode.SwapTwo );
+		compiler.addInstr(OpCode.SwapTwo);
 
 		bodyStmt.accept(compiler);
 
 		// Apend current result to previous
-		compiler.addInstr( OpCode.Append );
+		compiler.addInstr(OpCode.Append);
 
 		// Put data node range at the TOP and result on (TOP - 1)
-		compiler.addInstr( OpCode.SwapTwo );
+		compiler.addInstr(OpCode.SwapTwo);
 
-		size_t loopEndInstrIndex = compiler.addInstr( OpCode.Jump, loopStartInstrIndex );
+		size_t loopEndInstrIndex = compiler.addInstr(OpCode.Jump, loopStartInstrIndex);
 		// We need to say RunLoop where to jump when range become empty
-		compiler.setInstrArg( loopStartInstrIndex, loopEndInstrIndex );
+		compiler.setInstrArg(loopStartInstrIndex, loopEndInstrIndex);
 
 		// Data range is dropped by RunLoop already
 	}
@@ -401,15 +389,14 @@ public:
 class PassCompiler : IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
-	{
-		compiler.addInstr( Instruction( OpCode.Nop ) );
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler) {
+		compiler.addInstr(OpCode.Nop);
 	}
 }
 
 class ExprCompiler: IDirectiveCompiler
 {
-	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = stmt[];
 		if( stmtRange.empty )
@@ -430,7 +417,7 @@ class ExprCompiler: IDirectiveCompiler
 class ImportCompiler: IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = statement[];
 
@@ -453,7 +440,7 @@ public:
 class FromImportCompiler: IDirectiveCompiler
 {
 public:
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = statement[];
 
@@ -475,13 +462,11 @@ public:
 
 		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
 
-		size_t modNameConstIndex = compiler.addConst(TDataNode(moduleNameExpr.name));
-		compiler.addInstr(OpCode.LoadConst, modNameConstIndex);
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(moduleNameExpr.name) ));
 
 		compiler.addInstr(OpCode.ImportModule);
 		compiler.addInstr(OpCode.SwapTwo); // Swap module return value and imported execution frame
-		size_t varNamesConstIndex = compiler.addConst(TDataNode(varNames));
-		compiler.addInstr(OpCode.LoadConst, varNamesConstIndex); // Put list of imported names on the stack
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(varNames) )); // Put list of imported names on the stack
 		compiler.addInstr(OpCode.FromImport); // Store names from module exec frame into current frame
 	}
 }
@@ -490,7 +475,7 @@ debug import std.stdio;
 /// Defines directive using ivy language
 class DefCompiler: IDirectiveCompiler
 {
-	override void compile( IDirectiveStatement statement, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
@@ -514,18 +499,7 @@ class DefCompiler: IDirectiveCompiler
 
 				switch( attrDefStmt.name )
 				{
-					case "def.kv": {
-						break;
-					}
-					case "def.pos": {
-						break;
-					}
-					case "def.names": {
-						break;
-					}
-					case "def.kwd": {
-						break;
-					}
+					case "def.kv", "def.pos", "def.names", "def.kwd": break;
 					case "def.body": {
 						if( bodyStatement )
 							compiler.loger.error("Multiple body statements are not allowed!!!");
@@ -545,7 +519,7 @@ class DefCompiler: IDirectiveCompiler
 
 						bodyStatement = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
 						if( !bodyStatement )
-							compiler.loger.error("Expected compound statement as directive body statement");
+							compiler.loger.error(`Expected compound statement as directive body statement`);
 
 						break;
 					}
@@ -567,17 +541,17 @@ class DefCompiler: IDirectiveCompiler
 			import std.algorithm: map;
 			import std.array: array;
 
-			Symbol symb = compiler.symbolLookup( defNameExpr.name );
+			Symbol symb = compiler.symbolLookup(defNameExpr.name);
 			if( symb.kind != SymbolKind.DirectiveDefinition )
 				compiler.loger.error(`Expected directive definition symbol kind`);
 
 			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-			assert( dirSymbol, `Directive definition symbol is null` );
+			assert(dirSymbol, `Directive definition symbol is null`);
 
 			if( !isNoscope )
 			{
 				// Compiler should enter frame of directive body, identified by index in source code
-				compiler.enterScope( bodyStatement.location.index );
+				compiler.enterScope(bodyStatement.location.index);
 			}
 
 			codeObjIndex = compiler.enterNewCodeObject(); // Creating code object
@@ -597,22 +571,19 @@ class DefCompiler: IDirectiveCompiler
 		}
 
 		// Add instruction to load code object from module constants
-		compiler.addInstr( OpCode.LoadConst, codeObjIndex );
-
-		// Add directive name to module constants
-		size_t dirNameConstIndex = compiler.addConst( TDataNode(defNameExpr.name) );
+		compiler.addInstr(OpCode.LoadConst, codeObjIndex);
 
 		// Add instruction to load directive name from consts
-		compiler.addInstr( OpCode.LoadConst, dirNameConstIndex );
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(defNameExpr.name) ));
 
 		// Add instruction to create directive object
-		compiler.addInstr( OpCode.LoadDirective );
+		compiler.addInstr(OpCode.LoadDirective);
 	}
 }
 
 class InsertCompiler: IDirectiveCompiler
 {
-	override void compile( IDirectiveStatement stmt, ByteCodeCompiler compiler )
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = stmt[];
 
@@ -635,7 +606,7 @@ class InsertCompiler: IDirectiveCompiler
 
 		if( !stmtRange.empty )
 		{
-			compiler.loger.write("InsertCompiler. At end. stmtRange.front.kind: ", stmtRange.front.kind);
+			compiler.loger.write(`InsertCompiler. At end. stmtRange.front.kind: `, stmtRange.front.kind);
 			compiler.loger.error(`Expected end of "expr" directive. Maybe ';' is missing`);
 		}
 	}

@@ -42,6 +42,10 @@ enum DataNodeType: ubyte {
 	CodeObject, Callable, ExecutionFrame, DataNodeRange
 };
 
+enum NodeEscapeState: ubyte {
+	Init, Safe, Unsafe
+}
+
 struct DataNode(S)
 {
 	import std.datetime: SysTime;
@@ -75,6 +79,7 @@ struct DataNode(S)
 
 	private Storage storage;
 	private DataNodeType typeTag;
+	private NodeEscapeState _escapeState;
 
 	bool boolean() @property
 	{
@@ -414,6 +419,14 @@ struct DataNode(S)
 		TDataNode undef;
 		undef.typeTag = DataNodeType.Undef;
 		return undef;
+	}
+
+	void escapeState(NodeEscapeState state) @property {
+		_escapeState = state;
+	}
+
+	NodeEscapeState escapeState()  @property {
+		return _escapeState;
 	}
 
 	string toString()

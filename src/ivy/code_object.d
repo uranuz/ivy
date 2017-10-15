@@ -1,6 +1,6 @@
 module ivy.code_object;
 
-import ivy.interpreter.data_node: DataNode, DataNodeType;
+import ivy.interpreter.data_node: DataNode, DataNodeType, NodeEscapeState;
 import ivy.directive_stuff: DirAttrsBlock;
 
 /**
@@ -28,8 +28,10 @@ public:
 	// This function can return index of already existing object if it's equal to passed data
 	size_t addConst(TDataNode data)
 	{
+		import std.range: back;
 		size_t index = _consts.length;
 		_consts ~= data;
+		_consts.back.escapeState = NodeEscapeState.Safe; // Consider all constants are Safe by default
 		return index;
 	}
 

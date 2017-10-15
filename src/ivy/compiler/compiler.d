@@ -61,16 +61,6 @@ T takeFrontAs(T)( IAttributeRange range, string errorMsg = null, string file = _
 	return typedAttr;
 }
 
-T testFrontIs(T)( IAttributeRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
-{
-	if( range.empty )
-		return false;
-
-	T typedNode = cast(T) range.front;
-
-	return typedNode !is null;
-}
-
 alias TDataNode = DataNode!string;
 
 class ByteCodeCompiler: AbstractNodeVisitor
@@ -178,7 +168,7 @@ public:
 	void enterModuleScope( string moduleName )
 	{
 		loger.write(`Enter method`);
-		loger.write(`_modulesSymbolTables: `, _modulesSymbolTables );
+		loger.write(`_modulesSymbolTables: `, _modulesSymbolTables);
 		if( auto table = moduleName in _modulesSymbolTables )
 		{
 			loger.internalAssert(*table, `Cannot enter module sybol table frame, because it is null`);
@@ -535,6 +525,7 @@ public:
 
 		if( auto comp = node.name in _dirCompilers ) {
 			comp.compile(node, this);
+			addInstr(OpCode.MarkForEscape, NodeEscapeState.Safe);
 		}
 		else
 		{
@@ -554,6 +545,7 @@ public:
 
 			// Keeps count of stack arguments actualy used by this call. First is directive object
 			size_t stackItemsCount = 1;
+			bool isEscape = true;
 
 			loger.write(`Entering directive attrs blocks loop`);
 			while( !dirAttrBlocks.empty )
@@ -663,7 +655,8 @@ public:
 					{
 						loger.internalAssert( false );
 						// TODO: We should take number of identifiers passed in directive definition
-						while( !attrRange.empty ) {
+						while( !attrRange.empty )
+						{
 							IExpression identAttr = cast(INameExpression) attrRange.front;
 							if( !identAttr ) {
 								break;
@@ -683,6 +676,7 @@ public:
 						break;
 					}
 					case DirAttrKind.BodyAttr:
+						isEscape = dirAttrBlocks.front.bodyAttr.isEscape;
 						break;
 				}
 				dirAttrBlocks.popFront();
@@ -695,12 +689,13 @@ public:
 
 			// After all preparations add instruction to call directive
 			addInstr(OpCode.RunCallable, stackItemsCount);
+			addInstr(OpCode.MarkForEscape, isEscape? NodeEscapeState.Unsafe: NodeEscapeState.Safe);
 		}
 	}
 
 	void _visit(IDataFragmentStatement node)
 	{
-		// Nothing special. Just store this piece of data into table
+		// Nothing special. Just store this piece of data into table and output then
 		addInstr(OpCode.LoadConst, addConst( TDataNode(node.data) ));
 	}
 
@@ -741,33 +736,11 @@ public:
 		TDataNode emptyArray = TDataNode[].init;
 		addInstr(OpCode.LoadConst, addConst(emptyArray));
 
-		//size_t renderDirNameConstIndex = addConst( TDataNode("__render__") );
-		//size_t resultNameConstIndex = addConst( TDataNode("__result__") );
-
-		// In order to make call to __render__ creating block header for one positional argument
-		// witch is currently at the TOP of the execution stack
-		//size_t blockHeader = ( 1 << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr; //TODO: Change block type magic constant to enum!
-		//size_t blockHeaderConstIndex = addConst( TDataNode(blockHeader) ); // Add it to constants
-
 		auto stmtRange = node[];
 		while( !stmtRange.empty )
 		{
-			//addInstr( OpCode.LoadName, renderDirNameConstIndex ); // Load __render__ directive
-
-			// Add name for key-value argument
-			//addInstr( OpCode.LoadConst, resultNameConstIndex );
-
 			stmtRange.front.accept(this);
 			stmtRange.popFront();
-
-			//addInstr( OpCode.LoadConst, blockHeaderConstIndex ); // Add argument block header
-
-			// Stack layout is:
-			// TOP: argument block header
-			// TOP - 1: Current result argument
-			// TOP - 2: Current result var name argument
-			// TOP - 3: Callable object for __render__
-			//addInstr( OpCode.RunCallable, 4 );
 
 			addInstr(OpCode.Append); // Append result to result array
 		}
@@ -841,5 +814,4 @@ public:
 
 		return result;
 	}
-
 }

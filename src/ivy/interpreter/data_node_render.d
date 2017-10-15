@@ -7,26 +7,70 @@ import ivy.interpreter.data_node: DataNodeType;
 /// TextDebug - для вывода данных в виде текста в отладочном режиме (выводятся некоторые данные для узлов внутренних типов)
 /// JSON - вывод узлов, которые соответствуют типам в JSON в формате собственно JSON (остальные типы узлов выводим как null)
 /// JSONFull - выводим всё максимально в JSON, сериализуя узлы внутренних типов в JSON
-enum DataRenderType { Text, TextDebug, JSON, JSONFull };
+enum DataRenderType { Text, TextDebug, HTML, JSON, JSONFull };
 /// Думаю, нужен ещё флаг isPrettyPrint
 
-private void _writeEscapedString(OutRange)(string str, ref OutRange outRange)
+private void _writeEscapedString(DataRenderType renderType, OutRange)(ref OutRange outRange, string str)
 {
 	import std.range: put;
-	foreach( char symb; str )
+	import std.algorithm: canFind;
+	enum bool isQuoted = ![DataRenderType.Text, DataRenderType.HTML].canFind(renderType);
+	static if( isQuoted ) {
+		outRange.put("\"");
+	}
+	static if( renderType == DataRenderType.Text ) {
+		outRange.put(str); // There is no escaping for plain text render
+	}
+	else
 	{
-		switch( symb )
+		foreach( char symb; str )
 		{
-			case '\"': outRange.put("\\\""); break;
-			case '\\': outRange.put("\\\\"); break;
-			case '/': outRange.put("\\/"); break;
-			case '\b': outRange.put("\\b"); break;
-			case '\f': outRange.put("\\f"); break;
-			case '\n': outRange.put("\\n"); break;
-			case '\r': outRange.put("\\r"); break;
-			case '\t': outRange.put("\\t"); break;
-			default:	outRange.put(symb);
+			static if( renderType == DataRenderType.HTML )
+			{
+				switch( symb )
+				{
+					case '<': outRange.put("&lt;"); break;
+					case '>': outRange.put("&gt;"); break;
+					case '&': outRange.put("&amp;"); break;
+					default:	outRange.put(symb);
+				}
+			}
+			else
+			{
+				switch( symb )
+				{
+					case '\"': outRange.put("\\\""); break;
+					case '\\': outRange.put("\\\\"); break;
+					case '/': outRange.put("\\/"); break;
+					case '\b': outRange.put("\\b"); break;
+					case '\f': outRange.put("\\f"); break;
+					case '\n': outRange.put("\\n"); break;
+					case '\r': outRange.put("\\r"); break;
+					case '\t': outRange.put("\\t"); break;
+					default:	outRange.put(symb);
+				}
+			}
 		}
+	}
+	static if( isQuoted ) {
+		outRange.put("\"");
+	}
+}
+
+import std.traits: isInstanceOf;
+import ivy.interpreter.data_node: DataNode, NodeEscapeState;
+private void _writeEscapedString(DataRenderType renderType, OutRange, TDataNode)(ref OutRange outRange, TDataNode strNode)
+	if( isInstanceOf!(DataNode, TDataNode) )
+{
+	assert(strNode.type == DataNodeType.String);
+	if( strNode.escapeState == NodeEscapeState.Safe && renderType == DataRenderType.HTML ) {
+		outRange._writeEscapedString!(DataRenderType.Text)(strNode.str);
+	} else {
+		outRange._writeEscapedString!(renderType)(strNode.str);
+	}
+	static if( renderType == DataRenderType.TextDebug ) {
+		import std.conv: text;
+		outRange.put(` <[` ~ strNode.escapeState.text ~ `]>`);
 	}
 }
 
@@ -35,13 +79,14 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 {
 	import std.range: put;
 	import std.conv: to;
+	import std.algorithm: canFind;
 
 	assert( maxRecursion, "Recursion is too deep!" );
 
 	final switch(node.type) with(DataNodeType)
 	{
 		case Undef:
-			static if( renderType == DataRenderType.Text ) {
+			static if( [DataRenderType.Text, DataRenderType.HTML].canFind(renderType) ) {
 				outRange.put("");
 			} else static if( renderType == DataRenderType.TextDebug ) {
 				outRange.put("undef");
@@ -50,7 +95,7 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			}
 			break;
 		case Null:
-			static if( renderType == DataRenderType.Text ) {
+			static if( [DataRenderType.Text, DataRenderType.HTML].canFind(renderType) ) {
 				outRange.put("");
 			} else {
 				outRange.put("null");
@@ -66,43 +111,23 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			outRange.put(node.floating.to!string);
 			break;
 		case String:
-			static if( renderType == DataRenderType.Text ) {
-				outRange.put(node.str);
-			}
-			else
-			{
-				outRange.put("\"");
-				_writeEscapedString(node.str, outRange);
-				outRange.put("\"");
-			}
+			outRange._writeEscapedString!renderType(node);
 			break;
 		case DateTime:
-			static if( renderType == DataRenderType.Text ) {
-				outRange.put(node.dateTime.toISOExtString());
-			}
-			else
-			{
-				outRange.put("\"");
-				_writeEscapedString(node.dateTime.toISOExtString(), outRange);
-				outRange.put("\"");
-			}
+			outRange._writeEscapedString!renderType(node.dateTime.toISOExtString());
 			break;
 		case Array:
-			static if( renderType == DataRenderType.Text ) {
-				foreach( i, ref el; node.array ) {
-					renderDataNode!(renderType)(el, outRange, maxRecursion - 1);
+			enum bool asArray = ![DataRenderType.Text, DataRenderType.HTML].canFind(renderType);
+			static if( asArray ) outRange.put("[");
+			foreach( i, ref el; node.array )
+			{
+				static if( asArray )	if( i != 0 ) {
+					outRange.put(", ");
 				}
-			} else {
-				outRange.put("[");
-				foreach( i, ref el; node.array )
-				{
-					if( i != 0 )
-						outRange.put(", ");
 
-					renderDataNode!(renderType)(el, outRange, maxRecursion - 1);
-				}
-				outRange.put("]");
+				renderDataNode!(renderType)(el, outRange, maxRecursion - 1);
 			}
+			static if( asArray ) outRange.put("]");
 			break;
 		case AssocArray:
 			outRange.put("{");
@@ -112,9 +137,7 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 				if( i != 0 )
 					outRange.put(", ");
 
-				outRange.put("\"");
-				_writeEscapedString(key, outRange);
-				outRange.put("\"");
+				outRange._writeEscapedString!renderType(key);
 				outRange.put(": ");
 
 				renderDataNode!(renderType)(val, outRange, maxRecursion - 1);
@@ -127,72 +150,35 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			if( node.classNode )
 			{
 				TDataNode serialized = node.classNode.__serialize__();
-				if( serialized.isUndef )
-				{
-					static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-						outRange.put("\"<class node>\"");
-					} else {
-						outRange.put("<class node>");
-					}
+				if( serialized.isUndef ) {
+					outRange._writeEscapedString!renderType("<class node>");
 				} else {
 					renderDataNode!(renderType)(serialized, outRange, maxRecursion - 1);
 				}
-			}
-			else
-			{
-				static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-					outRange.put("\"<class node (null)>\"");
-				} else {
-					outRange.put("<class node (null)>");
-				}
+			} else {
+				outRange._writeEscapedString!renderType("<class node (null)>");
 			}
 			break;
 		case CodeObject:
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
-
 			import std.conv: text;
-			if( node.codeObject ) {
-				outRange.put("<code object, size: " ~ node.codeObject._instrs.length.text ~ ">");
-			} else {
-				outRange.put("<code object (null)>");
-			}
-
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
+			outRange._writeEscapedString!renderType(
+				node.codeObject?
+				"<code object, size: " ~ node.codeObject._instrs.length.text ~ ">":
+				"<code object (null)>"
+			);
 			break;
 		case Callable:
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
-			if( node.callable ) {
-				outRange.put("<callable object, " ~ node.callable._kind.to!string ~ ", " ~ node.callable._name ~ ">");
-			} else {
-				outRange.put("<callable object (null)>");
-			}
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
+			outRange._writeEscapedString!renderType(
+				node.callable?
+				"<callable object, " ~ node.callable._kind.to!string ~ ", " ~ node.callable._name ~ ">":
+				"<callable object (null)>"
+			);
 			break;
 		case ExecutionFrame:
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
-			outRange.put( "<execution frame>" );
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
+			outRange._writeEscapedString!renderType("<execution frame>");
 			break;
 		case DataNodeRange:
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
-			outRange.put( "<data node range>" );
-			static if( renderType == DataRenderType.JSON || renderType == DataRenderType.JSONFull ) {
-				outRange.put("\"");
-			}
+			outRange._writeEscapedString!renderType("<data node range>");
 			break;
 	}
 }
