@@ -10,7 +10,7 @@ import ivy.interpreter.data_node: DataNodeType;
 enum DataRenderType { Text, TextDebug, HTML, JSON, JSONFull };
 /// Думаю, нужен ещё флаг isPrettyPrint
 
-private void _writeEscapedString(DataRenderType renderType, OutRange)(ref OutRange outRange, string str)
+private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref OutRange outRange, string str)
 {
 	import std.range: put;
 	import std.algorithm: canFind;
@@ -29,9 +29,11 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(ref OutRan
 			{
 				switch( symb )
 				{
+					case '&': outRange.put("&amp;"); break;
+					case '\'': outRange.put("&apos;"); break;
+					case '"': outRange.put("&quot;"); break;
 					case '<': outRange.put("&lt;"); break;
 					case '>': outRange.put("&gt;"); break;
-					case '&': outRange.put("&amp;"); break;
 					default:	outRange.put(symb);
 				}
 			}
@@ -59,7 +61,7 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(ref OutRan
 
 import std.traits: isInstanceOf;
 import ivy.interpreter.data_node: DataNode, NodeEscapeState;
-private void _writeEscapedString(DataRenderType renderType, OutRange, TDataNode)(ref OutRange outRange, TDataNode strNode)
+private void _writeEscapedString(DataRenderType renderType, OutRange, TDataNode)(auto ref OutRange outRange, TDataNode strNode)
 	if( isInstanceOf!(DataNode, TDataNode) )
 {
 	assert(strNode.type == DataNodeType.String);
@@ -75,7 +77,7 @@ private void _writeEscapedString(DataRenderType renderType, OutRange, TDataNode)
 }
 
 void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
-	ref TDataNode node, ref OutRange outRange, size_t maxRecursion = size_t.max)
+	auto ref TDataNode node, auto ref OutRange outRange, size_t maxRecursion = size_t.max)
 {
 	import std.range: put;
 	import std.conv: to;

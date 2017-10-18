@@ -93,10 +93,10 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	symbolsCollector.run(); // Run analyse
 
 	auto dirInterps = config.dirInterpreters.dup;
-	// Add native directive interpreter __render__ to global scope
-	dirInterps["__render__"] = new RenderDirInterpreter();
+	// Add native directive interpreters to global scope
 	dirInterps["int"] = new IntCtorDirInterpreter();
 	dirInterps["float"] = new FloatCtorDirInterpreter();
+	dirInterps["str"] = new StrCtorDirInterpreter();
 	dirInterps["has"] = new HasDirInterpreter();
 	dirInterps["typestr"] = new TypeStrDirInterpreter();
 	dirInterps["len"] = new LenDirInterpreter();

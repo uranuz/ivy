@@ -56,7 +56,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 	alias TValueAttr = DirValueAttr!(isForCompiler);
 	alias BodyAttrs = AliasSeq!(
 		bool, "isNoscope",
-		bool, "isEscape"
+		bool, "isNoescape"
 	);
 
 	static if( isForCompiler ) {
@@ -204,7 +204,7 @@ struct DirAttrsBlock(bool isForCompiler = false)
 				return DirAttrsBlock!(false)(_kind, _storage.keyword);
 			case DirAttrKind.BodyAttr:
 				return DirAttrsBlock!(false)(_kind,
-					tuple!("isNoscope", "isEscape")(_storage.bodyAttr.isNoscope, _storage.bodyAttr.isEscape)
+					tuple!("isNoscope", "isNoescape")(_storage.bodyAttr.isNoscope, _storage.bodyAttr.isNoescape)
 				);
 		}
 		assert( false, `This should never happen` );

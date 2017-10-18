@@ -92,7 +92,7 @@ public:
 				IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
 
 				bool isNoscope = false;
-				bool isEscape = false;
+				bool isNoescape = false;
 				ICompoundStatement bodyStmt;
 
 				DirAttrsBlock!(true)[] attrBlocks;
@@ -166,7 +166,7 @@ public:
 							if( attrsDefStmtAttrRange.empty )
 								loger.error("Unexpected end of def.body directive!");
 
-							// Try to parse noscope and escape flags
+							// Try to parse noscope and noescape flags
 							body_flags_loop:
 							while( !attrsDefStmtAttrRange.empty )
 							{
@@ -179,8 +179,8 @@ public:
 									case "noscope":
 										isNoscope = true;
 										break;
-									case "escape":
-										isEscape = true;
+									case "noescape":
+										isNoescape = true;
 										break;
 									default: break body_flags_loop;
 								}
@@ -194,7 +194,7 @@ public:
 							if( !bodyStmt )
 								loger.error("Expected compound statement as directive body statement");
 
-							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope, isEscape) );
+							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope, isNoescape) );
 
 							break;
 						default:

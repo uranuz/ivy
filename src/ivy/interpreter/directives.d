@@ -34,36 +34,6 @@ mixin template BaseNativeDirInterpreterImpl(string symbolName)
 	}
 }
 
-class RenderDirInterpreter: INativeDirectiveInterpreter
-{
-	override void interpret(Interpreter interp)
-	{
-		import std.array: appender;
-		debug import std.stdio;
-		TDataNode result = interp.getValue("__result__");
-
-		auto renderedResult = appender!string();
-		renderDataNode!(DataRenderType.HTML)(result, renderedResult);
-		auto safetyResult = appender!string();
-		renderDataNode!(DataRenderType.TextDebug)(result, safetyResult);
-		writeln(`safetyResult: `, safetyResult.data);
-		interp._stack ~= TDataNode(renderedResult.data);
-	}
-
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks;
-	shared static this()
-	{
-		_compilerAttrBlocks = [
-			DirAttrsBlock!true(DirAttrKind.NamedAttr, [
-				"__result__": DirValueAttr!(true)("__result__", "any")
-			]),
-			DirAttrsBlock!true(DirAttrKind.BodyAttr)
-		];
-	}
-
-	mixin BaseNativeDirInterpreterImpl!("__render__");
-}
-
 class IntCtorDirInterpreter: INativeDirectiveInterpreter
 {
 	override void interpret(Interpreter interp)
@@ -131,6 +101,22 @@ class FloatCtorDirInterpreter: INativeDirectiveInterpreter
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("float");
+}
+
+class StrCtorDirInterpreter: INativeDirectiveInterpreter
+{
+	override void interpret(Interpreter interp) {
+		interp._stack ~= TDataNode(interp.getValue("value").toString());
+	}
+
+	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
+		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
+			DirValueAttr!(true)("value", "any")
+		]),
+		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+	];
+
+	mixin BaseNativeDirInterpreterImpl!("str");
 }
 
 class HasDirInterpreter: INativeDirectiveInterpreter
@@ -303,7 +289,7 @@ class ScopeDirInterpreter: INativeDirectiveInterpreter
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
 		DirAttrsBlock!true(DirAttrKind.BodyAttr,
-			Tuple!(ICompoundStatement, "ast", bool, "isNoscope", bool, "isEscape")(null, true, false)
+			Tuple!(ICompoundStatement, "ast", bool, "isNoscope", bool, "isNoescape")(null, true, false)
 		)
 	];
 

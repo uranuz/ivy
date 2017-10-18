@@ -525,7 +525,6 @@ public:
 
 		if( auto comp = node.name in _dirCompilers ) {
 			comp.compile(node, this);
-			addInstr(OpCode.MarkForEscape, NodeEscapeState.Safe);
 		}
 		else
 		{
@@ -545,7 +544,7 @@ public:
 
 			// Keeps count of stack arguments actualy used by this call. First is directive object
 			size_t stackItemsCount = 1;
-			bool isEscape = true;
+			bool isNoescape = false;
 
 			loger.write(`Entering directive attrs blocks loop`);
 			while( !dirAttrBlocks.empty )
@@ -676,7 +675,7 @@ public:
 						break;
 					}
 					case DirAttrKind.BodyAttr:
-						isEscape = dirAttrBlocks.front.bodyAttr.isEscape;
+						isNoescape = dirAttrBlocks.front.bodyAttr.isNoescape;
 						break;
 				}
 				dirAttrBlocks.popFront();
@@ -689,7 +688,9 @@ public:
 
 			// After all preparations add instruction to call directive
 			addInstr(OpCode.RunCallable, stackItemsCount);
-			addInstr(OpCode.MarkForEscape, isEscape? NodeEscapeState.Unsafe: NodeEscapeState.Safe);
+			if( isNoescape ) {
+				addInstr(OpCode.MarkForEscape, NodeEscapeState.Safe);
+			}
 		}
 	}
 
@@ -756,14 +757,17 @@ public:
 		// We create __render__ invocation on the result of module execution !!!
 		IvyNode mainModuleAST = _moduleRepo.getModuleTree(_mainModuleName);
 
+		/++
 		// Load __render__ directive
 		addInstr(OpCode.LoadName, addConst( TDataNode("__render__") ));
 
 		// Add name for key-value argument
 		addInstr(OpCode.LoadConst, addConst( TDataNode("__result__") ));
+		+/
 
 		mainModuleAST.accept(this);
 
+		/++
 		// In order to make call to __render__ creating block header for one positional argument
 		// which is currently at the TOP of the execution stack
 		size_t blockHeader = (1 << _stackBlockHeaderSizeOffset) + DirAttrKind.NamedAttr;
@@ -775,6 +779,7 @@ public:
 		// TOP - 2: Current result var name argument
 		// TOP - 3: Callable object for __render__
 		addInstr(OpCode.RunCallable, 4);
+		+/
 	}
 
 	string toPrettyStr()
