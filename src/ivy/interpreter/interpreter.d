@@ -715,9 +715,8 @@ public:
 				case OpCode.UnaryNot:
 				{
 					loger.internalAssert(!_stack.empty, "Cannot execute UnaryNot instruction. Operand expected, but exec stack is empty!");
-					loger.internalAssert(_stack.back.type == DataNodeType.Boolean, `Operand for unary not operation must have boolean type!`);
 
-					_stack.back = ! _stack.back.boolean;
+					_stack.back = !evalAsBoolean(_stack.back);
 					break;
 				}
 
