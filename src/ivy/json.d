@@ -43,6 +43,20 @@ public:
 		throw new IvyJSONException(`Parsing error in: ` ~ _source.str ~ `..: ` ~ msg, file, line);
 	}
 
+	wchar parseWChar()
+	{
+		import std.ascii : isDigit, isHexDigit, toUpper;
+		wchar val = 0;
+		foreach_reverse (i; 0 .. 4)
+		{
+			auto hex = toUpper(getChar());
+			_source.popFront();
+			if (!isHexDigit(hex)) error("Expecting hex character");
+			val += (isDigit(hex) ? hex - '0' : hex - ('A' - 10)) << (4 * i);
+		}
+		return val;
+	}
+
 	String parseString()
 	{
 		import std.array: appender;
@@ -67,8 +81,37 @@ public:
 					case 'n': buf.put('\n');  break;
 					case 'r': buf.put('\r');  break;
 					case 't': buf.put('\t');  break;
-					case 'u': assert(false, "UTF escape sequences parsing not implemented yet!"); break;
+					case 'u': {
+						import std.uni : isSurrogateHi, isSurrogateLo;
+        				import std.utf : encode, decode;
+						import std.typecons : Yes;
+						wchar wc = parseWChar();
+						dchar val;
+						// Non-BMP characters are escaped as a pair of
+						// UTF-16 surrogate characters (see RFC 4627).
+						if (isSurrogateHi(wc))
+						{
+							wchar[2] pair;
+							pair[0] = wc;
+							if (getChar() != '\\') error("Expected escaped low surrogate after escaped high surrogate");
+							_source.popFront(); // Skip \
+							if (getChar() != 'u') error("Expected escaped low surrogate after escaped high surrogate");
+							_source.popFront(); // Skip u
+							pair[1] = parseWChar();
+							size_t index = 0;
+							val = decode(pair[], index);
+							if (index != 2) error("Invalid escaped surrogate pair");
+						} else if (isSurrogateLo(wc)) {
+							error("Unexpected low surrogate");
+						} else {
+							val = wc;
+						}
 
+						char[4] tmp;
+						immutable len = encode!(Yes.useReplacementDchar)(tmp, val);
+						buf.put(tmp[0 .. len]);
+						break;
+					}
 					default:
 						error( "Unexpected escape sequence..." );
 				}
@@ -162,7 +205,7 @@ public:
 						string key = parseString();
 
 						if( !_source.empty && getChar() != ':' )
-							error( "Expected :" );
+							error("Expected :");
 
 						_source.popFront(); // Skip :
 
@@ -173,7 +216,7 @@ public:
 							break;
 
 						if( _source.empty || getChar() != ',' )
-							error( `Expected ,` );
+							error(`Expected ,`);
 						_source.popFront(); // Skip ,
 					}
 
