@@ -400,7 +400,7 @@ public:
 					loger.internalAssert(!_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
 					loger.internalAssert( ( leftVal.type == DataNodeType.Integer || leftVal.type == DataNodeType.Floating ) && leftVal.type == rightVal.type,
-						`Left and right values of arithmetic operation must have the same integer or floating type!` );
+						`Left and right values of arithmetic operation must have the same integer or floating type! But got: `, leftVal.type, ` and `, rightVal.type );
 
 					arithm_op_switch:
 					switch( instr.opcode )
@@ -512,7 +512,8 @@ public:
 							tuple(DataNodeType.Boolean, "boolean"),
 							tuple(DataNodeType.Integer, "integer"),
 							tuple(DataNodeType.Floating, "floating"),
-							tuple(DataNodeType.String, "str")) )
+							tuple(DataNodeType.String, "str"),
+							tuple(DataNodeType.DateTime, "dateTime")) )
 						{
 							case typeAndField[0]:
 								if( instr.opcode == OpCode.Equal ) {

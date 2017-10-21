@@ -300,17 +300,22 @@ class DateTimeGetDirInterpreter: INativeDirectiveInterpreter
 {
 	import std.typecons: Tuple;
 	import std.datetime: SysTime;
+	import std.algorithm: canFind;
 
 	override void interpret(Interpreter interp)
 	{
 		TDataNode value = interp.getValue("value");
 		TDataNode field = interp.getValue("field");
 
-		if( value.type !=  DataNodeType.DateTime ) {
+		if( ![DataNodeType.DateTime, DataNodeType.Undef, DataNodeType.Null].canFind(value.type) ) {
 			interp.loger.error(`Expected DateTime as first argument in dtGet!`);
 		}
 		if( field.type !=  DataNodeType.String ) {
 			interp.loger.error(`Expected string as second argument in dtGet!`);
+		}
+		if( value.type != DataNodeType.DateTime ) {
+			interp._stack ~= value; // Will not fail if it is null or undef, but just return it!
+			return;
 		}
 
 		SysTime dt = value.dateTime;
