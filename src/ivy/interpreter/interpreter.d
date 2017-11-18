@@ -684,7 +684,6 @@ public:
 					loger.write("OpCode.Append _stack: ", _stack);
 					loger.internalAssert(!_stack.empty, "Cannot execute ListInsert instruction. Expected right operand, but exec stack is empty!");
 					assert(false, `Not implemented yet!`);
-					break;
 				}
 
 				// Useless unary plus operation

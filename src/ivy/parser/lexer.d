@@ -666,11 +666,8 @@ public:
 		else if( ctx.state == ContextState.MixedContext )
 		{
 			rules = mixedContextRules;
-		}
-		else
-		{
+		} else {
 			assert(false, "No lexer context detected!");
-			rules = null;
 		}
 
 

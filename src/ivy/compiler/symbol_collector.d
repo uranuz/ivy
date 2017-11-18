@@ -153,12 +153,7 @@ public:
 							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.ExprAttr, exprAttrs );
 							break;
 						}
-						case "def.names":
-							assert( false, `Not implemented yet!` );
-							break;
-						case "def.kwd":
-							assert( false, `Not implemented yet!` );
-							break;
+						case "def.names", "def.kwd": assert( false, `Not implemented yet!` );
 						case "def.body":
 							if( bodyStmt )
 								loger.error(`Multiple body statements are not allowed!`);
