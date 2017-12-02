@@ -73,26 +73,25 @@ public:
 		mixin LogerProxyImpl!(IvyParserException, isDebugMode);
 		ParserT parser;
 
-		void sendLogInfo(LogInfoType logInfoType, string msg)
+		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
 			import std.array: array;
 			import std.conv: to;
 			import std.algorithm: splitter;
 
-			if( parser.logerMethod is null ) {
-				return; // There is no loger method, so get out of here
+			if( parser.logerMethod !is null ) {
+				parser.logerMethod(LogInfo(
+					msg,
+					logInfoType,
+					func.splitter('.').retro.take(2).array.retro.join("."),
+					file,
+					line,
+					parser.fileName,
+					(!parser.lexer.empty? parser.lexer.front.loc.lineIndex: 0),
+					(!parser.lexer.empty? parser.lexer.frontValue.array.to!string: null)
+				));
 			}
-
-			parser.logerMethod(LogInfo(
-				msg,
-				logInfoType,
-				func.splitter('.').retro.take(2).array.retro.join("."),
-				file,
-				line,
-				parser.fileName,
-				(!parser.lexer.empty? parser.lexer.front.loc.lineIndex: 0),
-				(!parser.lexer.empty? parser.lexer.frontValue.array.to!string: null)
-			));
+			return msg;
 		}
 	}
 

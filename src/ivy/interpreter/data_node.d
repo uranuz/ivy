@@ -51,6 +51,7 @@ struct DataNode(S)
 	import std.datetime: SysTime;
 	import std.exception: enforceEx;
 	import std.traits;
+	import std.conv: text;
 	import ivy.interpreter.execution_frame: ExecutionFrame;
 
 	alias String = S;
@@ -200,12 +201,16 @@ struct DataNode(S)
 		assign(val);
 	}
 
-	DataNodeType type() @property {
+	DataNodeType type() @property
+	{
+		if( typeTag == DataNodeType.ClassNode && storage.classNode is null ) {
+			return DataNodeType.Null;
+		}
 		return typeTag;
 	}
 
 	bool empty() @property {
-		return type == DataNodeType.Undef || type == DataNodeType.Null;
+		return isUndef || isNull || (type == DataNodeType.ClassNode && storage.classNode[].empty);
 	}
 
 	bool isUndef() @property {
@@ -213,7 +218,7 @@ struct DataNode(S)
 	}
 
 	bool isNull() @property {
-		return type == DataNodeType.Null;
+		return type == DataNodeType.Null || (type == DataNodeType.ClassNode && storage.classNode is null);
 	}
 
 	private void assign(T)(auto ref T arg)
@@ -339,9 +344,13 @@ struct DataNode(S)
 		storage.array[index] = value;
 	}
 
-	ref DataNode opIndex(size_t index)
+	DataNode opIndex(size_t index)
 	{
-		enforceEx!DataNodeException( type == DataNodeType.Array, "DataNode is not an array");
+		import std.algorithm: canFind;
+		enforceEx!DataNodeException( [DataNodeType.Array, DataNodeType.ClassNode].canFind(type), "DataNode is not an array or class node, but is: " ~ type.text);
+		if( type == DataNodeType.ClassNode ) {
+			return storage.classNode is null? DataNode(): storage.classNode[index];
+		}
 		enforceEx!DataNodeException( index < storage.array.length, "DataNode array index is out of range");
 
 		return storage.array[index];
@@ -386,10 +395,15 @@ struct DataNode(S)
 		storage.assocArray[key] = value;
 	}
 
-	ref DataNode opIndex(String key)
+	DataNode opIndex(String key)
 	{
-		enforceEx!DataNodeException( type == DataNodeType.AssocArray, "DataNode is not a dict");
-		enforceEx!DataNodeException( key in storage.assocArray, "DataNode dict has no such key");
+		import std.algorithm: canFind;
+		enforceEx!DataNodeException( [DataNodeType.AssocArray, DataNodeType.ClassNode].canFind(type), "DataNode is not a dict or class node, but is: " ~ type.text);
+		if( type == DataNodeType.ClassNode ) {
+			return storage.classNode is null? DataNode(): storage.classNode[key];
+		}
+		
+		enforceEx!DataNodeException(key in storage.assocArray, "DataNode dict has no such key");
 
 		return storage.assocArray[key];
 	}
@@ -434,6 +448,14 @@ struct DataNode(S)
 		import std.array: appender;
 		auto result = appender!string();
 		renderDataNode!(DataRenderType.Text)(this, result);
+		return result.data;
+	}
+
+	string toDebugString()
+	{
+		import std.array: appender;
+		auto result = appender!string();
+		renderDataNode!(DataRenderType.TextDebug)(this, result);
 		return result.data;
 	}
 

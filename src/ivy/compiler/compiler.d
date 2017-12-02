@@ -113,6 +113,7 @@ public:
 		_dirCompilers["import"] = new ImportCompiler();
 		_dirCompilers["from"] = new FromImportCompiler();
 		_dirCompilers["at"] = new AtCompiler();
+		_dirCompilers["setat"] = new SetAtCompiler();
 		_dirCompilers["insert"] = new InsertCompiler();
 
 		_mainModuleName = mainModuleName;
@@ -131,19 +132,21 @@ public:
 		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
 		ByteCodeCompiler compiler;
 
-		void sendLogInfo(LogInfoType logInfoType, string msg) {
-			if( compiler._logerMethod is null ) {
-				return; // There is no loger method, so get out of here
+		string sendLogInfo(LogInfoType logInfoType, string msg)
+		{
+			if( compiler._logerMethod !is null )
+			{
+				compiler._logerMethod(LogInfo(
+					msg,
+					logInfoType,
+					getShortFuncName(func),
+					file,
+					line,
+					compiler._currentLocation.fileName,
+					compiler._currentLocation.lineIndex
+				));
 			}
-			compiler._logerMethod(LogInfo(
-				msg,
-				logInfoType,
-				getShortFuncName(func),
-				file,
-				line,
-				compiler._currentLocation.fileName,
-				compiler._currentLocation.lineIndex
-			));
+			return msg;
 		}
 	}
 
@@ -752,49 +755,31 @@ public:
 	}
 
 	// Runs main compiler phase starting from main module
-	void run()
-	{
-		// We create __render__ invocation on the result of module execution !!!
-		IvyNode mainModuleAST = _moduleRepo.getModuleTree(_mainModuleName);
-
-		/++
-		// Load __render__ directive
-		addInstr(OpCode.LoadName, addConst( TDataNode("__render__") ));
-
-		// Add name for key-value argument
-		addInstr(OpCode.LoadConst, addConst( TDataNode("__result__") ));
-		+/
-
-		mainModuleAST.accept(this);
-
-		/++
-		// In order to make call to __render__ creating block header for one positional argument
-		// which is currently at the TOP of the execution stack
-		size_t blockHeader = (1 << _stackBlockHeaderSizeOffset) + DirAttrKind.NamedAttr;
-		addInstr(OpCode.LoadConst, addConst( TDataNode(blockHeader) )); // Add argument block header
-
-		// Stack layout is:
-		// TOP: argument block header
-		// TOP - 1: Current result argument
-		// TOP - 2: Current result var name argument
-		// TOP - 3: Callable object for __render__
-		addInstr(OpCode.RunCallable, 4);
-		+/
+	void run() {
+		_moduleRepo.getModuleTree(_mainModuleName).accept(this);
 	}
 
 	string toPrettyStr()
 	{
 		import std.conv;
-		import std.range: empty, back;
+		import std.range: empty, back, take;
+		import std.algorithm: canFind;
 
 		string result;
+		static immutable OpCode[] instrsWhereArgRefsConst = [
+			OpCode.LoadConst,
+			OpCode.StoreName,
+			OpCode.StoreLocalName,
+			OpCode.StoreNameWithParents,
+			OpCode.LoadName
+		];
 
 		foreach( modName, modObj; _moduleObjects )
 		{
 			result ~= "\r\nMODULE " ~ modName ~ "\r\n";
 			result ~= "\r\nCONSTANTS\r\n";
 			foreach( i, con; modObj._consts ) {
-				result ~= i.text ~ "  " ~ con.toString() ~ "\r\n";
+				result ~= i.text ~ "  " ~ con.toDebugString() ~ "\r\n";
 			}
 
 			result ~= "\r\nCODE\r\n";
@@ -808,8 +793,22 @@ public:
 					else
 					{
 						result ~= "\r\nCode object " ~ i.text ~ "\r\n";
-						foreach( k, instr; con.codeObject._instrs ) {
-							result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.arg.text ~ "\r\n";
+						foreach( k, instr; con.codeObject._instrs )
+						{
+							string val;
+							if(
+								instr.arg < modObj._consts.length 
+								&& instrsWhereArgRefsConst.canFind(instr.opcode)
+							) {
+								enum limit = 50;
+								val = modObj._consts[instr.arg].toDebugString();
+								if( val.length >= limit ) {
+									val = val.take(limit).text ~ "...";
+								}
+								val = " (" ~ val ~ ")";
+							}
+							result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.arg.text ~ val ~ "\r\n";
+
 						}
 					}
 				}

@@ -247,16 +247,15 @@ public:
 			compiler.loger.error("Expected 'in' keyword");
 
 		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected 'for' aggregate expression");
-
-		// Compile code to calculate aggregate value
-		aggregateExpr.accept(compiler);
-
 		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement("Expected loop body statement");
 
 		if( !stmtRange.empty )
 			compiler.loger.error("Expected end of directive after loop body. Maybe ';' is missing");
 
 		// TODO: Check somehow if aggregate has supported type
+
+		// Compile code to calculate aggregate value
+		aggregateExpr.accept(compiler);
 
 		// Issue instruction to get iterator from aggregate in execution stack
 		compiler.addInstr( OpCode.GetDataRange );
@@ -310,10 +309,13 @@ public:
 		IExpression assignedValue = stmtRange.takeFrontAs!IExpression(`Expected expression as "at" value to assign`);
 		IExpression indexValue = stmtRange.takeFrontAs!IExpression(`Expected expression as "at" index value`);
 
-		compiler.addInstr(OpCode.StoreSubscr);
 		aggregate.accept(compiler); // Evaluate aggregate
 		assignedValue.accept(compiler); // Evaluate assigned value
 		indexValue.accept(compiler); // Evaluate index
+		compiler.addInstr(OpCode.StoreSubscr);
+
+		// Add fake value to stack as a result
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
 
 		if( !stmtRange.empty )
 			compiler.loger.error(`Expected end of "setat" directive after index expression. Maybe ';' is missing. `

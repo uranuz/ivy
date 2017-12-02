@@ -38,19 +38,21 @@ public:
 		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
 		CompilerSymbolsCollector collector;
 
-		void sendLogInfo(LogInfoType logInfoType, string msg) {
-			if( collector._logerMethod is null ) {
-				return; // There is no loger method, so get out of here
+		string sendLogInfo(LogInfoType logInfoType, string msg)
+		{
+			if( collector._logerMethod !is null )
+			{
+				collector._logerMethod(LogInfo(
+					msg,
+					logInfoType,
+					getShortFuncName(func),
+					file,
+					line,
+					collector._currentLocation.fileName,
+					collector._currentLocation.lineIndex
+				));
 			}
-			collector._logerMethod(LogInfo(
-				msg,
-				logInfoType,
-				getShortFuncName(func),
-				file,
-				line,
-				collector._currentLocation.fileName,
-				collector._currentLocation.lineIndex
-			));
+			return msg;
 		}
 	}
 

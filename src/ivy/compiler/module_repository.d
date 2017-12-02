@@ -36,11 +36,12 @@ public:
 		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
 		CompilerModuleRepository moduleRepo;
 
-		void sendLogInfo(LogInfoType logInfoType, string msg) {
-			if( moduleRepo._logerMethod is null ) {
-				return; // There is no loger method, so get out of here
+		string sendLogInfo(LogInfoType logInfoType, string msg)
+		{
+			if( moduleRepo._logerMethod !is null ) {
+				moduleRepo._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
 			}
-			moduleRepo._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+			return msg;
 		}
 	}
 

@@ -62,11 +62,12 @@ public:
 		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
 		SymbolTableFrame table;
 
-		void sendLogInfo(LogInfoType logInfoType, string msg) {
-			if( table._logerMethod is null ) {
-				return; // There is no loger method, so get out of here
+		string sendLogInfo(LogInfoType logInfoType, string msg)
+		{
+			if( table._logerMethod !is null ) {
+				table._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
 			}
-			table._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+			return msg;
 		}
 	}
 

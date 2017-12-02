@@ -588,25 +588,24 @@ public:
 		mixin LogerProxyImpl!(IvyLexerException, isDebugMode);
 		LexerT lexer;
 
-		void sendLogInfo(LogInfoType logInfoType, string msg)
+		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
 			import std.array: array;
 			import std.conv: to;
 
-			if( lexer.logerMethod is null ) {
-				return; // There is no loger method, so get out of here
+			if( lexer.logerMethod !is null ) {
+				lexer.logerMethod(LogInfo(
+					msg,
+					logInfoType,
+					func.splitter('.').retro.take(2).array.retro.join("."),
+					file,
+					line,
+					(!lexer.empty? lexer.front.loc.fileName: null),
+					(!lexer.empty? lexer.front.loc.lineIndex: 0),
+					(!lexer.empty? lexer.frontValue.array.to!string: null)
+				));
 			}
-
-			lexer.logerMethod(LogInfo(
-				msg,
-				logInfoType,
-				func.splitter('.').retro.take(2).array.retro.join("."),
-				file,
-				line,
-				(!lexer.empty? lexer.front.loc.fileName: null),
-				(!lexer.empty? lexer.front.loc.lineIndex: 0),
-				(!lexer.empty? lexer.frontValue.array.to!string: null)
-			));
+			return msg;	
 		}
 	}
 

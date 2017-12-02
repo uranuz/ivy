@@ -52,12 +52,12 @@ public:
 		mixin LogerProxyImpl!(IvyExecutionFrameException, isDebugMode);
 		ExecutionFrame frame;
 
-		void sendLogInfo(LogInfoType logInfoType, string msg) {
-			if( frame._logerMethod is null ) {
-				return; // There is no loger method, so get out of here
+		string sendLogInfo(LogInfoType logInfoType, string msg)
+		{
+			if( frame._logerMethod !is null ) {
+				frame._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
 			}
-
-			frame._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+			return msg;
 		}
 	}
 
@@ -89,6 +89,7 @@ public:
 	alias SearchResult = Tuple!(bool, "allowUndef", TDataNode, "node");
 
 	// Basic method used to search symbols in context
+	// This method searches inside current frame without taking _moduleFrame into account
 	SearchResult findLocalValue(FrameSearchMode mode)(string varName)
 	{
 		import std.conv: text;
@@ -241,9 +242,16 @@ public:
 	{
 		loger.write(`Searching for node with full path: `, varName);
 
-		SearchResult result = findLocalValue!(mode)(varName);
-		if( !result.node.isUndef || (result.node.isUndef && result.allowUndef) )
-			return result;
+		// If current frame has it's own scope then try to find in it.
+		// If it is noscope then search into it's _moduleFrame, because we could still have some symbols there
+		if( this.hasOwnScope )
+		{
+			SearchResult result = findLocalValue!(mode)(varName);
+			if( !result.node.isUndef || (result.node.isUndef && result.allowUndef) )
+				return result;
+		} else {
+			loger.write(`Current level exec frame is noscope. So search only in connected _moduleFrame`);
+		}
 
 		loger.write(`Node: `, varName, ` NOT foind in exec frame. Try to find in module frame`);
 

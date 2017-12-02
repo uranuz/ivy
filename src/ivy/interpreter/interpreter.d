@@ -115,12 +115,21 @@ public:
 		mixin LogerProxyImpl!(IvyInterpretException, isDebugMode);
 		Interpreter interp;
 
-		void sendLogInfo(LogInfoType logInfoType, string msg) {
-			if( interp._logerMethod is null ) {
-				return; // There is no loger method, so get out of here
+		string sendLogInfo(LogInfoType logInfoType, string msg)
+		{
+			import std.algorithm: map, canFind;
+			import std.array: join;
+			if( [LogInfoType.error, LogInfoType.internalError].canFind(logInfoType) )
+			{
+				// Give additional data for debugging if error occured
+				string execFrameList = interp._frameStack.map!( (frame) => frame._callableObj._name ).join("\n");
+				string dataStack = interp._stack.map!( (it) => it.toDebugString() ).join("\n");
+				msg ~= "\n\nExec stack:\n" ~ execFrameList ~ "\n\nData stack:\n" ~ dataStack;
 			}
-
-			interp._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+			if( interp._logerMethod !is null ) {
+				interp._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+			}
+			return msg;
 		}
 	}
 
@@ -196,13 +205,15 @@ public:
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
 			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
-			if( !frameStackSlice.back.hasOwnScope ) {
+
+			loger.write(`Trying to search in current execution frame for varName: `, varName);
+			result = frameStackSlice.back.findValue!(mode)(varName);
+
+			if( !frameStackSlice.back.hasOwnScope && result.node.isUndef ) {
 				loger.write(`Current level exec frame is noscope. Try find: `, varName, ` in parent`);
 				continue; // Let's try to find in parent
 			}
 
-			loger.write(`Trying to search in current execution frame for varName: `, varName);
-			result = frameStackSlice.back.findValue!(mode)(varName);
 			if( !result.node.isUndef || (result.node.isUndef && result.allowUndef) ) {
 				loger.write(`varName: `, varName, ` found in current execution frame`);
 				return result;
@@ -238,11 +249,13 @@ public:
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
 			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!`);
-			if( !frameStackSlice.back.hasOwnScope ) {
+
+			result = frameStackSlice.back.findValue!(mode)(varName);
+			if( !frameStackSlice.back.hasOwnScope && result.node.isUndef ) {
 				continue; // Let's try to find first parent that have it's own scope
 			}
 
-			result = frameStackSlice.back.findValue!(mode)(varName);
+
 			if( !result.node.isUndef ) {
 				loger.write(`varName: `, varName, ` found in current execution frame`);
 				return result;
@@ -589,7 +602,60 @@ public:
 							}
 							break;
 						default:
-							loger.internalAssert(false, `This should never happen`);
+							loger.internalAssert(false, `Cannot execute LoadSubscr instruction. Unexpected aggregate type`);
+					}
+					break;
+				}
+
+				// Set property of object, array item or class object with writeable attribute
+				// by passed property name or index
+				case OpCode.StoreSubscr:
+				{
+					import std.algorithm: canFind;
+
+					loger.write(`OpCode.StoreSubscr. _stack: `, _stack);
+
+					loger.internalAssert(!_stack.empty, "Cannot execute StoreSubscr instruction. Expected index value, but exec stack is empty!");
+					TDataNode indexValue = _stack.back;
+					_stack.popBack();
+					
+					loger.internalAssert(!_stack.empty, "Cannot execute StoreSubscr instruction. Expected value to set, but exec stack is empty!");
+					TDataNode value = _stack.back;
+					_stack.popBack();
+
+					loger.internalAssert(!_stack.empty, "Cannot execute StoreSubscr instruction. Expected aggregate, but exec stack is empty!");
+					TDataNode aggr = _stack.back;
+					_stack.popBack();
+
+					// Do not support setting individual characters of strings for now and maybe forever... Who knowns how it turns...
+					loger.internalAssert(
+						[DataNodeType.Array, DataNodeType.AssocArray, DataNodeType.ClassNode].canFind(aggr.type),
+						"Cannot execute StoreSubscr instruction. Aggregate value must be array, assoc array or class node!");
+
+					switch( aggr.type )
+					{
+						case DataNodeType.Array:
+							loger.internalAssert(indexValue.type == DataNodeType.Integer,
+								"Cannot execute StoreSubscr instruction. Index value for array aggregate must be integer!");
+							loger.internalAssert(indexValue.integer < aggr.array.length, `Array index must be less than array length`);
+							aggr[indexValue.integer] = value;
+							break;
+						case DataNodeType.AssocArray:
+							loger.internalAssert(indexValue.type == DataNodeType.String,
+								"Cannot execute StoreSubscr instruction. Index value for assoc array aggregate must be string!");
+							aggr[indexValue.str] = value;
+							break;
+						case DataNodeType.ClassNode:
+							if( indexValue.type == DataNodeType.Integer ) {
+								aggr[indexValue.integer] = value;
+							} else if( indexValue.type == DataNodeType.String ) {
+								aggr[indexValue.str] = value;
+							} else {
+								loger.error("Cannot execute StoreSubscr instruction. Index value for class node must be string or integer!");
+							}
+							break;
+						default:
+							loger.internalAssert(false, `Cannot execute StoreSubscr instruction. Unexpected aggregate type`);
 					}
 					break;
 				}
