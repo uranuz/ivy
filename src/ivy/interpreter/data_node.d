@@ -281,16 +281,29 @@ struct DataNode(S)
 		{
 			static assert(is(Key : String), "AA key must be string");
 
+			if( storage.assocArray is null )
+			{
+				// Special workaround to make AA allocated somewhere in memory even if it is empty
+				storage.assocArray = ["__allocateWorkaround__": DataNode()];
+				storage.assocArray.remove("__allocateWorkaround__");
+			}
+
+			if( arg is null ) {
+				storage.assocArray.clear(); // Just clear, not set it to null
+			}
+
 			typeTag = DataNodeType.AssocArray;
 			static if(is(Value : DataNode)) {
-				storage.assocArray = arg;
+				if( storage.assocArray !is null && arg !is null ) {
+					storage.assocArray = arg; // Assign only if it is not null
+				}
 			}
 			else
 			{
-				DataNode[String] aa;
+				storage.assocArray.clear(); // Need to remove old data
 				foreach(key, value; arg)
-					aa[key] = DataNode(value);
-				storage.assocArray = aa;
+					storage.assocArray[key] = DataNode(value);
+				storage.assocArray.rehash(); // For faster lookups
 			}
 		}
 		else static if( isArray!T )
