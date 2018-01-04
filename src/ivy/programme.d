@@ -113,7 +113,7 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	compiler.run(); // Run compilation itself
 
 	if( config.compilerLoger ) {
-		config.compilerLoger(LogInfo(
+		debug config.compilerLoger(LogInfo(
 			"compileModule:\r\n" ~ compiler.toPrettyStr(),
 			LogInfoType.info,
 			__FUNCTION__, __FILE__, __LINE__
