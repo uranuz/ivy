@@ -38,6 +38,7 @@ enum OpCode: ubyte {
 	// Array or assoc array operations
 	LoadSubscr,
 	StoreSubscr,
+	LoadSlice,
 
 	// Frame data load/ store
 	StoreName,

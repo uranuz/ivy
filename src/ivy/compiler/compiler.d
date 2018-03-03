@@ -115,6 +115,7 @@ public:
 		_dirCompilers["at"] = new AtCompiler();
 		_dirCompilers["setat"] = new SetAtCompiler();
 		_dirCompilers["insert"] = new InsertCompiler();
+		_dirCompilers["slice"] = new SliceCompiler();
 
 		_mainModuleName = mainModuleName;
 		enterModuleScope(mainModuleName);

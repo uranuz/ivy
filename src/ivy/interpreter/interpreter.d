@@ -607,6 +607,65 @@ public:
 					break;
 				}
 
+				// Load data node slice for array-like nodes onto stack
+				case OpCode.LoadSlice:
+				{
+					import std.utf: toUTFindex, decode;
+					import std.algorithm: canFind;
+
+					loger.write(`OpCode.LoadSlice. _stack: `, _stack);
+
+					loger.internalAssert(!_stack.empty, "Cannot execute LoadSlice instruction. Expected index value, but exec stack is empty!");
+					TDataNode endValue = _stack.back;
+					_stack.popBack();
+
+					loger.internalAssert(!_stack.empty, "Cannot execute LoadSlice instruction. Expected index value, but exec stack is empty!");
+					TDataNode beginValue = _stack.back;
+					_stack.popBack();
+
+					loger.internalAssert(!_stack.empty, "Cannot execute LoadSlice instruction. Expected aggregate, but exec stack is empty!");
+					TDataNode aggr = _stack.back;
+					_stack.popBack();
+					loger.write(`OpCode.LoadSlice. aggr: `, aggr);
+					loger.write(`OpCode.LoadSlice. beginValue: `, beginValue);
+					loger.write(`OpCode.LoadSlice. endValue: `, endValue);
+
+					loger.internalAssert(
+						[DataNodeType.String, DataNodeType.Array, DataNodeType.ClassNode].canFind(aggr.type),
+						"Cannot execute LoadSlice instruction. Aggregate value must be string, array, assoc array or class node!");
+					
+					loger.internalAssert(beginValue.type == DataNodeType.Integer,
+						"Cannot execute LoadSlice instruction. Begin value of slice must be integer!");
+
+					loger.internalAssert(endValue.type == DataNodeType.Integer,
+						"Cannot execute LoadSlice instruction. End value of slice must be integer!");
+
+					switch( aggr.type )
+					{
+						case DataNodeType.String:
+							// Index operation for string in D is little more complicated
+							size_t startIndex = aggr.str.toUTFindex(beginValue.integer); // Get code unit index by index of symbol
+							size_t endIndex = endValue.integer;
+							aggr.str.decode(endIndex); // decode increases passed index
+							loger.internalAssert(startIndex <= aggr.str.length, `String slice start index must be not greather than str length`);
+							loger.internalAssert(endIndex <= aggr.str.length, `String slice end index must be not greather or equal to str length`);
+							_stack ~= TDataNode( aggr.str[startIndex..endIndex] );
+							break;
+						case DataNodeType.Array:
+							loger.internalAssert(beginValue.integer <= aggr.array.length, `Begin value must be not greather than array length`);
+							loger.internalAssert(endValue.integer <= aggr.array.length, `End value must be not greather than array length`);
+							_stack ~= aggr.array[beginValue.integer..endValue.integer];
+							break;
+						case DataNodeType.ClassNode:
+							// Class node must have it's own range checks
+							_stack ~= TDataNode(aggr.classNode[beginValue.integer..endValue.integer]);
+							break;
+						default:
+							loger.internalAssert(false, `Cannot execute LoadSlice instruction. Unexpected aggregate type`);
+					}
+					break;
+				}
+
 				// Set property of object, array item or class object with writeable attribute
 				// by passed property name or index
 				case OpCode.StoreSubscr:

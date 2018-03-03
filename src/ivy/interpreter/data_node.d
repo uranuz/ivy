@@ -19,6 +19,7 @@ interface IClassNode
 {
 	alias TDataNode = DataNode!string;
 	IDataNodeRange opSlice();
+	IClassNode opSlice(size_t, size_t);
 	TDataNode opIndex(string);
 	TDataNode opIndex(size_t);
 	TDataNode __getAttr__(string);
