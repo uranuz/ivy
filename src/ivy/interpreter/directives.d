@@ -191,6 +191,9 @@ class LenDirInterpreter: INativeDirectiveInterpreter
 			case DataNodeType.AssocArray:
 				interp._stack ~= TDataNode(value.assocArray.length);
 				break;
+			case DataNodeType.ClassNode:
+				interp._stack ~= TDataNode(value.classNode.length);
+				break;
 			default:
 				interp.loger.error(`Cannot get length for value of type: `, value.type);
 				break;

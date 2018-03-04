@@ -25,6 +25,7 @@ interface IClassNode
 	TDataNode __getAttr__(string);
 	void __setAttr__(TDataNode, string);
 	TDataNode __serialize__();
+	size_t length() @property;
 }
 
 class DataNodeException: IvyException
