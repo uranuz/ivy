@@ -81,6 +81,7 @@ public:
 		TDataNode globalDataDict;
 		globalDataDict["__scopeName__"] = "__global__"; // Allocating dict
 		_globalFrame = new ExecutionFrame(null, null, globalDataDict, _logerMethod);
+		_moduleFrames["__global__"] = _globalFrame; // We need to add entry point module frame to storage manually
 		loger.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
@@ -1312,6 +1313,8 @@ public:
 				{
 					size_t aaLen = instr.arg;
 					TDataNode[string] newAssocArray;
+					newAssocArray[`__mentalModuleMagic_0451__`] = 451;
+					newAssocArray.remove(`__mentalModuleMagic_0451__`);
 
 					for( size_t i = 0; i < aaLen; ++i )
 					{
