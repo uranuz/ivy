@@ -190,10 +190,7 @@ public:
 		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
 	}
 
-	import std.typecons: Tuple;
-	alias SearchResult = Tuple!(bool, "allowUndef", TDataNode, "node");
-
-	SearchResult findValue(FrameSearchMode mode)(string varName)
+	FrameSearchResult findValue(FrameSearchMode mode)(string varName)
 	{
 		import std.range: empty, back, popBack;
 
@@ -201,7 +198,7 @@ public:
 		ExecutionFrame[] frameStackSlice = _frameStack[];
 		loger.internalAssert( !frameStackSlice.empty, `frameStackSlice is empty` );
 
-		SearchResult result;
+		FrameSearchResult result;
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
 			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
@@ -240,12 +237,14 @@ public:
 		return result;
 	}
 
-	SearchResult findValueLocal(FrameSearchMode mode)(string varName)
+	FrameSearchResult findValueLocal(FrameSearchMode mode)(string varName)
 	{
 		import std.range: empty, back, popBack;
 
+		loger.write(`Call findValueLocal for: ` ~ varName);
+
 		ExecutionFrame[] frameStackSlice = _frameStack[];
-		SearchResult result;
+		FrameSearchResult result;
 		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
 		{
 			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!`);
@@ -270,7 +269,7 @@ public:
 
 	TDataNode getValue(string varName)
 	{
-		SearchResult result = findValue!(FrameSearchMode.get)(varName);
+		FrameSearchResult result = findValue!(FrameSearchMode.get)(varName);
 		if( result.node.isUndef && !result.allowUndef )
 		{
 			debug {
@@ -314,26 +313,30 @@ public:
 
 	void setValue(string varName, TDataNode value)
 	{
-		SearchResult result = findValue!(FrameSearchMode.set)(varName);
-		_assignNodeAttribute(result.node, value, varName);
+		loger.write(`Call for: ` ~ varName);
+		FrameSearchResult result = findValue!(FrameSearchMode.set)(varName);
+		_assignNodeAttribute(result.parent, value, varName);
 	}
 
 	void setValueWithParents(string varName, TDataNode value)
 	{
-		SearchResult result = findValue!(FrameSearchMode.setWithParents)(varName);
-		_assignNodeAttribute(result.node, value, varName);
+		loger.write(`Call for: ` ~ varName);
+		FrameSearchResult result = findValue!(FrameSearchMode.setWithParents)(varName);
+		_assignNodeAttribute(result.parent, value, varName);
 	}
 
 	void setLocalValue(string varName, TDataNode value)
 	{
-		SearchResult result = findValueLocal!(FrameSearchMode.set)(varName);
-		_assignNodeAttribute(result.node, value, varName);
+		loger.write(`Call for: ` ~ varName);
+		FrameSearchResult result = findValueLocal!(FrameSearchMode.set)(varName);
+		_assignNodeAttribute(result.parent, value, varName);
 	}
 
 	void setLocalValueWithParents(string varName, TDataNode value)
 	{
-		SearchResult result = findValueLocal!(FrameSearchMode.setWithParents)(varName);
-		_assignNodeAttribute(result.node, value, varName);
+		loger.write(`Call for: ` ~ varName);
+		FrameSearchResult result = findValueLocal!(FrameSearchMode.setWithParents)(varName);
+		_assignNodeAttribute(result.parent, value, varName);
 	}
 
 	TDataNode getModuleConst( size_t index )
@@ -1012,6 +1015,7 @@ public:
 						loger.write("RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack);
 						loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 						pk = instr.arg;
+						loger.internalAssert(_stack.back.type == DataNodeType.DataNodeRange, "RunLoop. Expected DataNodeRange to drop");
 						_stack.popBack(); // Drop data range from stack as we no longer need it
 						break;
 					}
