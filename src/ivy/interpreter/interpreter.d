@@ -628,20 +628,38 @@ public:
 					loger.internalAssert(endValue.type == DataNodeType.Integer,
 						"Cannot execute LoadSlice instruction. End value of slice must be integer!");
 
+					size_t startIndex; size_t endIndex; size_t len;
+					if( [DataNodeType.String, DataNodeType.Array].canFind(aggr.type) )
+					{
+						if( aggr.type == DataNodeType.String )
+						{
+							startIndex = aggr.str.toUTFindex(beginValue.integer); // Get code unit index by index of symbol
+							endIndex = endValue.integer;
+							len = aggr.str.length;
+							aggr.str.decode(endIndex); // decode increases passed index
+						} else {
+							startIndex = beginValue.integer;
+							startIndex = endValue.integer;
+							len = aggr.array.length;
+						}
+						// For slice we shall correct indexes if they are out of range
+						if( startIndex > len ) {
+							startIndex = len;
+						}
+						if( endIndex > len ) {
+							startIndex = len;
+						}
+						if( startIndex > endIndex ) {
+							startIndex = endIndex;
+						}
+					}
+
 					switch( aggr.type )
 					{
 						case DataNodeType.String:
-							// Index operation for string in D is little more complicated
-							size_t startIndex = aggr.str.toUTFindex(beginValue.integer); // Get code unit index by index of symbol
-							size_t endIndex = endValue.integer;
-							aggr.str.decode(endIndex); // decode increases passed index
-							loger.internalAssert(startIndex <= aggr.str.length, `String slice start index must be not greather than str length`);
-							loger.internalAssert(endIndex <= aggr.str.length, `String slice end index must be not greather or equal to str length`);
 							_stack ~= TDataNode( aggr.str[startIndex..endIndex] );
 							break;
 						case DataNodeType.Array:
-							loger.internalAssert(beginValue.integer <= aggr.array.length, `Begin value must be not greather than array length`);
-							loger.internalAssert(endValue.integer <= aggr.array.length, `End value must be not greather than array length`);
 							_stack ~= aggr.array[beginValue.integer..endValue.integer];
 							break;
 						case DataNodeType.ClassNode:
