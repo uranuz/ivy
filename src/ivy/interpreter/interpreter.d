@@ -172,21 +172,6 @@ public:
 
 	}
 
-	ExecutionFrame getModuleFrame(string modName)
-	{
-		if( modName !in _moduleFrames )
-		{
-			loger.write(`There is no execution frame for module: `, modName, `, creating new one`);
-			TDataNode dataDict;
-			dataDict["__scopeName__"] = modName;
-			_moduleFrames[modName] = new ExecutionFrame(null, _globalFrame, dataDict, _logerMethod);
-		} else {
-			loger.write(`Getting existing execution frame for module: `, modName);
-		}
-
-		return _moduleFrames[modName];
-	}
-
 	bool canFindValue(string varName) {
 		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
 	}
@@ -250,11 +235,10 @@ public:
 		{
 			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!`);
 
-			result = frameStackSlice.back.findValue!(mode)(varName);
-			if( !frameStackSlice.back.hasOwnScope && result.node.isUndef ) {
+			if( !frameStackSlice.back.hasOwnScope ) {
 				continue; // Let's try to find first parent that have it's own scope
 			}
-
+			result = frameStackSlice.back.findLocalValue!(mode)(varName);
 
 			if( !result.node.isUndef ) {
 				loger.write(`varName: `, varName, ` found in current execution frame`);
@@ -1169,9 +1153,8 @@ public:
 					}
 
 					string moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__";
-					ExecutionFrame moduleFrame = getModuleFrame(moduleName);
-
-					loger.internalAssert( moduleFrame, `Module frame for callable is null` );
+					ExecutionFrame moduleFrame = _moduleFrames.get(moduleName, null);
+					loger.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callableObj._name, ` does not exist!` );
 					if( isNoscope )
 					{
 						loger.write("RunCallable creating noscope execution frame...");
