@@ -64,10 +64,6 @@ public:
 			import std.range: popFront;
 			_array.popFront();
 		}
-
-		DataNodeType aggrType() @property {
-			return DataNodeType.Array;
-		}
 	}
 }
 
@@ -95,17 +91,13 @@ public:
 		TDataNode front()
 		{
 			import std.range: front;
-			return _assocArray[_keys.front];
+			return TDataNode(_keys.front);
 		}
 
 		void popFront()
 		{
 			import std.range: popFront;
 			_keys.popFront();
-		}
-
-		DataNodeType aggrType() @property {
-			return DataNodeType.AssocArray;
 		}
 	}
 }
@@ -136,10 +128,6 @@ public:
 
 		void popFront() {
 			++_current;
-		}
-
-		DataNodeType aggrType() @property {
-			return DataNodeType.Array;
 		}
 	}
 }

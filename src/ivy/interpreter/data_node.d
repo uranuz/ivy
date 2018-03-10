@@ -12,7 +12,6 @@ interface IDataNodeRange
 	bool empty() @property;
 	TDataNode front();
 	void popFront();
-	DataNodeType aggrType() @property;
 }
 
 interface IClassNode

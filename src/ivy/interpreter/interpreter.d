@@ -1023,27 +1023,7 @@ public:
 						break;
 					}
 
-					switch( dataRange.aggrType )
-					{
-						case DataNodeType.Array:
-						{
-							_stack ~= dataRange.front;
-							break;
-						}
-						case DataNodeType.AssocArray:
-						{
-							loger.internalAssert(dataRange.front.type == DataNodeType.Array, `Expected array as assoc array key-value pair`);
-							TDataNode[] aaPair = dataRange.front.array;
-							loger.internalAssert(aaPair.length > 1, `Assoc array pair must have two items`);
-							_stack ~= aaPair[0];
-							_stack ~= aaPair[1];
-
-							break;
-						}
-						default:
-							loger.internalAssert(false, `Unexpected range aggregate type!`);
-					}
-
+					_stack ~= dataRange.front;
 					// TODO: For now we just move range forward as take current value from it
 					// Maybe should fix it and make it move after loop block finish
 					dataRange.popFront();
