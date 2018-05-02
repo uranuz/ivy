@@ -107,6 +107,16 @@ public:
 		}
 	}
 
+	// Method used to add extra global data into interpreter
+	// Consider not to bloat it to much ;)
+	void addExtraGlobals(TDataNode[string] extraGlobals)
+	{
+		foreach( string name, TDataNode dataNode; extraGlobals ) {
+			// Take a copy of it just like with consts
+			_globalFrame.setValue(name, dataNode);
+		}
+	}
+
 	version(IvyInterpreterDebug)
 		enum isDebugMode = true;
 	else
@@ -279,7 +289,7 @@ public:
 	{
 		import std.array: split;
 		import std.range: back;
-		string attrName = varName.split.back;
+		string attrName = varName.split(`.`).back;
 		switch( parent.type )
 		{
 			case DataNodeType.AssocArray:

@@ -56,7 +56,7 @@ public:
 	}
 
 	/// Run programme main module with arguments passed as mainModuleScope parameter
-	TDataNode run(TDataNode mainModuleScope = TDataNode())
+	TDataNode run(TDataNode mainModuleScope = TDataNode(), TDataNode[string] extraGlobals = null)
 	{
 		mainModuleScope["__scopeName__"] = "__main__"; // Allocating a dict if it's not
 		import std.range: back;
@@ -64,6 +64,7 @@ public:
 		import ivy.interpreter.interpreter: Interpreter;
 		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
 		interp.addDirInterpreters(_dirInterpreters);
+		interp.addExtraGlobals(extraGlobals);
 		interp.execLoop();
 
 		return interp._stack.back;
@@ -172,8 +173,11 @@ public:
 		{
 			if( moduleName !in _progs )
 			{
-				synchronized(_mutex) {
-					_progs[moduleName] = compileModule(moduleName, _config);
+				synchronized(_mutex)
+				{
+					if( moduleName !in _progs ) {
+						_progs[moduleName] = compileModule(moduleName, _config);
+					}
 				}
 			}
 			return _progs[moduleName];
