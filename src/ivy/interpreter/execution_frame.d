@@ -156,7 +156,11 @@ public:
 								return FrameSearchResult(allowUndef, TDataNode.makeUndef(), parent);
 							} else {
 								// Only parent node should get there. And if it's not exists then issue an error in the set mode
-								loger.error(`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
+								//loger.error(`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
+								// Upd: In case when we using `set` in noscope directive we go into module scope of noscope directive
+								// and failing to find parent object to place variable in it. In that case we should just say that
+								// nothing is found instead if error and then go and find in parent scope of noscope directive
+								return FrameSearchResult(false);
 							}
 						} else {
 							return FrameSearchResult(allowUndef);
