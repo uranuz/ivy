@@ -80,11 +80,11 @@ public:
 
 		TDataNode globalDataDict;
 		globalDataDict["__scopeName__"] = "__global__"; // Allocating dict
-		_globalFrame = new ExecutionFrame(null, null, globalDataDict, _logerMethod);
+		_globalFrame = new ExecutionFrame(null, null, globalDataDict, _logerMethod, false);
 		_moduleFrames["__global__"] = _globalFrame; // We need to add entry point module frame to storage manually
 		loger.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
 
-		newFrame(rootCallableObj, null, dataDict); // Create entry point module frame
+		newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
 		_moduleFrames[mainModuleName] = _frameStack.back; // We need to add entry point module frame to storage manually
 	}
 
@@ -153,9 +153,9 @@ public:
 		_logerMethod = method;
 	}
 
-	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict)
+	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, bool isNoscope)
 	{
-		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict, _logerMethod);
+		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict, _logerMethod, isNoscope);
 		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict, `, and modFrame `, (modFrame? `is not null`: `is null`));
 	}
 
@@ -245,11 +245,7 @@ public:
 		{
 			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!`);
 
-			if( !frameStackSlice.back.hasOwnScope ) {
-				continue; // Let's try to find first parent that have it's own scope
-			}
 			result = frameStackSlice.back.findLocalValue!(mode)(varName);
-
 			if( !result.node.isUndef ) {
 				loger.write(`varName: `, varName, ` found in current execution frame`);
 				return result;
@@ -925,7 +921,7 @@ public:
 
 						TDataNode dataDict;
 						dataDict["__scopeName__"] = moduleName;
-						newFrame(callableObj, null, dataDict); // Create entry point module frame
+						newFrame(callableObj, null, dataDict, false); // Create entry point module frame
 						_moduleFrames[moduleName] = _frameStack.back; // We need to store module frame into storage
 						_stack ~= TDataNode(_frameStack.back); // Put module root frame into execution frame (it will be stored with StoreName)
 
@@ -1146,7 +1142,8 @@ public:
 					loger.internalAssert(stackArgCount <= _stack.length, "Not enough arguments in execution stack");
 					loger.write("RunCallable _stack: ", _stack);
 					loger.write("RunCallable callable type: ", _stack[_stack.length - stackArgCount].type);
-					loger.internalAssert(_stack[_stack.length - stackArgCount].type == DataNodeType.Callable, `Expected directive object operand in directive call operation`);
+					loger.internalAssert(_stack[_stack.length - stackArgCount].type == DataNodeType.Callable,
+						`Expected directive object operand in directive call operation`);
 
 					CallableObject callableObj = _stack[_stack.length - stackArgCount].callable;
 					loger.internalAssert(callableObj, `Callable object is null!` );
@@ -1158,26 +1155,19 @@ public:
 					bool isNoscope = false;
 					if( attrBlocks.length > 0 )
 					{
-						loger.internalAssert(attrBlocks[$-1].kind == DirAttrKind.BodyAttr, `Last attr block definition expected to be BodyAttr, but got: `, attrBlocks[$-1].kind);
+						loger.internalAssert(attrBlocks[$-1].kind == DirAttrKind.BodyAttr,
+							`Last attr block definition expected to be BodyAttr, but got: `, attrBlocks[$-1].kind);
 						isNoscope = attrBlocks[$-1].bodyAttr.isNoscope;
 					}
 
 					string moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__";
 					ExecutionFrame moduleFrame = _moduleFrames.get(moduleName, null);
 					loger.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callableObj._name, ` does not exist!` );
-					if( isNoscope )
-					{
-						loger.write("RunCallable creating noscope execution frame...");
-						// If directive is noscope we create frame with _dataDict that is Undef
-						newFrame( callableObj, moduleFrame, TDataNode() );
-					}
-					else
-					{
-						loger.write("RunCallable creating scoped execution frame...");
-						TDataNode dataDict;
-						dataDict["__scopeName__"] = callableObj._name; // Allocating scope
-						newFrame( callableObj, moduleFrame, dataDict );
-					}
+
+					loger.write("RunCallable creating execution frame...");
+					TDataNode dataDict;
+					dataDict["__scopeName__"] = callableObj._name; // Allocating scope
+					newFrame(callableObj, moduleFrame, dataDict, isNoscope);
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{

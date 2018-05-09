@@ -37,6 +37,7 @@ class ExecutionFrame
 		In other cases _dataDict should be of AssocArray type for storing local variables
 	*/
 	TDataNode _dataDict;
+	bool _isNoscope = false;
 
 	ExecutionFrame _moduleFrame;
 
@@ -44,12 +45,13 @@ class ExecutionFrame
 	LogerMethod _logerMethod;
 
 public:
-	this(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, LogerMethod logerMethod)
+	this(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, LogerMethod logerMethod, bool isNoscope)
 	{
 		_callableObj = callableObj;
 		_moduleFrame = modFrame;
 		_dataDict = dataDict;
 		_logerMethod = logerMethod;
+		_isNoscope = isNoscope;
 	}
 
 	version(IvyInterpreterDebug)
@@ -249,15 +251,10 @@ public:
 	{
 		loger.write(`Searching for node with full path: `, varName);
 
-		FrameSearchResult result;
-
 		// If current frame has it's own scope then try to find in it.
 		// If it is noscope then search into it's _moduleFrame, because we could still have some symbols there
-		if( this.hasOwnScope ) {
-			result = findLocalValue!(mode)(varName);
-		} else {
-			loger.write(`Current level exec frame is noscope. So search only in connected _moduleFrame`);
-		}
+		FrameSearchResult result = findLocalValue!(mode)(varName);
+		loger.write(`Current level exec frame is noscope. So search only in connected _moduleFrame`);
 
 		if( !result.node.isUndef )
 			return result;
@@ -312,7 +309,7 @@ public:
 
 	bool hasOwnScope() @property
 	{
-		return _dataDict.type == DataNodeType.AssocArray;
+		return !_isNoscope;
 	}
 
 	CallableKind callableKind() @property
