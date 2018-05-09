@@ -738,7 +738,7 @@ public:
 				// Load constant from programme data table into stack
 				case OpCode.LoadConst:
 				{
-					_stack ~= getModuleConst(instr.arg);
+					_stack ~= getModuleConstCopy(instr.arg);
 					break;
 				}
 
@@ -767,17 +767,17 @@ public:
 				case OpCode.Append:
 				{
 					loger.write("OpCode.Append _stack: ", _stack);
-					loger.internalAssert(!_stack.empty, "Cannot execute Append instruction. Expected right operand, but exec stack is empty!");
+					loger.internalAssert(!_stack.empty,
+						"Cannot execute Append instruction. Expected right operand, but exec stack is empty!");
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute Append instruction. Expected left operand, but exec stack is empty!");
-					TDataNode leftVal = _stack.back;
-					_stack.popBack();
-					loger.internalAssert(leftVal.type == DataNodeType.Array, "Left operand for Append instruction expected to be array, but got: ", leftVal.type);
+					loger.internalAssert(!_stack.empty,
+						"Cannot execute Append instruction. Expected left operand, but exec stack is empty!");
+					loger.internalAssert(_stack.back.type == DataNodeType.Array,
+						"Left operand for Append instruction expected to be array, but got: ", _stack.back.type);
 
-					leftVal ~= rightVal;
-					_stack ~= leftVal;
+					_stack.back ~= rightVal;
 
 					break;
 				}
@@ -786,43 +786,45 @@ public:
 				{
 					import std.array: insertInPlace;
 
-					loger.write("OpCode.Append _stack: ", _stack);
+					loger.write("OpCode.Insert _stack: ", _stack);
 					loger.internalAssert(!_stack.empty, "Cannot execute Insert instruction. Expected right operand, but exec stack is empty!");
 					TDataNode positionNode = _stack.back;
 					_stack.popBack();
+					import std.algorithm: canFind;
 					loger.internalAssert(
-						positionNode.type == DataNodeType.Integer,
-						"Cannot execute Insert instruction. Position argument expected to be an integer, but got: ", positionNode.type
+						[DataNodeType.Integer, DataNodeType.Null, DataNodeType.Undef].canFind(positionNode.type),
+						"Cannot execute Insert instruction. Position argument expected to be an integer or empty (for append), but got: ", positionNode.type
 					);
 
-					loger.internalAssert(!_stack.empty, "Cannot execute Append instruction. Expected left operand, but exec stack is empty!");
+					loger.internalAssert(!_stack.empty, "Cannot execute Insert instruction. Expected left operand, but exec stack is empty!");
 					TDataNode valueNode = _stack.back;
 					_stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute Append instruction. Expected left operand, but exec stack is empty!");
+					loger.internalAssert(!_stack.empty, "Cannot execute Insert instruction. Expected left operand, but exec stack is empty!");
 					TDataNode listNode = _stack.back;
-					_stack.popBack();
 					loger.internalAssert(
 						listNode.type == DataNodeType.Array,
 						"Cannot execute Insert instruction. Aggregate must be an array, but got: ", listNode.type
 					);
-					auto pos = positionNode.integer;
-					if (pos < 0) {
-						pos = listNode.array.length + pos;
+					size_t pos;
+					if( positionNode.type != DataNodeType.Integer ) {
+						pos = listNode.array.length; // Do append
+					} else if( positionNode.integer >= 0 ) {
+						pos = positionNode.integer;
+					} else {
+						// Indexing from back if negative
+						pos = listNode.array.length + positionNode.integer;
 					}
 					loger.internalAssert(
-						pos >= 0 && pos < listNode.array.length,
-						"Cannot execute Insert instruction. Computed position is wrong: ", pos
-					);
+						pos >= 0 && pos <= listNode.array.length,
+						"Cannot execute Insert instruction. Computed position is wrong: ", pos);
 					listNode.array.insertInPlace(pos, valueNode);
-
-					_stack ~= listNode; // Put list at the stack as the result
 					break;
 				}
 
 				case OpCode.InsertMass:
 				{
-					loger.write("OpCode.Append _stack: ", _stack);
+					loger.write("OpCode.InsertMass _stack: ", _stack);
 					loger.internalAssert(!_stack.empty, "Cannot execute ListInsert instruction. Expected right operand, but exec stack is empty!");
 					assert(false, `Not implemented yet!`);
 				}

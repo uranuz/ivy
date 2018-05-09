@@ -728,7 +728,7 @@ public:
 			if( node.isListBlock ) {
 				addInstr(OpCode.Append); // Append result to result array
 			} else if( !stmtRange.empty ) {
-				addInstr(OpCode.PopTop);
+				addInstr(OpCode.PopTop); // For each item except last drop result
 			}
 		}
 	}
