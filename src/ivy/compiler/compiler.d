@@ -209,7 +209,7 @@ public:
 		if( moduleName in _moduleObjects )
 			loger.error(`Cannot create new module object "` ~ moduleName ~ `", because it already exists!`);
 
-		ModuleObject newModObj = new ModuleObject(moduleName, null);
+		ModuleObject newModObj = new ModuleObject(moduleName, moduleName);
 		_moduleObjects[moduleName] = newModObj;
 		return newModObj;
 	}
@@ -242,25 +242,15 @@ public:
 		loger.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
 		loger.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
 
-		return _codeObjStack.back.addInstr(instr);
+		return _codeObjStack.back.addInstr(instr, _currentLocation.lineIndex);
 	}
 
-	size_t addInstr(OpCode opcode)
-	{
-		import std.range: empty, back;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
-		loger.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
-
-		return _codeObjStack.back.addInstr( Instruction(opcode) );
+	size_t addInstr(OpCode opcode) {
+		return addInstr(Instruction(opcode));
 	}
 
-	size_t addInstr(OpCode opcode, size_t arg)
-	{
-		import std.range: empty, back;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
-		loger.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
-
-		return _codeObjStack.back.addInstr( Instruction(opcode, arg) );
+	size_t addInstr(OpCode opcode, size_t arg) {
+		return addInstr(Instruction(opcode, arg));
 	}
 
 	void setInstrArg(size_t index, size_t arg)
@@ -811,9 +801,16 @@ public:
 							result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.arg.text ~ val ~ "\r\n";
 
 						}
+						result ~= "\r\nCode object source map(line, startAddr)\r\n";
+						foreach( mapItem; con.codeObject._sourceMap )
+						{
+							result ~= mapItem.line.text ~ "\t\t" ~ mapItem.startInstr.text ~ "\r\n";
+						}
 					}
 				}
 			}
+
+
 			result ~= "\r\nEND OF MODULE " ~ modName ~ "\r\n";
 		}
 

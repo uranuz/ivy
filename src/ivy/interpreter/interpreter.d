@@ -62,6 +62,8 @@ public:
 	// Loger method used to send error and debug messages
 	LogerMethod _logerMethod;
 
+	size_t _pk; // Programme counter
+
 	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, LogerMethod logerMethod = null)
 	{
 		import std.range: back;
@@ -130,18 +132,65 @@ public:
 		{
 			import std.algorithm: map, canFind;
 			import std.array: join;
-			if( [LogInfoType.error, LogInfoType.internalError].canFind(logInfoType) )
-			{
-				// Give additional data for debugging if error occured
-				string execFrameList = interp._frameStack.map!( (frame) => frame._callableObj._name ).join("\n");
-				string dataStack = interp._stack.map!( (it) => it.toDebugString() ).join("\n");
-				msg ~= "\n\nExec stack:\n" ~ execFrameList ~ "\n\nData stack:\n" ~ dataStack;
+			import std.conv: text;
+
+			string modFileName;
+			size_t modLineIndex;
+			if( ModuleObject modObj = interp.currentModule ) {
+				modFileName = modObj.fileName;
 			}
+
+			if( CodeObject codeObj = interp.currentCodeObject ) {
+				modLineIndex = codeObj.getInstrLine(interp._pk);
+			}
+
+			// Put name of module and line where event occured
+			msg = "Ivy module: " ~ modFileName ~ ":" ~ modLineIndex.text ~ "\n" ~ msg;
+
+			debug {
+				if( [LogInfoType.error, LogInfoType.internalError].canFind(logInfoType) )
+				{
+					// Give additional debug data if error occured
+					string execFrameList = interp._frameStack.map!( (frame) => frame._callableObj._name ).join("\n");
+					string dataStack = interp._stack.map!( (it) => it.toDebugString() ).join("\n");
+					msg ~= "Exec stack:\n" ~ execFrameList ~ "\n\nData stack:\n" ~ dataStack;
+				}
+			}
+
 			if( interp._logerMethod !is null ) {
-				interp._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
+				interp._logerMethod(LogInfo(
+					msg,
+					logInfoType,
+					getShortFuncName(func),
+					file,
+					line,
+					modFileName,
+					modLineIndex
+				));
 			}
 			return msg;
 		}
+	}
+
+	ModuleObject currentModule()
+	{
+		if( CodeObject codeObj = currentCodeObject ) {
+			return codeObj._moduleObj;
+		}
+		return null;
+	}
+
+	CodeObject currentCodeObject()
+	{
+		import std.range: empty, back;
+		if(
+			_frameStack.empty
+			|| (_frameStack.back is null)
+			|| (_frameStack.back._callableObj is null)
+		) {
+			return null;
+		}
+		return _frameStack.back._callableObj._codeObj;
 	}
 
 	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
@@ -388,12 +437,10 @@ public:
 		loger.internalAssert(_frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null`);
 
 		auto codeRange = _frameStack.back._callableObj._codeObj._instrs[];
-		size_t pk = 0;
-
 		execution_loop:
-		for( ; pk < codeRange.length; )
+		for( _pk = 0; _pk < codeRange.length; )
 		{
-			Instruction instr = codeRange[pk];
+			Instruction instr = codeRange[_pk];
 			switch( instr.opcode )
 			{
 				// Base arithmetic operations execution
@@ -926,9 +973,9 @@ public:
 						_stack ~= TDataNode(_frameStack.back); // Put module root frame into execution frame (it will be stored with StoreName)
 
 						// Preparing to run code object in newly created frame
-						_stack ~= TDataNode(pk+1);
+						_stack ~= TDataNode(_pk+1);
 						codeRange = codeObject._instrs[];
-						pk = 0;
+						_pk = 0;
 
 						continue execution_loop;
 					}
@@ -1025,7 +1072,7 @@ public:
 					{
 						loger.write("RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack);
 						loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
-						pk = instr.arg;
+						_pk = instr.arg;
 						loger.internalAssert(_stack.back.type == DataNodeType.DataNodeRange, "RunLoop. Expected DataNodeRange to drop");
 						_stack.popBack(); // Drop data range from stack as we no longer need it
 						break;
@@ -1044,7 +1091,7 @@ public:
 				{
 					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 
-					pk = instr.arg;
+					_pk = instr.arg;
 					continue execution_loop;
 				}
 
@@ -1067,7 +1114,7 @@ public:
 
 					if( jumpCond )
 					{
-						pk = instr.arg;
+						_pk = instr.arg;
 						continue execution_loop;
 					}
 					break;
@@ -1257,9 +1304,9 @@ public:
 
 					if( callableObj._codeObj )
 					{
-						_stack ~= TDataNode(pk+1); // Put next instruction index on the stack to return at
+						_stack ~= TDataNode(_pk+1); // Put next instruction index on the stack to return at
 						codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
-						pk = 0;
+						_pk = 0;
 						continue execution_loop;
 					}
 					else
@@ -1327,9 +1374,9 @@ public:
 					break;
 				}
 			}
-			++pk;
+			++_pk;
 
-			if( pk == codeRange.length ) // Ended with this code object
+			if( _pk == codeRange.length ) // Ended with this code object
 			{
 				loger.write("_stack on code object end: ", _stack);
 				loger.write("_frameStack on code object end: ", _frameStack);
@@ -1348,7 +1395,7 @@ public:
 
 				loger.internalAssert(!_stack.empty, "Expected integer as instruction pointer, but got end of execution stack");
 				loger.internalAssert(_stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer");
-				pk = cast(size_t) _stack.back.integer;
+				_pk = cast(size_t) _stack.back.integer;
 				_stack.popBack(); // Drop return address
 				codeRange = _frameStack.back._callableObj._codeObj._instrs[]; // Set old instruction range back
 

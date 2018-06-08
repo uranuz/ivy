@@ -23,6 +23,14 @@ public:
 		_name = name;
 		_fileName = fileName;
 	}
+	
+	string name() @property {
+		return _name;
+	}
+
+	string fileName() @property {
+		return _fileName;
+	}
 
 	// Append const to list and return it's index
 	// This function can return index of already existing object if it's equal to passed data
@@ -52,6 +60,13 @@ public:
 	}
 }
 
+/** Debugging info */
+struct SourceMapItem
+{
+	size_t line; // Source code line index
+	size_t startInstr; // Index of first instruction
+}
+
 /**
 	Code object is inner runtime representation of chunk of source file.
 	Usually it's representation of directive or module.
@@ -65,15 +80,19 @@ class CodeObject
 	DirAttrsBlock!(false)[] _attrBlocks;
 	ModuleObject _moduleObj; // Module object which contains this code object
 
+	SourceMapItem[] _sourceMap; // Debugging info (source map sorted by line)
+	SourceMapItem[] _revSourceMap; // Debugging info (source map sorted by startInstr)
+
 public:
 	this(ModuleObject moduleObj) {
 		_moduleObj = moduleObj;
 	}
 
-	size_t addInstr(Instruction instr)
+	size_t addInstr(Instruction instr, size_t line)
 	{
 		size_t index = _instrs.length;
 		_instrs ~= instr;
+		_addSourceMapItem(line, index);
 		return index;
 	}
 
@@ -85,5 +104,50 @@ public:
 
 	size_t getInstrCount() {
 		return _instrs.length;
+	}
+
+	// Get line where code object instruction is located
+	size_t getInstrLine(size_t instrIndex)
+	{
+		auto sMap = _checkRevSourceMap();
+		auto lowerB = sMap.lowerBound(SourceMapItem(0, instrIndex));
+		if( lowerB.length < _revSourceMap.length ) {
+			return _revSourceMap[lowerB.length].line;
+		}
+		return 0;
+	}
+
+	static auto _sourceMapByLinePred(SourceMapItem one, SourceMapItem other) {
+		return one.line < other.line;
+	}
+
+	static auto _sourceMapByAddrPred(SourceMapItem one, SourceMapItem other) {
+		return one.startInstr < other.startInstr;
+	}
+
+	void _addSourceMapItem(size_t line, size_t instrIndex)
+	{
+		import std.range: assumeSorted;
+		import std.array: insertInPlace;
+		auto sMap = assumeSorted!_sourceMapByLinePred(_sourceMap);
+		auto trisectMap = sMap.trisect(SourceMapItem(line));
+		size_t afterPos = trisectMap[0].length + trisectMap[1].length;
+		if( trisectMap[1].length == 0 ) {
+			_sourceMap.insertInPlace(afterPos, SourceMapItem(line, instrIndex));
+		} else if( trisectMap[1][0].startInstr > instrIndex ) {
+			// If we find some addre that goes before current at the line then patch it
+			_sourceMap[trisectMap[0].length].startInstr = instrIndex;
+		}
+	}
+
+	auto _checkRevSourceMap()
+	{
+		import std.algorithm: sort;
+		import std.range: assumeSorted;
+		if( _revSourceMap.length == 0) {
+			_revSourceMap = _sourceMap.dup;
+			_revSourceMap.sort!_sourceMapByAddrPred();
+		}
+		return assumeSorted!_sourceMapByAddrPred(_revSourceMap);
 	}
 }
