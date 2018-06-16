@@ -43,10 +43,6 @@ public:
 	alias TDataNode = DataNode!String;
 	alias LogerMethod = void delegate(LogInfo);
 
-	// Stack used to store temporary data during execution.
-	// Results of execution of instructions are plcaed there too...
-	TDataNode[] _stack;
-
 	// Stack of execution frames with directives or modules local data
 	ExecutionFrame[] _frameStack;
 
@@ -202,37 +198,60 @@ public:
 		_logerMethod = method;
 	}
 
+	/++ Returns nearest independent execution frame that is not marked `noscope`+/
+	ExecutionFrame independentFrame() @property
+	{
+		import std.range: empty;
+		loger.internalAssert(!_frameStack.empty, `Execution frame stack is empty!`);
+
+		foreach_reverse( frame; _frameStack )
+		{
+			if( frame.hasOwnScope ) {
+				return frame;
+			}
+		}
+		loger.internalAssert(false, `Cannot get current independent execution frame!`);
+		return null;
+	}
+
+	/++ Returns nearest execution frame from _frameStack +/
+	ExecutionFrame currentFrame() @property
+	{
+		import std.range: empty, back;
+		loger.internalAssert(!_frameStack.empty, "Execution frame stack is empty!");
+		return _frameStack.back;
+	}
+
 	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, bool isNoscope)
 	{
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict, _logerMethod, isNoscope);
 		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict, `, and modFrame `, (modFrame? `is not null`: `is null`));
 	}
 
-	ExecutionFrame currentFrame() @property
-	{
-		import std.range: empty, back, popBack;
-
-		auto frameStackSlice = _frameStack[];
-		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
-		{
-			if( frameStackSlice.back.hasOwnScope ) {
-				return frameStackSlice.back;
-			}
-		}
-		loger.internalAssert(false, `Cannot get current execution frame`);
-		return null;
-	}
-
 	void removeFrame()
 	{
-		import std.range: back, popBack;
+		import std.range: empty, back, popBack;
+		loger.internalAssert(!_frameStack.empty, `Execution frame stack is empty!`);
 		loger.write(`Exit execution frame for callable: `, _frameStack.back._callableObj._name, ` with dataDict: `, _frameStack.back._dataDict);
 		_frameStack.popBack();
-
 	}
 
 	bool canFindValue(string varName) {
 		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
+	}
+
+	/++ Add data stack block into the current execution frame +/
+	void add_stackBlock() {
+		currentFrame.addStackBlock();
+	}
+
+	/++ Remove data stack block from current execution frame +/
+	void remove_stackBlock() {
+		currentFrame.removeStackBlock();
+	}
+
+	ref TDataNode[] _stack() @property {
+		return currentFrame._stack;
 	}
 
 	FrameSearchResult findValue(FrameSearchMode mode)(string varName)
@@ -424,7 +443,7 @@ public:
 		assert(false);
 	}
 
-	void execLoop()
+	TDataNode execLoop()
 	{
 		import std.range: empty, back, popBack;
 		import std.conv: to, text;
@@ -438,8 +457,36 @@ public:
 
 		auto codeRange = _frameStack.back._callableObj._codeObj._instrs[];
 		execution_loop:
-		for( _pk = 0; _pk < codeRange.length; )
+		for( _pk = 0; _pk <= codeRange.length; )
 		{
+			if( _pk >= codeRange.length ) // Ended with this code object
+			{
+				loger.write("_stack on code object end: ", _stack);
+				loger.write("_frameStack on code object end: ", _frameStack);
+				loger.internalAssert(!_frameStack.empty, "Frame stack shouldn't be empty yet'");
+				// Else we expect to have result of directive on the stack
+				loger.internalAssert(!_stack.empty, "Expected directive result, but data stack is empty!" );
+
+				TDataNode result = _stack.back;
+				_stack.popBack(); // We saved result - so drop it!
+				loger.internalAssert(_stack.empty, "Frame stack should be empty now! But there is: ", _stack);
+
+				this.removeFrame(); // Exit out of this frame
+				if( this._frameStack.empty ) {
+					return result; // If there is no frames left - then we finished
+				}
+
+				loger.internalAssert(!_stack.empty, "Expected integer as instruction pointer, but got end of execution stack");
+				loger.internalAssert(_stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer, but got: ", _stack.back.type);
+				_pk = cast(size_t) _stack.back.integer;
+				_stack.popBack(); // Drop return address
+
+				loger.internalAssert(!_frameStack.back._callableObj._codeObj._instrs.empty, "Code object to return is empty!");
+				codeRange = _frameStack.back._callableObj._codeObj._instrs[]; // Set old instruction range back
+				_stack ~= result; // Get result back
+				continue;
+			} // if
+			
 			Instruction instr = codeRange[_pk];
 			switch( instr.opcode )
 			{
@@ -961,6 +1008,9 @@ public:
 						CodeObject codeObject = modObject.mainCodeObject;
 						loger.internalAssert(codeObject, `Cannot execute ImportModule instruction, because main code object for module "`, moduleName, `" is null!` );
 
+						// Save link to current frame
+						ExecutionFrame prevFrame = currentFrame;
+
 						CallableObject callableObj = new CallableObject;
 						callableObj._name = moduleName;
 						callableObj._kind = CallableKind.Module;
@@ -970,10 +1020,13 @@ public:
 						dataDict["__scopeName__"] = moduleName;
 						newFrame(callableObj, null, dataDict, false); // Create entry point module frame
 						_moduleFrames[moduleName] = _frameStack.back; // We need to store module frame into storage
-						_stack ~= TDataNode(_frameStack.back); // Put module root frame into execution frame (it will be stored with StoreName)
+
+						// Put module root frame into previous execution frame (it will be stored with StoreName)
+						prevFrame._stack ~= TDataNode(_frameStack.back);
+						// Decided to put return address into parent frame instead of current
+						prevFrame._stack ~= TDataNode(_pk+1);
 
 						// Preparing to run code object in newly created frame
-						_stack ~= TDataNode(_pk+1);
 						codeRange = codeObject._instrs[];
 						_pk = 0;
 
@@ -981,7 +1034,8 @@ public:
 					}
 					else
 					{
-						_stack ~= TDataNode(_moduleFrames[moduleName]); // Put module root frame into execution frame
+						// Put module root frame into previous execution frame (it will be stored with StoreName)
+						_stack ~= TDataNode(_moduleFrames[moduleName]); 
 						// As long as module returns some value at the end of execution, so put fake value there for consistency
 						_stack ~= TDataNode();
 					}
@@ -1120,6 +1174,13 @@ public:
 					break;
 				}
 
+				case OpCode.Return:
+				{
+					// Set instruction index at the end of code object in order to finish 
+					_pk = codeRange.length;
+					continue execution_loop;
+				}
+
 				case OpCode.PopTop:
 				{
 					loger.internalAssert(!_stack.empty, "Cannot pop value from stack, because stack is empty");
@@ -1211,6 +1272,9 @@ public:
 					ExecutionFrame moduleFrame = _moduleFrames.get(moduleName, null);
 					loger.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callableObj._name, ` does not exist!` );
 
+					// Save previous stack to get directive arguments from
+					ExecutionFrame prevFrame = currentFrame;
+
 					loger.write("RunCallable creating execution frame...");
 					TDataNode dataDict;
 					dataDict["__scopeName__"] = callableObj._name; // Allocating scope
@@ -1222,16 +1286,16 @@ public:
 
 						for( size_t i = 0; i < (stackArgCount - 1); )
 						{
-							loger.internalAssert(!_stack.empty, `Expected integer as arguments block header, but got empty exec stack!`);
-							loger.internalAssert(_stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!`);
-							size_t blockArgCount = _stack.back.integer >> _stackBlockHeaderSizeOffset;
+							loger.internalAssert(!prevFrame._stack.empty, `Expected integer as arguments block header, but got empty exec stack!`);
+							loger.internalAssert(prevFrame._stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!`);
+							size_t blockArgCount = prevFrame._stack.back.integer >> _stackBlockHeaderSizeOffset;
 							loger.write("blockArgCount: ", blockArgCount);
-							DirAttrKind blockType = cast(DirAttrKind)( _stack.back.integer & _stackBlockHeaderTypeMask );
+							DirAttrKind blockType = cast(DirAttrKind)( prevFrame._stack.back.integer & _stackBlockHeaderTypeMask );
 							// Bit between block size part and block type must always be zero
-							loger.internalAssert( (_stack.back.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
+							loger.internalAssert( (prevFrame._stack.back.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
 							loger.write("blockType: ", blockType);
 
-							_stack.popBack();
+							prevFrame._stack.popBack();
 							++i; // Block header was eaten, so increase counter
 
 							switch( blockType )
@@ -1241,20 +1305,20 @@ public:
 									size_t j = 0;
 									while( j < 2 * blockArgCount )
 									{
-										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
-										TDataNode attrValue = _stack.back;
-										_stack.popBack(); ++j; // Parallel bookkeeping ;)
+										loger.internalAssert(!prevFrame._stack.empty, "Execution stack is empty!");
+										TDataNode attrValue = prevFrame._stack.back;
+										prevFrame._stack.popBack(); ++j; // Parallel bookkeeping ;)
 
-										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
+										loger.internalAssert(!prevFrame._stack.empty, "Execution stack is empty!");
 										loger.write(`RunCallable debug, _stack is: `, _stack);
-										loger.internalAssert(_stack.back.type == DataNodeType.String, "Named attribute name must be string!");
-										string attrName = _stack.back.str;
-										_stack.popBack(); ++j;
+										loger.internalAssert(prevFrame._stack.back.type == DataNodeType.String, "Named attribute name must be string!");
+										string attrName = prevFrame._stack.back.str;
+										prevFrame._stack.popBack(); ++j;
 
 										setLocalValue( attrName, attrValue );
 									}
 									i += j; // Increase overall processed stack arguments count (2 items per iteration)
-									loger.write("_stack after parsing named arguments: ", _stack);
+									loger.write("_stack after parsing named arguments: ", prevFrame._stack);
 									break;
 								}
 								case DirAttrKind.ExprAttr:
@@ -1278,15 +1342,15 @@ public:
 
 									for( size_t j = 0; j < blockArgCount; ++j, ++i /* Inc overall processed arg count*/ )
 									{
-										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
-										TDataNode attrValue = _stack.back;
-										_stack.popBack();
+										loger.internalAssert(!prevFrame._stack.empty, "Execution stack is empty!");
+										TDataNode attrValue = prevFrame._stack.back;
+										prevFrame._stack.popBack();
 
 										loger.internalAssert(j < currBlock.exprAttrs.length, `Unexpected number of attibutes in positional arguments block`);
 
 										setLocalValue( currBlock.exprAttrs[blockArgCount -j -1].name, attrValue );
 									}
-									loger.write("_stack after parsing positional arguments: ", _stack);
+									loger.write("_stack after parsing positional arguments: ", prevFrame._stack);
 									break;
 								}
 								default:
@@ -1296,15 +1360,15 @@ public:
 							blockCounter += 1;
 						}
 					}
-					loger.write("_stack after parsing all arguments: ", _stack);
+					loger.write("_stack after parsing all arguments: ", prevFrame._stack);
 
-					loger.internalAssert(!_stack.empty, "Expected callable object to call, but found end of execution stack!");
-					loger.internalAssert(_stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation`);
-					_stack.popBack(); // Drop callable object from stack
+					loger.internalAssert(!prevFrame._stack.empty, "Expected callable object to call, but found end of execution stack!");
+					loger.internalAssert(prevFrame._stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation`);
+					prevFrame._stack.popBack(); // Drop callable object from stack
 
 					if( callableObj._codeObj )
 					{
-						_stack ~= TDataNode(_pk+1); // Put next instruction index on the stack to return at
+						prevFrame._stack ~= TDataNode(_pk+1); // Put next instruction index on the stack to return at
 						codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
 						_pk = 0;
 						continue execution_loop;
@@ -1313,8 +1377,18 @@ public:
 					{
 						loger.internalAssert(callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!`);
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
+						// If frame stack contains last frame - it means that we nave done with programme
+						// Else we expect to have result of directive on the stack
+						loger.internalAssert(!_stack.empty, "Expected directive result, but execution stack is empty!" );
+						TDataNode result = _stack.back;
+						_stack.popBack(); // We saved result - so drop it!
+						loger.internalAssert(_stack.empty, "Frame stack should be empty now! Breakpoint 1.");
 
 						this.removeFrame(); // Drop frame from stack after end of execution
+						if( _frameStack.empty ) {
+							return result;
+						}
+						_stack ~= result; // Get result back
 					}
 
 					break;
@@ -1373,35 +1447,21 @@ public:
 					loger.internalAssert(false, "Unexpected code of operation: ", instr.opcode);
 					break;
 				}
-			}
+			} // switch
 			++_pk;
 
-			if( _pk == codeRange.length ) // Ended with this code object
-			{
-				loger.write("_stack on code object end: ", _stack);
-				loger.write("_frameStack on code object end: ", _frameStack);
-				loger.internalAssert(!_frameStack.empty, "Frame stack shouldn't be empty yet'");
-				// TODO: Consider case with noscope directive
-				this.removeFrame(); // Exit out of this frame
 
-				// If frame stack happens to be empty - it means that we nave done with programme
-				if( _frameStack.empty )
-					break;
-
-				// Else we expect to have result of directive on the stack
-				loger.internalAssert(!_stack.empty, "Expected directive result, but execution stack is empty!" );
-				TDataNode result = _stack.back;
-				_stack.popBack(); // We saved result - so drop it!
-
-				loger.internalAssert(!_stack.empty, "Expected integer as instruction pointer, but got end of execution stack");
-				loger.internalAssert(_stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer");
-				_pk = cast(size_t) _stack.back.integer;
-				_stack.popBack(); // Drop return address
-				codeRange = _frameStack.back._callableObj._codeObj._instrs[]; // Set old instruction range back
-
-				_stack ~= result; // Get result back
+			if( _frameStack.empty ) {
+				import std.stdio;
+				writeln("DEBUUUG frameStack.empty: ", _frameStack.empty);
 			}
-
+		} // execution_loop:
+		import std.stdio;
+		writeln("DEBUUUG frameStack\n", _frameStack);
+		if( !_frameStack.empty ) {
+			writeln("DEBUUUG dataStack\n", _stack);
 		}
-	}
+		
+		return TDataNode();
+	} // void execLoop()
 }

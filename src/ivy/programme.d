@@ -65,9 +65,8 @@ public:
 		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
 		interp.addDirInterpreters(_dirInterpreters);
 		interp.addExtraGlobals(extraGlobals);
-		interp.execLoop();
 
-		return interp._stack.back;
+		return interp.execLoop();
 	}
 
 	void logerMethod(LogerMethod method) @property {

@@ -434,7 +434,10 @@ public:
 
 		compiler.addInstr(OpCode.ImportModule);
 		compiler.addInstr(OpCode.SwapTwo); // Swap module return value and imported execution frame
+		//compiler.addInstr(OpCode.PopTop); // Drop return value of module importing, because it is meaningless
 		compiler.addInstr(OpCode.StoreNameWithParents, modNameConstIndex);
+		// OpCode.StoreName  does not put value on the stack so do it there
+		//compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ) );
 	}
 }
 
@@ -468,8 +471,11 @@ public:
 
 		compiler.addInstr(OpCode.ImportModule);
 		compiler.addInstr(OpCode.SwapTwo); // Swap module return value and imported execution frame
+		//compiler.addInstr(OpCode.PopTop); // Drop return value of module importing, because it is meaningless
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(varNames) )); // Put list of imported names on the stack
 		compiler.addInstr(OpCode.FromImport); // Store names from module exec frame into current frame
+		// OpCode.FromImport  does not put value on the stack so do it there
+		//compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ) );
 	}
 }
 
@@ -642,5 +648,34 @@ class SliceCompiler: IDirectiveCompiler
 			compiler.loger.write(`SliceCompiler. At end. stmtRange.front.kind: `, stmtRange.front.kind);
 			compiler.loger.error(`Expected end of "slice" directive. Maybe ';' is missing`);
 		}
+	}
+}
+
+class ReturnCompiler: IDirectiveCompiler
+{
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
+	{
+		auto stmtRange = stmt[];
+
+		// Drop last stack value
+		//compiler.addInstr(OpCode.PopTop);
+
+		if( !stmtRange.empty )
+		{
+			// Evaluating return expression if it is there
+			stmtRange.front.accept(compiler);
+			stmtRange.popFront();
+		}
+		else
+		{
+			// Put Undef value on the stack if there is no value
+			compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
+		}
+
+		if( !stmtRange.empty ) {
+			compiler.loger.error(`Expected end of "return" directive. Maybe ';' is missing`);
+		}
+
+		compiler.addInstr(OpCode.Return); // Add Return instruction that goes to the end of code object
 	}
 }
