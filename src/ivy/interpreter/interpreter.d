@@ -1450,18 +1450,9 @@ public:
 			} // switch
 			++_pk;
 
-
-			if( _frameStack.empty ) {
-				import std.stdio;
-				writeln("DEBUUUG frameStack.empty: ", _frameStack.empty);
-			}
 		} // execution_loop:
-		import std.stdio;
-		writeln("DEBUUUG frameStack\n", _frameStack);
-		if( !_frameStack.empty ) {
-			writeln("DEBUUUG dataStack\n", _stack);
-		}
-		
-		return TDataNode();
+
+		loger.internalAssert(false, "Failed to get result of executionW");
+		assert(false);
 	} // void execLoop()
 }
