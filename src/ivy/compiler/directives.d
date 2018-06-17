@@ -4,7 +4,7 @@ import ivy.bytecode: OpCode, Instruction;
 import ivy.parser.node;
 import ivy.parser.statement;
 import ivy.parser.expression;
-import ivy.compiler.compiler: IDirectiveCompiler, ByteCodeCompiler, takeFrontAs;
+import ivy.compiler.compiler: IDirectiveCompiler, ByteCodeCompiler, takeFrontAs, JumpKind;
 import ivy.compiler.symbol_table: Symbol, SymbolKind, DirectiveDefinitionSymbol;
 import ivy.interpreter.data_node: DataNode;
 
@@ -234,6 +234,9 @@ class ForCompiler : IDirectiveCompiler
 public:
 	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
+		import std.range: popBack, empty, back;
+		alias JumpTableItem = ByteCodeCompiler.JumpTableItem;
+		
 		auto stmtRange = statement[];
 		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("For loop variable name expected");
 
@@ -253,6 +256,9 @@ public:
 			compiler.loger.error("Expected end of directive after loop body. Maybe ';' is missing");
 
 		// TODO: Check somehow if aggregate has supported type
+
+		// Add nem jumps list item into jump table stack
+		compiler._jumpTableStack ~= JumpTableItem[].init;
 
 		// Compile code to calculate aggregate value
 		aggregateExpr.accept(compiler);
@@ -275,6 +281,24 @@ public:
 
 		// Push fake result to "make all happy" ;)
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
+
+		compiler.loger.internalAssert(!compiler._jumpTableStack.empty, `Jump table stack is empty!`);
+		JumpTableItem[] jumpTable = compiler._jumpTableStack.back;
+		compiler._jumpTableStack.popBack();
+		foreach( ref JumpTableItem item; jumpTable )
+		{
+			final switch( item.jumpKind )
+			{
+				case JumpKind.Break: {
+					compiler.setInstrArg(item.instrIndex, loopStartInstrIndex);
+					break;
+				}
+				case JumpKind.Continue: {
+					compiler.setInstrArg(item.instrIndex, loopEndInstrIndex);
+					break;
+				}
+			}
+		}
 	}
 }
 
@@ -328,6 +352,9 @@ class RepeatCompiler : IDirectiveCompiler
 public:
 	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
+		import std.range: popBack, empty, back;
+		alias JumpTableItem = ByteCodeCompiler.JumpTableItem;
+
 		auto stmtRange = statement[];
 
 		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("Loop variable name expected");
@@ -342,6 +369,9 @@ public:
 			compiler.loger.error("Expected 'in' keyword");
 
 		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected loop aggregate expression");
+
+		// Add nem jumps list item into jump table stack
+		compiler._jumpTableStack ~= JumpTableItem[].init;
 
 		// Compile code to calculate aggregate value
 		aggregateExpr.accept(compiler);
@@ -383,6 +413,24 @@ public:
 		compiler.setInstrArg(loopStartInstrIndex, loopEndInstrIndex);
 
 		// Data range is dropped by RunLoop already
+
+		compiler.loger.internalAssert(!compiler._jumpTableStack.empty, `Jump table stack is empty!`);
+		JumpTableItem[] jumpTable = compiler._jumpTableStack.back;
+		compiler._jumpTableStack.popBack();
+		foreach( ref JumpTableItem item; jumpTable )
+		{
+			final switch( item.jumpKind )
+			{
+				case JumpKind.Break: {
+					compiler.setInstrArg(item.instrIndex, loopStartInstrIndex);
+					break;
+				}
+				case JumpKind.Continue: {
+					compiler.setInstrArg(item.instrIndex, loopEndInstrIndex);
+					break;
+				}
+			}
+		}
 	}
 }
 
@@ -657,9 +705,6 @@ class ReturnCompiler: IDirectiveCompiler
 	{
 		auto stmtRange = stmt[];
 
-		// Drop last stack value
-		//compiler.addInstr(OpCode.PopTop);
-
 		if( !stmtRange.empty )
 		{
 			// Evaluating return expression if it is there
@@ -677,5 +722,46 @@ class ReturnCompiler: IDirectiveCompiler
 		}
 
 		compiler.addInstr(OpCode.Return); // Add Return instruction that goes to the end of code object
+	}
+}
+
+class ContinueCompiler: IDirectiveCompiler
+{
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
+	{
+		import std.range: empty, back;
+		alias JumpTableItem = ByteCodeCompiler.JumpTableItem;
+
+		auto stmtRange = stmt[];
+
+		if( !stmtRange.empty ) {
+			compiler.loger.error(`Expected end of "return" directive. Maybe ';' is missing`);
+		}
+
+		compiler.loger.internalAssert(!compiler._jumpTableStack.empty, `Jump table stack is empty!`);
+		// Add instruction to jump at SOME position and put instruction index and kind in jump table
+		// This SOME position will be calculated and patched when generating loop bytecode
+		compiler._jumpTableStack.back ~= JumpTableItem(JumpKind.Continue, compiler.addInstr(OpCode.Jump));
+	}
+}
+
+
+class BreakCompiler: IDirectiveCompiler
+{
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
+	{
+		import std.range: empty, back;
+		alias JumpTableItem = ByteCodeCompiler.JumpTableItem;
+
+		auto stmtRange = stmt[];
+
+		if( !stmtRange.empty ) {
+			compiler.loger.error(`Expected end of "return" directive. Maybe ';' is missing`);
+		}
+
+		compiler.loger.internalAssert(!compiler._jumpTableStack.empty, `Jump table stack is empty!`);
+		// Add instruction to jump at SOME position and put instruction index and kind in jump table
+		// This SOME position will be calculated and patched when generating loop bytecode
+		compiler._jumpTableStack.back ~= JumpTableItem(JumpKind.Break, compiler.addInstr(OpCode.Jump));
 	}
 }

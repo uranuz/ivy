@@ -63,6 +63,11 @@ T takeFrontAs(T)( IAttributeRange range, string errorMsg = null, string file = _
 
 alias TDataNode = DataNode!string;
 
+enum JumpKind {
+	Break = 1,
+	Continue = 0
+}
+
 class ByteCodeCompiler: AbstractNodeVisitor
 {
 	alias LogerMethod = void delegate(LogInfo);
@@ -93,6 +98,13 @@ private:
 
 	LogerMethod _logerMethod;
 
+	import std.typecons: Tuple;
+
+	alias JumpTableItem = Tuple!(JumpKind, "jumpKind", size_t, "instrIndex");
+	// Stack of jump tables used to set.
+	// Stack item contains kind of jump and source instruction index from where to jump
+	public JumpTableItem[][] _jumpTableStack;
+
 
 public:
 	this(CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName, LogerMethod logerMethod = null)
@@ -117,6 +129,8 @@ public:
 		_dirCompilers["insert"] = new InsertCompiler();
 		_dirCompilers["slice"] = new SliceCompiler();
 		_dirCompilers["return"] = new ReturnCompiler();
+		_dirCompilers["continue"] = new ContinueCompiler();
+		_dirCompilers["break"] = new BreakCompiler();
 
 		_mainModuleName = mainModuleName;
 		enterModuleScope(mainModuleName);

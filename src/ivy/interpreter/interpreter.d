@@ -1030,7 +1030,7 @@ public:
 						codeRange = codeObject._instrs[];
 						_pk = 0;
 
-						continue execution_loop;
+						continue execution_loop; // Skip _pk increment
 					}
 					else
 					{
@@ -1146,7 +1146,7 @@ public:
 					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 
 					_pk = instr.arg;
-					continue execution_loop;
+					continue execution_loop; // Skip _pk increment
 				}
 
 				case OpCode.JumpIfTrue, OpCode.JumpIfFalse, OpCode.JumpIfTrueOrPop, OpCode.JumpIfFalseOrPop:
@@ -1169,7 +1169,7 @@ public:
 					if( jumpCond )
 					{
 						_pk = instr.arg;
-						continue execution_loop;
+						continue execution_loop; // Skip _pk increment
 					}
 					break;
 				}
@@ -1178,7 +1178,9 @@ public:
 				{
 					// Set instruction index at the end of code object in order to finish 
 					_pk = codeRange.length;
-					continue execution_loop;
+					// Erase all from the current stack
+					_stack = [_stack.back];
+					continue execution_loop; // Skip _pk increment
 				}
 
 				case OpCode.PopTop:
@@ -1371,7 +1373,7 @@ public:
 						prevFrame._stack ~= TDataNode(_pk+1); // Put next instruction index on the stack to return at
 						codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
 						_pk = 0;
-						continue execution_loop;
+						continue execution_loop;  // Skip _pk increment
 					}
 					else
 					{
