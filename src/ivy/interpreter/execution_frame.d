@@ -39,12 +39,6 @@ class ExecutionFrame
 	TDataNode _dataDict;
 	bool _isNoscope = false;
 
-	// Stack used to store temporary data during execution.
-	// Results of execution of instructions are placed there too...
-	// Stack is splitted into blocks. Blocks are currently used to combine stack data of loops `for`, `repeat`
-	// This helps to implement `continue`, `break` operations
-	TDataNode[][] _stackBlocks;
-
 	ExecutionFrame _moduleFrame;
 
 	// Loger method for used to send error and debug messages
@@ -58,27 +52,6 @@ public:
 		_dataDict = dataDict;
 		_logerMethod = logerMethod;
 		_isNoscope = isNoscope;
-		addStackBlock(); // Add one data stack block on frame creation - it will be removed by GC at the end
-	}
-
-	/++ Add new stack block. Should be called at calling new directive or entering into loop body +/
-	void addStackBlock() {
-		_stackBlocks ~= TDataNode[].init;
-	}
-
-	/++ Removes last data stack block from frame. Should be used in pair with addStackBlock +/
-	void removeStackBlock()
-	{
-		import std.range: empty, back, popBack;
-		loger.internalAssert(!_stackBlocks.empty, `Data stack block list of execution stack is empty, so cannot remove!`);
-		_stackBlocks.popBack();
-	}
-
-	ref TDataNode[] _stack() @property
-	{
-		import std.range: empty, back;
-		loger.internalAssert(!_stackBlocks.empty, `Data stack block list of execution stack is empty, so cannot get from it!`);
-		return _stackBlocks.back;
 	}
 
 	version(IvyInterpreterDebug)
@@ -137,14 +110,6 @@ public:
 		if( varName.empty )
 			loger.error( "Variable name cannot be empty" );
 
-		if( _dataDict.type != DataNodeType.AssocArray )
-		{
-			static if( mode == FrameSearchMode.tryGet ) {
-				return FrameSearchResult(false);
-			} else {
-				loger.error("Cannot find variable: " ~ varName ~ " in execution frame, because callable doesn't have it's on scope!");
-			}
-		}
 		TDataNode parent;
 		TDataNode node = _dataDict;
 

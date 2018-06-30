@@ -45,7 +45,7 @@ mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
 	string file;
 	int line;
 
-	string genericWrite(T...)(LogInfoType logInfoType, T data)
+	string genericWrite(T...)(LogInfoType logInfoType, lazy T data)
 	{
 		import std.format: formattedWrite;
 		import std.array: appender;
@@ -58,29 +58,29 @@ mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
 	}
 
 	// Write regular log message
-	void write(T...)(T data) {
+	void write(T...)(lazy T data) {
 		static if(isDebugMode) {
 			genericWrite(LogInfoType.info, data);
 		}
 	}
 
 	// Write warning message
-	void warn(T...)(T data) {
+	void warn(T...)(lazy T data) {
 		genericWrite(LogInfoType.warn, data);
 	}
 
 	// Write error message and throw exception
-	void error(T...)(T data) {
+	void error(T...)(lazy T data) {
 		throw new ExceptionType(genericWrite(LogInfoType.error, data));
 	}
 
 	// Write internal error message and throw exception
-	void internalError(T...)(T data) {
+	void internalError(T...)(lazy T data) {
 		throw new ExceptionType(genericWrite(LogInfoType.internalError, data));
 	}
 
 	// Test assertion. If assertion is false then logs internal error and throws
-	void internalAssert(T...)(T data) {
+	void internalAssert(T...)(lazy T data) {
 		assert( data[0], genericWrite(LogInfoType.internalError, data) );
 	}
 }

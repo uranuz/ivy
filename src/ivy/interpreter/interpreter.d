@@ -32,7 +32,88 @@ public:
 	}
 }
 
+struct ExecStack
+{
+	TDataNode[] _stack;
+	size_t[] _stackBlocks;
 
+	void addStackBlock() {
+		_stackBlocks ~= _stack.length;
+	}
+
+	void removeStackBlock()
+	{
+		import std.range: popBack, empty;
+		assert(!_stackBlocks.empty, `Cannot remove stack block!`);
+		_stackBlocks.popBack;
+	}
+
+	// Test if current stack block is empty
+	bool empty() @property
+	{
+		import std.range: back, empty;
+		if( _stackBlocks.empty || _stack.empty )
+			return true;
+		return _stack.length <= _stackBlocks.back;
+	}
+
+	// Get current item from the stack
+	ref TDataNode back() @property
+	{
+		import std.range: back;
+		assert(!this.empty, `Cannot get exec stack "back" property, because it is empty!!!`);
+		return _stack.back;
+	}
+
+	// Drop current item from the stack
+	void popBack()
+	{
+		import std.range: popBack;
+		assert(!this.empty, `Cannot execute "popBack" for exec stack, because it is empty!!!`);
+		_stack.popBack;
+	}
+
+	void popBackN(size_t count)
+	{
+		import std.range: popBackN;
+		assert(count <= this.length, `Requested to remove more items than exists in stack block`);
+		_stack.popBackN(count);
+	}
+
+	void opOpAssign(string op : "~", T)(auto ref T arg) {
+		_stack ~= arg;
+	}
+
+	import std.traits: isIntegral;
+
+	void opIndexAssign(T, Int)(auto ref T arg, Int index)
+		if( isIntegral!Int )
+	{
+		import std.range: back;
+		assert(!this.empty, `Cannot assign item of empty exec stack!!!`);
+		_stack[index + _stackBlocks.back] = arg;
+	}
+
+	ref TDataNode opIndex(Int)(Int index)
+		if( isIntegral!Int )
+	{
+		import std.range: back;
+		assert(!this.empty, `Cannot get item by index for empty exec stack!!!`);
+		return _stack[index + _stackBlocks.back];
+	}
+
+	size_t length() @property
+	{
+		import std.range: empty, back;
+		if( _stackBlocks.empty )
+			return 0;
+		return _stack.length - _stackBlocks.back;
+	}
+
+	size_t opDollar() {
+		return this.length;
+	}
+}
 
 import ivy.bytecode;
 
@@ -54,6 +135,8 @@ public:
 
 	// Storage for bytecode code and initial constant data for modules
 	ModuleObject[string] _moduleObjects;
+
+	ExecStack _stack;
 
 	// Loger method used to send error and debug messages
 	LogerMethod _logerMethod;
@@ -83,6 +166,7 @@ public:
 		loger.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
+		_stack.addStackBlock();
 		_moduleFrames[mainModuleName] = _frameStack.back; // We need to add entry point module frame to storage manually
 	}
 
@@ -148,7 +232,7 @@ public:
 				{
 					// Give additional debug data if error occured
 					string execFrameList = interp._frameStack.map!( (frame) => frame._callableObj._name ).join("\n");
-					string dataStack = interp._stack.map!( (it) => it.toDebugString() ).join("\n");
+					string dataStack = interp._stack._stack.map!( (it) => it.toDebugString() ).join("\n");
 					msg ~= "Exec stack:\n" ~ execFrameList ~ "\n\nData stack:\n" ~ dataStack;
 				}
 			}
@@ -233,25 +317,12 @@ public:
 		import std.range: empty, back, popBack;
 		loger.internalAssert(!_frameStack.empty, `Execution frame stack is empty!`);
 		loger.write(`Exit execution frame for callable: `, _frameStack.back._callableObj._name, ` with dataDict: `, _frameStack.back._dataDict);
+		_stack.removeStackBlock();
 		_frameStack.popBack();
 	}
 
 	bool canFindValue(string varName) {
 		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
-	}
-
-	/++ Add data stack block into the current execution frame +/
-	void add_stackBlock() {
-		currentFrame.addStackBlock();
-	}
-
-	/++ Remove data stack block from current execution frame +/
-	void remove_stackBlock() {
-		currentFrame.removeStackBlock();
-	}
-
-	ref TDataNode[] _stack() @property {
-		return currentFrame._stack;
 	}
 
 	FrameSearchResult findValue(FrameSearchMode mode)(string varName)
@@ -1008,23 +1079,21 @@ public:
 						CodeObject codeObject = modObject.mainCodeObject;
 						loger.internalAssert(codeObject, `Cannot execute ImportModule instruction, because main code object for module "`, moduleName, `" is null!` );
 
-						// Save link to current frame
-						ExecutionFrame prevFrame = currentFrame;
-
 						CallableObject callableObj = new CallableObject;
 						callableObj._name = moduleName;
 						callableObj._kind = CallableKind.Module;
 						callableObj._codeObj = codeObject;
 
-						TDataNode dataDict;
-						dataDict["__scopeName__"] = moduleName;
+						TDataNode dataDict = ["__scopeName__": moduleName];
 						newFrame(callableObj, null, dataDict, false); // Create entry point module frame
 						_moduleFrames[moduleName] = _frameStack.back; // We need to store module frame into storage
 
-						// Put module root frame into previous execution frame (it will be stored with StoreName)
-						prevFrame._stack ~= TDataNode(_frameStack.back);
-						// Decided to put return address into parent frame instead of current
-						prevFrame._stack ~= TDataNode(_pk+1);
+						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreName)
+						_stack ~= TDataNode(_frameStack.back);
+						// Decided to put return address into parent frame`s stack block instead of current
+						_stack ~= TDataNode(_pk+1);
+
+						_stack.addStackBlock(); // Add new stack block for execution frame
 
 						// Preparing to run code object in newly created frame
 						codeRange = codeObject._instrs[];
@@ -1178,8 +1247,10 @@ public:
 				{
 					// Set instruction index at the end of code object in order to finish 
 					_pk = codeRange.length;
+					TDataNode result = _stack.back;
 					// Erase all from the current stack
-					_stack = [_stack.back];
+					_stack.popBackN(_stack.length);
+					_stack ~= result; // Put result on the stack
 					continue execution_loop; // Skip _pk increment
 				}
 
@@ -1274,9 +1345,6 @@ public:
 					ExecutionFrame moduleFrame = _moduleFrames.get(moduleName, null);
 					loger.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callableObj._name, ` does not exist!` );
 
-					// Save previous stack to get directive arguments from
-					ExecutionFrame prevFrame = currentFrame;
-
 					loger.write("RunCallable creating execution frame...");
 					TDataNode dataDict;
 					dataDict["__scopeName__"] = callableObj._name; // Allocating scope
@@ -1288,16 +1356,16 @@ public:
 
 						for( size_t i = 0; i < (stackArgCount - 1); )
 						{
-							loger.internalAssert(!prevFrame._stack.empty, `Expected integer as arguments block header, but got empty exec stack!`);
-							loger.internalAssert(prevFrame._stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!`);
-							size_t blockArgCount = prevFrame._stack.back.integer >> _stackBlockHeaderSizeOffset;
+							loger.internalAssert(!_stack.empty, `Expected integer as arguments block header, but got empty exec stack!`);
+							loger.internalAssert(_stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!`);
+							size_t blockArgCount = _stack.back.integer >> _stackBlockHeaderSizeOffset;
 							loger.write("blockArgCount: ", blockArgCount);
-							DirAttrKind blockType = cast(DirAttrKind)( prevFrame._stack.back.integer & _stackBlockHeaderTypeMask );
+							DirAttrKind blockType = cast(DirAttrKind)( _stack.back.integer & _stackBlockHeaderTypeMask );
 							// Bit between block size part and block type must always be zero
-							loger.internalAssert( (prevFrame._stack.back.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
+							loger.internalAssert( (_stack.back.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
 							loger.write("blockType: ", blockType);
 
-							prevFrame._stack.popBack();
+							_stack.popBack();
 							++i; // Block header was eaten, so increase counter
 
 							switch( blockType )
@@ -1307,20 +1375,20 @@ public:
 									size_t j = 0;
 									while( j < 2 * blockArgCount )
 									{
-										loger.internalAssert(!prevFrame._stack.empty, "Execution stack is empty!");
-										TDataNode attrValue = prevFrame._stack.back;
-										prevFrame._stack.popBack(); ++j; // Parallel bookkeeping ;)
+										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
+										TDataNode attrValue = _stack.back;
+										_stack.popBack(); ++j; // Parallel bookkeeping ;)
 
-										loger.internalAssert(!prevFrame._stack.empty, "Execution stack is empty!");
+										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
 										loger.write(`RunCallable debug, _stack is: `, _stack);
-										loger.internalAssert(prevFrame._stack.back.type == DataNodeType.String, "Named attribute name must be string!");
-										string attrName = prevFrame._stack.back.str;
-										prevFrame._stack.popBack(); ++j;
+										loger.internalAssert(_stack.back.type == DataNodeType.String, "Named attribute name must be string!");
+										string attrName = _stack.back.str;
+										_stack.popBack(); ++j;
 
 										setLocalValue( attrName, attrValue );
 									}
 									i += j; // Increase overall processed stack arguments count (2 items per iteration)
-									loger.write("_stack after parsing named arguments: ", prevFrame._stack);
+									loger.write("_stack after parsing named arguments: ", _stack);
 									break;
 								}
 								case DirAttrKind.ExprAttr:
@@ -1344,15 +1412,15 @@ public:
 
 									for( size_t j = 0; j < blockArgCount; ++j, ++i /* Inc overall processed arg count*/ )
 									{
-										loger.internalAssert(!prevFrame._stack.empty, "Execution stack is empty!");
-										TDataNode attrValue = prevFrame._stack.back;
-										prevFrame._stack.popBack();
+										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
+										TDataNode attrValue = _stack.back;
+										_stack.popBack();
 
 										loger.internalAssert(j < currBlock.exprAttrs.length, `Unexpected number of attibutes in positional arguments block`);
 
 										setLocalValue( currBlock.exprAttrs[blockArgCount -j -1].name, attrValue );
 									}
-									loger.write("_stack after parsing positional arguments: ", prevFrame._stack);
+									loger.write("_stack after parsing positional arguments: ", _stack);
 									break;
 								}
 								default:
@@ -1362,15 +1430,16 @@ public:
 							blockCounter += 1;
 						}
 					}
-					loger.write("_stack after parsing all arguments: ", prevFrame._stack);
+					loger.write("_stack after parsing all arguments: ", _stack);
 
-					loger.internalAssert(!prevFrame._stack.empty, "Expected callable object to call, but found end of execution stack!");
-					loger.internalAssert(prevFrame._stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation`);
-					prevFrame._stack.popBack(); // Drop callable object from stack
+					loger.internalAssert(!_stack.empty, "Expected callable object to call, but found end of execution stack!");
+					loger.internalAssert(_stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation`);
+					_stack.popBack(); // Drop callable object from stack
 
 					if( callableObj._codeObj )
 					{
-						prevFrame._stack ~= TDataNode(_pk+1); // Put next instruction index on the stack to return at
+						_stack ~= TDataNode(_pk+1); // Put next instruction index on the stack to return at
+						_stack.addStackBlock();
 						codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
 						_pk = 0;
 						continue execution_loop;  // Skip _pk increment
@@ -1378,6 +1447,7 @@ public:
 					else
 					{
 						loger.internalAssert(callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!`);
+						_stack.addStackBlock();
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
 						// If frame stack contains last frame - it means that we nave done with programme
 						// Else we expect to have result of directive on the stack
@@ -1454,7 +1524,6 @@ public:
 
 		} // execution_loop:
 
-		loger.internalAssert(false, "Failed to get result of executionW");
-		assert(false);
+		assert(false, `Failed to get result of execution`);
 	} // void execLoop()
 }

@@ -70,7 +70,10 @@ enum JumpKind {
 
 class ByteCodeCompiler: AbstractNodeVisitor
 {
+public:
+	import std.typecons: Tuple;
 	alias LogerMethod = void delegate(LogInfo);
+	alias JumpTableItem = Tuple!(JumpKind, "jumpKind", size_t, "instrIndex");
 private:
 
 	// Dictionary of native compilers for directives
@@ -98,9 +101,6 @@ private:
 
 	LogerMethod _logerMethod;
 
-	import std.typecons: Tuple;
-
-	alias JumpTableItem = Tuple!(JumpKind, "jumpKind", size_t, "instrIndex");
 	// Stack of jump tables used to set.
 	// Stack item contains kind of jump and source instruction index from where to jump
 	public JumpTableItem[][] _jumpTableStack;
