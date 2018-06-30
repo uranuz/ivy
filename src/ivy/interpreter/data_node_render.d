@@ -23,8 +23,21 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref O
 	}
 	else
 	{
-		foreach( char symb; str )
+		size_t chunkStart = 0;
+
+		foreach( size_t i, char symb; str )
 		{
+			static if( renderType == DataRenderType.HTML ) {
+				static immutable escapedSymb = `&\"<>`;
+			} else {
+				static immutable escapedSymb = "\"\\/\b\f\n\r\t";
+			}
+
+			if( escapedSymb.canFind(symb) ) {
+				outRange.put(str[chunkStart..i]);
+				chunkStart = i;
+			}
+			
 			static if( renderType == DataRenderType.HTML )
 			{
 				switch( symb )
@@ -34,7 +47,7 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref O
 					case '"': outRange.put("&quot;"); break;
 					case '<': outRange.put("&lt;"); break;
 					case '>': outRange.put("&gt;"); break;
-					default:	outRange.put(symb);
+					default:	break;
 				}
 			}
 			else
@@ -49,10 +62,11 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref O
 					case '\n': outRange.put("\\n"); break;
 					case '\r': outRange.put("\\r"); break;
 					case '\t': outRange.put("\\t"); break;
-					default:	outRange.put(symb);
+					default:	break;
 				}
 			}
 		}
+		outRange.put(str[chunkStart..$]); // Put the rest data into range
 	}
 	static if( isQuoted ) {
 		outRange.put("\"");
