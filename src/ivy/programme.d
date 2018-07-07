@@ -76,6 +76,76 @@ public:
 	void dirInterpreters(INativeDirectiveInterpreter[string] dirInterps) @property {
 		_dirInterpreters = dirInterps;
 	}
+
+	import std.json: JSONValue;
+	JSONValue toStdJSON()
+	{
+		JSONValue jProg = ["mainModuleName": _mainModuleName];
+		JSONValue[string] moduleObjects;
+		foreach( string modName, ModuleObject modObj; _moduleObjects )
+		{
+			JSONValue[] jConsts;
+			foreach( ref TDataNode con; modObj._consts ) {
+				jConsts ~= .toStdJSON(con);
+			}
+			moduleObjects[modName] = [
+				"entryPointIndex": JSONValue(modObj._entryPointIndex),
+				"consts": JSONValue(jConsts),
+				"fileName": JSONValue(modObj._fileName)
+			];
+		}
+		jProg[`moduleObjects`] = moduleObjects;
+		return jProg;
+	}
+}
+
+import std.json: JSONValue;
+JSONValue toStdJSON(TDataNode con)
+{
+	final switch( con.type ) with(DataNodeType)
+	{
+		case Undef: return JSONValue("undef");
+		case Null: return JSONValue();
+		case Boolean: return JSONValue(con.boolean);
+		case Integer: return JSONValue(con.integer);
+		case Floating: return JSONValue(con.floating);
+		case String: return JSONValue(con.str);
+		case DateTime:
+			return JSONValue([
+				"_t": JSONValue(con.type),
+				"_v": JSONValue(con.dateTime.toISOExtString())
+			]);
+		case Array: {
+			JSONValue[] arr;
+			foreach( TDataNode node; con.array ) {
+				arr ~= toStdJSON(node);
+			}
+			return JSONValue(arr);
+		}
+		case AssocArray: {
+			JSONValue[string] arr;
+			foreach( string key, TDataNode node; con.assocArray ) {
+				arr[key] ~= toStdJSON(node);
+			}
+			return JSONValue(arr);
+		}
+		case CodeObject: {
+			JSONValue jCode = [
+				"_t": JSONValue(con.type),
+				"moduleObj": JSONValue(con.codeObject._moduleObj._name)
+			];
+			JSONValue[] jInstrs;
+			foreach( instr; con.codeObject._instrs ) {
+				jInstrs ~= [ JSONValue(instr.opcode), JSONValue(instr.arg) ];
+			}
+			jCode["instrs"] = jInstrs;
+			return jCode;
+		}
+		case Callable, ClassNode, ExecutionFrame, DataNodeRange: {
+			return JSONValue(["_t": con.type]);
+		}
+	}
+	assert(false);
 }
 
 ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)

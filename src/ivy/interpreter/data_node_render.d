@@ -107,7 +107,7 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			} else static if( renderType == DataRenderType.TextDebug ) {
 				outRange.put("undef");
 			} else {
-				outRange.put("null");
+				outRange.put("\"undef\""); // Serialize undef as string in JSON
 			}
 			break;
 		case Null:

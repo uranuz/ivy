@@ -22,3 +22,5 @@
 
 # Code coverage
 *.lst
+
+/node_modules/**/*

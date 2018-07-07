@@ -54,7 +54,7 @@ struct ExecStack
 		import std.range: back, empty;
 		if( _stackBlocks.empty || _stack.empty )
 			return true;
-		return _stack.length <= _stackBlocks.back;
+		return _stack.length > _stackBlocks.back;
 	}
 
 	// Get current item from the stack
