@@ -90,9 +90,12 @@ var Consts = {
 		'MakeAssocArray',
 
 		'MarkForEscape'
+	],
+	FrameSearchModeItems: [
+		'get', 'tryGet', 'set', 'setWithParents'
 	]
 },
-EnumConsts = ['DataNodeType', 'OpCode'];
+EnumConsts = ['DataNodeType', 'OpCode', 'FrameSearchMode'];
 for( var i = 0; i < EnumConsts.length; ++i ) {
 	var
 		constName = EnumConsts[i],

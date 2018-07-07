@@ -189,60 +189,6 @@ return __mixinProto(Interpreter, {
 			}
 		}
 		
-	},
-	load = function(moduleName) {
-		var self = this;
-		$.ajax("/dyn/server/template?moduleName=" + moduleName, {
-			success: function(jsonText) {
-				var json = JSON.parse(jsonText);
-				self.parseModules(json);
-			},
-			error: function(error) {
-				console.error(error);
-			}
-		});
-	},
-	parseModules = function(json) {
-		var moduleObjects = json.moduleObjects;
-		this._mainModuleObject = json.mainModuleObject;
-
-		for(var modName in moduleObjects) {
-			if( !moduleObjects.hasOwnProperty(modName) ) continue;
-			var
-				jMod = moduleObjects[modName],
-				consts = jMod.consts;
-
-			this._moduleObjects[modName] = new ModuleObject(modName, consts);
-			for( var i = 0; i < consts.length; ++i ) {
-				var con = consts[i];
-				if( con === 'undef' ) {
-					consts[i] = undefined;
-				} else if(
-					con === null
-					|| con === true
-					|| con === false
-					|| typeof(con) === 'number'
-					|| typeof(con) === 'string'
-					|| con instanceof Array
-				) {
-					continue;
-				} else if( con instanceof Object ) {
-					switch( con._t ) {
-						case DataNodeType.CodeObject: {
-							consts[i] = new CodeObject(con.instrs, this._moduleObjects[modName]);
-							break;
-						}
-						case DataNodeType.DateTime: {
-							consts[i] = new Date(con._v);
-							break;
-						}
-						default:
-							continue;
-					}
-				}
-			}
-		}
-		return this._moduleObjects;
 	}
 });
 }); // define
