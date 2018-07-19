@@ -15,7 +15,7 @@ define('ivy/ModuleObject', [], function() {
 			if( index >= this._consts.length ) {
 				throw Error('There is no module const with specified index!');
 			}
-			return this._consts[];
+			return this._consts[index];
 		}
 	});
 });

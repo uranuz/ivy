@@ -1,30 +1,30 @@
-define('ivy/CodeLoader', [
+define('ivy/RemoteCodeLoader', [
 	'ivy/ModuleObject',
 	'ivy/CodeObject',
 ], function(
 	ModuleObject,
 	CodeObject
 ) {
-function CodeLoader(endpoint) {
+function RemoteCodeLoader(endpoint) {
 	if( !endpoint ) {
 		throw Error('Endpoint URL required to load compiled templates!');
 	}
 	this._endpoint = endpoint;
 };
-return __mixinProto(CodeLoader, {
-	load = function(moduleName) {
+return __mixinProto(RemoteCodeLoader, {
+	load: function(moduleName, callback) {
 		var self = this;
 		$.ajax(this._endpoint + '?moduleName=' + moduleName, {
 			success: function(jsonText) {
 				var json = JSON.parse(jsonText);
-				self.parseModules(json);
+				callback(self.parseModules(json), moduleName);
 			},
 			error: function(error) {
 				console.error(error);
 			}
 		});
 	},
-	parseModules = function(json) {
+	parseModules: function(json) {
 		var moduleObjects = json.moduleObjects;
 		this._mainModuleObject = json.mainModuleObject;
 
@@ -36,13 +36,12 @@ return __mixinProto(CodeLoader, {
 
 			this._moduleObjects[modName] = new ModuleObject(modName, consts);
 			for( var i = 0; i < consts.length; ++i ) {
-				var con = consts[i];
-				
+				consts[i] = this._deserializeValue(consts[i]);
 			}
 		}
 		return this._moduleObjects;
 	},
-	deserializeValue: function() {
+	_deserializeValue: function(con) {
 		if( con === 'undef' ) {
 			return undefined;
 		} else if(
@@ -64,7 +63,7 @@ return __mixinProto(CodeLoader, {
 					return con;
 			}
 		} else {
-			raise Error('Unexpected value type!');
+			throw new Error('Unexpected value type!');
 		}
 	}
 });

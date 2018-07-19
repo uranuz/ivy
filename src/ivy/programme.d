@@ -136,7 +136,7 @@ JSONValue toStdJSON(TDataNode con)
 			];
 			JSONValue[] jInstrs;
 			foreach( instr; con.codeObject._instrs ) {
-				jInstrs ~= [ JSONValue(instr.opcode), JSONValue(instr.arg) ];
+				jInstrs ~= JSONValue([ JSONValue(instr.opcode), JSONValue(instr.arg) ]);
 			}
 			jCode["instrs"] = jInstrs;
 			return jCode;

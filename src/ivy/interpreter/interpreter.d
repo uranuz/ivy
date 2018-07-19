@@ -45,6 +45,7 @@ struct ExecStack
 	{
 		import std.range: popBack, empty;
 		assert(!_stackBlocks.empty, `Cannot remove stack block!`);
+		this.popBackN(this.length); // Remove odd items from stack
 		_stackBlocks.popBack;
 	}
 
@@ -54,7 +55,7 @@ struct ExecStack
 		import std.range: back, empty;
 		if( _stackBlocks.empty || _stack.empty )
 			return true;
-		return _stack.length > _stackBlocks.back;
+		return _stack.length <= _stackBlocks.back;
 	}
 
 	// Get current item from the stack

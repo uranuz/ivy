@@ -2,13 +2,18 @@ define('ivy/utils', [
 	'ivy/Consts',
 	'ivy/CodeObject',
 	'ivy/ExecutionFrame',
-	'ivy/ExecutionFrame',
-], function(Consts) {
+	'ivy/CallableObject',
+], function(
+	Consts,
+	CodeObject,
+	ExecutionFrame,
+	CallableObject
+) {
 	var DataNodeType = DataNodeType;
 return {
 	back: function(arr) {
 		if( arr.length === 0 ) {
-			throw Error('Cannot get back item, becaise array is empty!');
+			throw new Error('Cannot get back item, becaise array is empty!');
 		}
 		return arr[arr.length-1];
 	},
@@ -44,11 +49,45 @@ return {
 		} else if( con instanceof Object ) {
 			return DataNodeType.AssocArray;
 		} else {
-			raise Error('Unrecognized node type!');
+			throw new Error('Unrecognized node type!');
 		}
 	},
-	deeperCopy: function() {
-		
+	deeperCopy: function(val) {
+		var vType = this.getDataNodeType(val);
+		switch( vType ) {
+			case DataNodeType.Undef:
+			case DataNodeType.Boolean:
+			case DataNodeType.Integer:
+			case DataNodeType.Floating:
+			case DataNodeType.String:
+				// All of these are value types so just return plain copy
+				return val;
+			case DataNodeType.DateTime:
+				// Copy date object
+				return new Date(val.getTime());
+			case DataNodeType.AssocArray: {
+				var newObj = {};
+				for( var key in val ) {
+					if( val.hasOwnProperty(key) ) {
+						newObj[key] = this.deeperCopy(val[key]);
+					}
+				}
+				return newObj;
+			}
+			case DataNodeType.Array: {
+				var newArr = [];
+				newArr.length = val.length; // Preallocate
+				for( var i = 0; i < val.length; ++i ) {
+					newArr[i] = val[i];
+				}
+				return newArr;
+			}
+			case DataNodeType.CodeObject:
+				// CodeObject's are constants so don't do copy
+				return val;
+			default:
+				throw new Error('Getting of deeper copy for this type is not implemented for now');
+		}
 	}
 };
 });
