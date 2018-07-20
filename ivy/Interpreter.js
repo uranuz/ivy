@@ -4,14 +4,16 @@ define('ivy/Interpreter', [
 	'ivy/ModuleObject',
 	'ivy/CodeObject',
 	'ivy/ExecutionFrame',
-	'ivy/utils'
+	'ivy/utils',
+	'ivy/errors'
 ], function(
 	ExecStack,
 	Consts,
 	ModuleObject,
 	CodeObject,
 	ExecutionFrame,
-	iu
+	iu,
+	errors
 ) {
 	var DataNodeType = Consts.DataNodeType;
 function Interpreter() {
@@ -20,13 +22,15 @@ function Interpreter() {
 	this._moduleObjects = {};
 	this._mainModuleObject = null;
 	this._pk = 0;
+	this._codeRange = [];
 }
 
 return __mixinProto(Interpreter, {
 	runLoop: function() {
-		var codeRange = iu.back(_frameStack)._callableObj._codeObj._instrs;
-		for( this._pk = 0; this._pk < codeRange.length; ) {
-			var instr = codeRange[this._pk];
+		this._codeRange = iu.back(_frameStack)._callableObj._codeObj._instrs;
+		for( this._pk = 0; this._pk < this._codeRange.length; ) {
+			var instr = this._codeRange[this._pk];
+
 			with(OpCode) switch(instr[0]) {
 				case Nop: break;
 
@@ -69,7 +73,7 @@ return __mixinProto(Interpreter, {
 						right = this._stack.pop(), left = this._stack.pop(),
 						rType = iu.getDataNodeType(right), lType = iu.getDataNodeType(left);
 					if( rType !== DataNodeType.Array && rType !== DataNodeType.String || lType !== rType ) {
-						throw new Error('Expected string or array arguments in Concat instruction!');
+						this.rtError('Expected String or Array operands')
 					}
 					if( rType === DataNodeType.String ) {
 						this._stack.push(left + right);
@@ -81,15 +85,31 @@ return __mixinProto(Interpreter, {
 				case Append: {
 					var right = this._stack.pop(), left = this._stack.back(), lType = iu.getDataNodeType(left);
 					if( lType !== DataNodeType.Array ) {
-						throw new Error('Argument for appending to must be array');
+						this.rtError('Expected Array target operand');
 					}
 					left.push(right);
 					break;
 				}
 				case Insert: {
+					var
+						posNode = this._stack.pop(), posType = iu.getDataNodeType(posNode),
+						valNode = this._stack.pop(),
+						arrNode = this._stack.pop(), arrType = iu.getDataNodeType(arrNode);
+					
+					if( [DataNodeType.Integer, DataNodeType.Null, DataNodeType.Undef].indexOf(posType) < 0 ) {
+						this.rtError('Expected Null, Undef (for append) or Integer as position operand');
+					}
+					if( arrType !== DataNodeType.Array ) {
+						this.rtError('Expected Array target operand')
+					}
+					if( posNode == null ) {
+						posNode = arrNode.length;
+					}
+					arrNode.splice(posNode, 0, valNode);
 					break;
 				}
 				case InsertMass: {
+					this.rtError('Not implemented operation');
 					break;
 				}
 
@@ -97,22 +117,19 @@ return __mixinProto(Interpreter, {
 				case UnaryMin: {
 					var arg = this._stack.pop();
 					if( typeof(arg) !== 'number' ) {
-						throw new Error('Cannot negate not a number!');
+						throw this.rtError('Expected number operand');
 					}
 					this._stack.push(-arg);
 					break;
 				}
 				case UnaryPlus: {
 					if( typeof(arg) !== 'number' ) {
-						throw new Error('Expected number in unary plus instruction!');
+						this.rtError('Expected number operand');
 					}
 					// Do nothing
 					break;
 				}
 				case UnaryNot: {
-					if( this._stack.empty() ) {
-						throw new Error('Cannot execute UnaryNot instruction. Operand expected, but exec stack is empty!');
-					}
 					this._stack.push( !this.evalAsBoolean(this._stack.pop()) );
 					break;
 				}
@@ -135,7 +152,7 @@ return __mixinProto(Interpreter, {
 						DataNodeType.DateTime
 						].indexOf(rType) < 0
 					) {
-						throw new Error('Cannot compare values!')
+						this.rtError('Cannot compare values!')
 					}
 					if( instr[0] === Equal ) {
 						return left === right;
@@ -149,7 +166,7 @@ return __mixinProto(Interpreter, {
 						rType = iu.getDataNodeType(right),
 						lType = iu.getDataNodeType(left);
 					if( rType !== lType ) {
-						throw new Error(`Left and right operands of comparision must have the same type`);
+						throw this.rtError(`Left and right operands of comparision must have the same type`);
 					}
 					if( [
 						DataNodeType.Integer,
@@ -157,7 +174,7 @@ return __mixinProto(Interpreter, {
 						DataNodeType.String
 						].indexOf(rType) < 0
 					) {
-						throw new Error(`Unsupported type of operand in comparision operation`)
+						throw this.rtError(`Unsupported type of operand in comparision operation`)
 					}
 					// Comparision itself
 					switch( instr[0] ) {
@@ -165,7 +182,7 @@ return __mixinProto(Interpreter, {
 						case GT: this._stack.push(left > right);
 						case LTEqual: this._stack.push(left <= right);
 						case GTEqual: this._stack.push(left >= right);
-						default: throw new Error('Unexpected bug!');
+						default: this.rtError('Unexpected bug!');
 					}
 					break;
 				}
@@ -208,24 +225,57 @@ return __mixinProto(Interpreter, {
 					break;
 				}
 				case FromImport: {
+					var symbolsNode = this._stack.pop(), symbolsType = iu.getDataNodeType(symbolsType);
+					if( symbolsType !== DataNodeType.Array ) {
+						this.rtError('Expected list of symbol names');
+					}
+					var frameNode = this._stack.pop(), frameType = iu.getDataNodeType(frameNode);
+					if( frameType !== DataNodeType.ExecutionFrame ) {
+						this.rtError('Expected ExecutionFrame');
+					}
+
+					for( var i = 0; i < symbolsNode; ++i ) {
+						if( typeof(symbolsNode[i]) !== 'string' ) {
+							this.rtError('Symbol name must be String');
+						}
+						this.setValue(symbolsNode[i], frameNode.getValue(symbolsNode[i]));
+					}
 					break;
 				}
 
 				// Flow control opcodes
-				case JumpIfTrue: {
+				case JumpIfTrue:
+				case JumpIfFalse:
+				case JumpIfFalseOrPop: // Used in "and"
+				case JumpIfTrueOrPop: // Used in "or"
+				{
+					if( instr[1] >= this._codeRange.length ) {
+						this.rtError('Cannot jump after the end of code object');
+					}
+					var jumpCond = evalAsBoolean(this._stack.back()); // This is actual condition to test
+					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].canFind(instr[0]) ) {
+						jumpCond = !jumpCond; // Invert condition if False family is used
+					}
+
+					if( [OpCode.JumpIfTrue, OpCode.JumpIfFalse].canFind(instr[0]) || !jumpCond ) {
+						// Drop condition from _stack on JumpIfTrue, JumpIfFalse anyway
+						// But for JumpIfTrueOrPop, JumpIfFalseOrPop drop it only if jumpCond is false
+						this._stack.pop();
+					}
+
+					if( jumpCond )
+					{
+						this._pk = instr[1];
+						continue; // Skip _pk increment
+					}
 					break;
 				}
-				case JumpIfFalse: {
-					break;
-				}
-				case JumpIfFalseOrPop: {
-					break;
-				} // Used in "and"
-				case JumpIfTrueOrPop: {
-					break;
-				} // Used in "or"
 				case Jump: {
-					break;
+					if( instr[1] >= this._codeRange.length ) {
+						this.rtError('Cannot jump after the end of code object');
+					}
+					this._pk = instr[1];
+					continue; // Skip _pk increment
 				}
 				case Return: {
 					break;
@@ -259,14 +309,11 @@ return __mixinProto(Interpreter, {
 						arrayLen = instr[1],
 						newArray = [];
 					if( iu.getDataNodeType(arrayLen) !== DataNodeType.Integer ) {
-						throw new Error('New array length must be integer!');
+						this.rtError('Expected Integer as new Array length');
 					}
 					newArray.length = arrayLen; // Preallocating is good ;)
 
 					for( var i = arrayLen; i > 0; --i ) {
-						if( this._stack.empty() ) {
-							throw new Error('Expected new array element, but got empty stack');
-						}
 						// We take array items from the tail, so we must consider it!
 						newArray[i-1] = this._stack.pop();
 					}
@@ -278,24 +325,16 @@ return __mixinProto(Interpreter, {
 						aaLen = instr[1],
 						newAA = {};
 					if( iu.getDataNodeType(aaLen) !== DataNodeType.Integer ) {
-						throw new Error('New array length must be integer!');
+						this.rtError('Expected Integer as new AssocArray length');
 					}
 
-					for( var i = 0; i < aaLen; ++i )
-					{
-						if( this._stack.empty() ) {
-							throw new Error('Expected assoc array value, but got empty stack');
-						}
-						var val = this._stack.pop();
-
-						if( this._stack.empty() ) {
-							throw new Error('Expected assoc array key, but got empty stack');
-						}
-						if( iu.getDataNodeType(this._stack.back()) !== DataNodeType.String ) {
-							throw new Error('Expected string as assoc array key');
+					for( var i = 0; i < aaLen; ++i ) {
+						var val = this._stack.pop(), key = this._stack.pop(), keyType = iu.getDataNodeType(key);
+						if( keyType !== DataNodeType.String ) {
+							this.rtError('Expected String as AssocArray key');
 						}
 
-						newAA[_stack.pop()] = val;
+						newAA[key] = val;
 					}
 					this._stack.push(newAA);
 					break;
@@ -304,38 +343,57 @@ return __mixinProto(Interpreter, {
 				case MarkForEscape: {
 					break;
 				}
-				default: throw Error(`Unexpected opcode!!!`);
+				default: this.rtError(`Unexpected opcode!!!`);
 			}
 		}
-		
+	},
+	rtError: function(msg) {
+		var instr = this._codeRange[this._pk];
+		throw new errors.InterpreterError({
+			msg: msg,
+			instrIndex: this._pk,
+			instrName: Consts.OpCodeItems[instr[0]]
+		});
 	},
 	_getNumberArgs: function() {
 		var
 			right = this._stack.pop(),
 			left = this._stack.pop();
 		if( typeof(right) !== 'number' || typeof(left) !== 'number' ) {
-			throw new Error('Expected number arguments in arithmetic operation!');
+			this.rtError('Expected number operands');
 		}
 		return [left, right];
 	},
+	getCurrentFrame: function() {
+		if( this._stack.empty() ) {
+			return null;
+		}
+		return this._frameStack.back();
+	},
+	getCodeObject: function() {
+		var frame = this.getCurrentFrame();
+		if( !frame ) {
+			return null;
+		}
+		var callable = frame._callableObj;
+		if( !callable ) {
+			return null;
+		}
+		return callable._codeObj;
+	},
+	getModuleObject: function() {
+		var codeObj = this.getCodeObject();
+		if( codeObj ) {
+			return codeObj._moduleObj;
+		}
+		return null;
+	},
 	getModuleConst: function(index) {
-		if( this._frameStack.length === 0 ) {
-			throw new Error('_frameStack is empty');
+		var moduleObj = this.getModuleObject();
+		if( !moduleObj ) {
+			this.rtError('Unable to get module constant');
 		}
-		if( this._frameStack.back() === null ) {
-			throw new Error('_frameStack.back is null');
-		}
-		if( this._frameStack.back()._callableObj === null ) {
-			throw new Error('_frameStack.back._callableObj is null');
-		}
-		if( this._frameStack.back()._callableObj._codeObj === null ) {
-			throw new Error('_frameStack.back._callableObj._codeObj is null');
-		}
-		if( this._frameStack.back()._callableObj._codeObj._moduleObj === null ) {
-			throw new Error('_frameStack.back._callableObj._codeObj._moduleObj is null');
-		}
-
-		return _frameStack.back()._callableObj._codeObj._moduleObj.getConst(index);
+		return moduleObj.getConst(index);
 	},
 	getModuleConstCopy: function(index) {
 		return iu.deeperCopy( this.getModuleConst(index) );
@@ -366,6 +424,9 @@ return __mixinProto(Interpreter, {
 			default:
 				throw new Error('Cannot evaluate value in logical context!');
 		}
+	},
+	setValue: function() {
+
 	}
 });
 }); // define
