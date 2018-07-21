@@ -1,4 +1,6 @@
-define('ivy/ProgrammeCache', [], function() {
+define('ivy/ProgrammeCache', [
+	'ivy/Programme'
+], function(Programme) {
 	function ProgrammeCache(codeLoader) {
 		if( !codeLoader ) {
 			throw new Error('Code loader instance needed!');
@@ -18,7 +20,8 @@ define('ivy/ProgrammeCache', [], function() {
 				throw new Error('Callback function is required!');
 			}
 			this._codeLoader.load(moduleName, function(moduleObjects) {
-				
+				var prog = new Programme(moduleObjects, moduleName);
+				callback(prog);
 			});
 		}
 	});

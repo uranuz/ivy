@@ -5,7 +5,8 @@ define('ivy/Interpreter', [
 	'ivy/CodeObject',
 	'ivy/ExecutionFrame',
 	'ivy/utils',
-	'ivy/errors'
+	'ivy/errors',
+	'ivy/CallableObject'
 ], function(
 	ExecStack,
 	Consts,
@@ -13,21 +14,45 @@ define('ivy/Interpreter', [
 	CodeObject,
 	ExecutionFrame,
 	iu,
-	errors
+	errors,
+	CallableObject
 ) {
-	var DataNodeType = Consts.DataNodeType;
-function Interpreter() {
+	var
+		DataNodeType = Consts.DataNodeType,
+		CallableKind = Consts.CallableKind;
+function Interpreter(moduleObjs, mainModuleName) {
 	this._frameStack = [];
 	this._stack = new ExecStack();
-	this._moduleObjects = {};
-	this._mainModuleObject = null;
+	this._moduleObjects = moduleObjs;
 	this._pk = 0;
 	this._codeRange = [];
+	
+	if( !this._moduleObjects.hasOwnProperty(mainModuleName) ) {
+		this.rtError('Unable to get main module object');
+	}
+	
+	var rootCallableObj = new CallableObject();
+	rootCallableObj._codeObj = this._moduleObjects[mainModuleName].mainCodeObject;
+	rootCallableObj._kind = CallableKind.Module;
+	rootCallableObj._name = "__main__";
+
+	var globalDataDict = {};
+	globalDataDict["__scopeName__"] = "__global__"; // Allocating dict
+	this._globalFrame = new ExecutionFrame(null, null, globalDataDict, false);
+	this._moduleFrames["__global__"] = _globalFrame; // We need to add entry point module frame to storage manually
+
+	this.newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
+	this._stack.addStackBlock();
+	this._moduleFrames[mainModuleName] = this._frameStack.back; // We need to add entry point module frame to storage manually
 }
 
 return __mixinProto(Interpreter, {
-	runLoop: function() {
-		this._codeRange = iu.back(_frameStack)._callableObj._codeObj._instrs;
+	execLoop: function() {
+		var codeObj = this.getCodeObject();
+		if( !codeObj ) {
+			this.rtError('Unable to get CodeObject to execute');
+		}
+		this._codeRange = codeObj._instrs;
 		for( this._pk = 0; this._pk < this._codeRange.length; ) {
 			var instr = this._codeRange[this._pk];
 
@@ -427,6 +452,13 @@ return __mixinProto(Interpreter, {
 	},
 	setValue: function() {
 
+	},
+	newFrame: function(callableObj, modFrame, dataDict, isNoscope) {
+		this._frameStack.push( new ExecutionFrame(callableObj, modFrame, dataDict, isNoscope) );
+	},
+	removeFrame: function() {
+		this._stack.removeStackBlock();
+		this._frameStack.pop();
 	}
 });
 }); // define

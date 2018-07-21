@@ -1,16 +1,21 @@
 define('ivy/RemoteCodeLoader', [
 	'ivy/ModuleObject',
 	'ivy/CodeObject',
+	'ivy/Consts'
 ], function(
 	ModuleObject,
-	CodeObject
+	CodeObject,
+	Consts
 ) {
 function RemoteCodeLoader(endpoint) {
 	if( !endpoint ) {
 		throw Error('Endpoint URL required to load compiled templates!');
 	}
 	this._endpoint = endpoint;
+	this._moduleObjects = {};
+	this._mainModuleName = null;
 };
+var DataNodeType = Consts.DataNodeType;
 return __mixinProto(RemoteCodeLoader, {
 	load: function(moduleName, callback) {
 		var self = this;
@@ -26,22 +31,23 @@ return __mixinProto(RemoteCodeLoader, {
 	},
 	parseModules: function(json) {
 		var moduleObjects = json.moduleObjects;
-		this._mainModuleObject = json.mainModuleObject;
+		this._mainModuleName = json.mainModuleName;
 
 		for(var modName in moduleObjects) {
 			if( !moduleObjects.hasOwnProperty(modName) ) continue;
 			var
 				jMod = moduleObjects[modName],
-				consts = jMod.consts;
+				consts = jMod.consts,
+				moduleObj = new ModuleObject(modName, consts, jMod.entryPointIndex);
 
-			this._moduleObjects[modName] = new ModuleObject(modName, consts);
+			this._moduleObjects[modName] = moduleObj;
 			for( var i = 0; i < consts.length; ++i ) {
-				consts[i] = this._deserializeValue(consts[i]);
+				consts[i] = this._deserializeValue(consts[i], moduleObj);
 			}
 		}
 		return this._moduleObjects;
 	},
-	_deserializeValue: function(con) {
+	_deserializeValue: function(con, moduleObj) {
 		if( con === 'undef' ) {
 			return undefined;
 		} else if(
@@ -56,7 +62,7 @@ return __mixinProto(RemoteCodeLoader, {
 		} else if( con instanceof Object ) {
 			switch( con._t ) {
 				case DataNodeType.CodeObject:
-					return new CodeObject(con.instrs, this._moduleObjects[modName]);
+					return new CodeObject(con.instrs, moduleObj);
 				case DataNodeType.DateTime:
 					return new Date(con._v);
 				default:

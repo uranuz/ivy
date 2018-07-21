@@ -93,6 +93,12 @@ var Consts = {
 	],
 	FrameSearchModeItems: [
 		'get', 'tryGet', 'set', 'setWithParents'
+	],
+	CallableKindItems: [
+		'ScopedDirective',
+		'NoscopeDirective',
+		'Module',
+		'Package'
 	]
 },
 EnumConsts = ['DataNodeType', 'OpCode', 'FrameSearchMode'];

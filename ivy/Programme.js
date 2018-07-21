@@ -4,11 +4,17 @@ define('ivy/Programme', [
 	function Programme(moduleObjs, mainModuleName, dirInterps) {
 		this._moduleObjs = moduleObjs;
 		this._mainModuleName = mainModuleName;
-		yhis._dirInterps = dirInterps || {};
+		this._dirInterps = dirInterps || {};
 	};
 	return __mixinProto(Programme, {
-		run: function() {
-			var interp = new Interpreter();
+		run: function(mainModuleScope) {
+			mainModuleScope = mainModuleScope || {};
+			var interp = new Interpreter(
+				this._moduleObjs,
+				this._mainModuleName,
+				mainModuleScope
+			);
+			return interp.execLoop();
 		}
 	});
 });
