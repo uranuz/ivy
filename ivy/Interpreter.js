@@ -1,26 +1,33 @@
 define('ivy/Interpreter', [
-	'ivy/ExecStack',
 	'ivy/Consts',
+	'ivy/ExecStack',
 	'ivy/ModuleObject',
 	'ivy/CodeObject',
 	'ivy/ExecutionFrame',
-	'ivy/utils',
 	'ivy/errors',
-	'ivy/CallableObject'
+	'ivy/CallableObject',
+	'ivy/ArrayRange',
+	'ivy/AssocArrayRange',
+	'ivy/utils'
 ], function(
-	ExecStack,
 	Consts,
+	ExecStack,
 	ModuleObject,
 	CodeObject,
 	ExecutionFrame,
-	iu,
 	errors,
-	CallableObject
+	CallableObject,
+	ArrayRange,
+	AssocArrayRange,
+	iu
 ) {
 	var
 		DataNodeType = Consts.DataNodeType,
-		CallableKind = Consts.CallableKind;
-function Interpreter(moduleObjs, mainModuleName) {
+		CallableKind = Consts.CallableKind,
+		FrameSearchMode = Consts.FrameSearchMode,
+		OpCode = Consts.OpCode,
+		DirAttrKind = Consts.DirAttrKind;
+function Interpreter(moduleObjs, mainModuleName, dataDict) {
 	this._frameStack = [];
 	this._stack = new ExecStack();
 	this._moduleObjects = moduleObjs;
@@ -31,19 +38,18 @@ function Interpreter(moduleObjs, mainModuleName) {
 		this.rtError('Unable to get main module object');
 	}
 	
-	var rootCallableObj = new CallableObject();
-	rootCallableObj._codeObj = this._moduleObjects[mainModuleName].mainCodeObject;
-	rootCallableObj._kind = CallableKind.Module;
-	rootCallableObj._name = "__main__";
-
-	var globalDataDict = {};
-	globalDataDict["__scopeName__"] = "__global__"; // Allocating dict
+	var
+		rootCallableObj = new CallableObject(
+			'__main__',
+			this._moduleObjects[mainModuleName].mainCodeObject()
+		),
+		globalDataDict = {
+			'__scopeName__': '__global__'
+		};
 	this._globalFrame = new ExecutionFrame(null, null, globalDataDict, false);
-	this._moduleFrames["__global__"] = _globalFrame; // We need to add entry point module frame to storage manually
-
-	this.newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
+	this._moduleFrames = {'__global__': this._globalFrame};
+	this._moduleFrames[mainModuleName] = this.newFrame(rootCallableObj, null, dataDict, false);
 	this._stack.addStackBlock();
-	this._moduleFrames[mainModuleName] = this._frameStack.back; // We need to add entry point module frame to storage manually
 }
 
 return __mixinProto(Interpreter, {
@@ -53,10 +59,32 @@ return __mixinProto(Interpreter, {
 			this.rtError('Unable to get CodeObject to execute');
 		}
 		this._codeRange = codeObj._instrs;
-		for( this._pk = 0; this._pk < this._codeRange.length; ) {
+		for( this._pk = 0; this._pk <= this._codeRange.length; ) {
+			if( this._pk >= this._codeRange.length ) {
+				// Ended with this code object
+				var result = this._stack.pop();
+
+				this.removeFrame(); // Exit out of this frame
+				if( this._frameStack.length === 0 ) {
+					return result; // If there is no frames left - then we finished
+				}
+				var returnPk = this._stack.pop();
+				if( iu.getDataNodeType(returnPk) !== DataNodeType.Integer ) {
+					this.rtError('Expected integer as instruction pointer');
+				}
+				this._pk = returnPk;
+				// Set old instruction range back
+				var oldCodeObj = this.getCodeObject();
+				if( !oldCodeObj ) {
+					this.rtError('Expected code object to return control to');
+				}
+				this._codeRange = oldCodeObj._instrs; 
+				this._stack.push(result); // Get result back
+				continue;
+			} // if
 			var instr = this._codeRange[this._pk];
 
-			with(OpCode) switch(instr[0]) {
+			with(Consts.OpCode) switch(instr[0]) {
 				case Nop: break;
 
 				// Load constant data from code
@@ -119,7 +147,8 @@ return __mixinProto(Interpreter, {
 					var
 						posNode = this._stack.pop(), posType = iu.getDataNodeType(posNode),
 						valNode = this._stack.pop(),
-						arrNode = this._stack.pop(), arrType = iu.getDataNodeType(arrNode);
+						// Don't pop result form stack here
+						arrNode = this._stack.back(), arrType = iu.getDataNodeType(arrNode);
 					
 					if( [DataNodeType.Integer, DataNodeType.Null, DataNodeType.Undef].indexOf(posType) < 0 ) {
 						this.rtError('Expected Null, Undef (for append) or Integer as position operand');
@@ -166,8 +195,9 @@ return __mixinProto(Interpreter, {
 						left = this._stack.pop(),
 						rType = iu.getDataNodeType(right),
 						lType = iu.getDataNodeType(left);
-					if( rType === lType ) {
-						return instr[0] === Equal;
+					if( rType !== lType ) {
+						this._stack.push(instr[0] === NotEqual);
+						break;
 					}
 					if( [
 						DataNodeType.Boolean,
@@ -180,9 +210,11 @@ return __mixinProto(Interpreter, {
 						this.rtError('Cannot compare values!')
 					}
 					if( instr[0] === Equal ) {
-						return left === right;
+						this._stack.push(left === right);
+					} else {
+						this._stack.push(left !== right);
 					}
-					return left !== right;
+					break;
 				}
 				case LT: case GT: case LTEqual: case GTEqual: {
 					var
@@ -191,7 +223,7 @@ return __mixinProto(Interpreter, {
 						rType = iu.getDataNodeType(right),
 						lType = iu.getDataNodeType(left);
 					if( rType !== lType ) {
-						throw this.rtError(`Left and right operands of comparision must have the same type`);
+						this.rtError(`Left and right operands of comparision must have the same type`);
 					}
 					if( [
 						DataNodeType.Integer,
@@ -199,14 +231,14 @@ return __mixinProto(Interpreter, {
 						DataNodeType.String
 						].indexOf(rType) < 0
 					) {
-						throw this.rtError(`Unsupported type of operand in comparision operation`)
+						this.rtError(`Unsupported type of operand in comparision operation`)
 					}
 					// Comparision itself
 					switch( instr[0] ) {
-						case LT: this._stack.push(left < right);
-						case GT: this._stack.push(left > right);
-						case LTEqual: this._stack.push(left <= right);
-						case GTEqual: this._stack.push(left >= right);
+						case LT: this._stack.push(left < right); break;
+						case GT: this._stack.push(left > right); break;
+						case LTEqual: this._stack.push(left <= right); break;
+						case GTEqual: this._stack.push(left >= right); break;
 						default: this.rtError('Unexpected bug!');
 					}
 					break;
@@ -214,43 +246,329 @@ return __mixinProto(Interpreter, {
 
 				// Array or assoc array operations
 				case LoadSubscr: {
+					var
+						indexValue = this._stack.pop(), indexType = iu.getDataNodeType(indexValue),
+						aggr = this.pop();
+
+					switch( iu.getDataNodeType(aggr) ) {
+						case DataNodeType.String:
+						case DataNodeType.Array: {
+							if( indexType !== DataNodeType.Integer ) {
+								this.rtError('Index value for String or Array must be Integer');
+							}
+							if( indexValue >= aggr.length ) {
+								this.rtError('Index value is out of bounds of String or Array');
+							}
+							this._stack.push(aggr[indexValue]);
+							break;
+						}
+						case DataNodeType.AssocArray: {
+							if( indexType !== DataNodeType.String ) {
+								this.rtError('Index value for AssocArray must be String');
+							}
+							this._stack.push(aggr[indexValue]);
+							break;
+						}
+						case DataNodeType.ClassNode: {
+							if( [DataNodeType.String, DataNodeType.Integer].indexOf(indexType) < 0 ) {
+								this.rtError('Expected String or Integer as index value');
+							}
+							this._stack.push(aggr.at( indexValue ));
+							break;
+						}
+						default:
+							this.rtError('Unexpected aggregate type');
+					}
 					break;
 				}
 				case StoreSubscr: {
+					var
+						indexValue = this._stack.pop(), indexType = iu.getDataNodeType(indexValue),
+						value = this._stack.pop(),
+						// Don't pop result here
+						aggr = this.back();
+
+					switch( iu.getDataNodeType(aggr) ) {
+						case DataNodeType.Array: {
+							if( indexType !== DataNodeType.Integer ) {
+								this.rtError('Index value for Array must be Integer');
+							}
+							if( indexValue >= aggr.length ) {
+								this.rtError('Index value is out of bounds of Array');
+							}
+							aggr[indexValue.integer] = value;
+							break;
+						}
+						case DataNodeType.AssocArray: {
+							if( indexType !== DataNodeType.String ) {
+								this.rtError('Index value for AssocArray must be String');
+							}
+							aggr[indexValue.str] = value;
+							break;
+						}
+						case DataNodeType.ClassNode: {
+							if( [DataNodeType.String, DataNodeType.Integer].indexOf(indexType) < 0 ) {
+								this.rtError('Expected String or Integer as index value');
+							}
+							aggr.setAt(value, indexType);
+							break;
+						}
+						default:
+							this.rtError('Unexpected aggregate type');
+					}
 					break;
 				}
 				case LoadSlice: {
+					var
+						endValue = this._stack.pop(), endType = iu.getDataNodeType(endValue),
+						beginValue = this._stack.pop(), beginType = iu.getDataNodeType(beginValue),
+						aggr = this._stack.pop(), aggrType = iu.getDataNodeType(aggr);
+
+					if( beginType !== DataNodeType.Integer ) {
+						this.rtError('Begin value of slice must be integer');
+					}
+					if( endValue !== DataNodeType.Integer ) {
+						this.rtError('End value of slice must be integer');
+					}
+
+					switch( aggrType ) {
+						case DataNodeType.String: case DataNodeType.Array: {
+							this._stack.push( aggr.slice(beginValue, endValue) );
+							break;
+						}
+						default:
+							this.rtError('Unexpected type of aggregate!');
+					}
 					break;
 				}
 
 				// Frame data load/ store
-				case StoreName: {
-					break;
-				}
-				case StoreLocalName: {
-					break;
-				}
-				case StoreNameWithParents: {
+				case StoreName: case StoreLocalName: case StoreNameWithParents: {
+					var
+						varValue = this._stack.pop(),
+						varName = this.getModuleConstCopy(instr[1]);
+
+					if( iu.getDataNodeType(varName) !== DataNodeType.String ) {
+						this.rtError('Expected String as variable name');
+					}
+
+					switch( instr[0] ) {
+						case StoreName: this.setValue(varName, varValue); break;
+						case StoreLocalName: this.setLocalValue(varName, varValue); break;
+						case StoreNameWithParents: this.setValueWithParents(varName, varValue); break;
+						default: this.rtError('Unexpected StoreName instruction kind');
+					}
 					break;
 				}
 				case LoadName: {
+					var varName = this.getModuleConstCopy(instr[1]);
+					if( iu.getDataNodeType(varName) !== DataNodeType.String ) {
+						this.rtError('Expected String as variable name');
+					}
+					this._stack.push(this.getValue(varName));
 					break;
 				}
 
 				// Preparing and calling directives
 				case LoadDirective: {
+					var
+						dirName = this._stack.pop(),
+						codeObj = this._stack.pop();
+					if( iu.getDataNodeType(dirName) !== DataNodeType.String ) {
+						this.rtError('Expected String as directive name');
+					}
+					if( iu.getDataNodeType(codeObj) !== DataNodeType.CodeObject ) {
+						this.rtError('Expected CodeObject to execute');
+					}
+
+					// Create callable for CodeObject and put it into context
+					this.setLocalValue(dirName, new CallableObject(dirName, codeObj));
+					// We should return something
+					this._stack.push(undefined);
 					break;
 				}
 				case RunCallable: {
+					var stackArgCount = instr[1];
+					if( stackArgCount < 1 ) {
+						this.rtError('Call must at least have 1 arguments in stack!');
+					}
+					if( stackArgCount > this._stack.getLength() ) {
+						this.rtError('Not enough arguments in execution stack');
+					}
+					var callableObj = this._stack.at(this._stack.getLength() - stackArgCount);
+					if( iu.getDataNodeType(callableObj) !== DataNodeType.Callable ) {
+						this.rtError('Expected Callable object');
+					}
+
+					var
+						attrBlocks = callableObj.attrBlocks(),
+						isNoscope = false;
+
+					if( attrBlocks.length > 0 ) {
+						if( iu.back(attrBlocks).kind !== DirAttrKind.BodyAttr ) {
+							this.rtError('Last attr block definition expected to be BodyAttr');
+						}
+						isNoscope = iu.back(attrBlocks).bodyAttr.isNoscope;
+					}
+
+					var
+						moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__",
+						moduleFrame = this._moduleFrames[moduleName];
+
+					if( !moduleFrame ) {
+						this.rtError('Module frame "' + moduleFrame + `" of callable "` + callableObj._name + `" does not exist!`);
+					}
+					var dataDict = {
+						"__scopeName__": callableObj._name
+					};
+					this.newFrame(callableObj, moduleFrame, dataDict, isNoscope);
+
+					// If args count is 1 - it mean that there is no arguments
+					if( stackArgCount > 1 )
+					{
+						var blockCounter = 0;
+
+						for( var i = 0; i < (stackArgCount - 1); ) {
+							var blockHeader = this._stack.pop();
+							++i; // Block header was eaten, so increase counter
+							if( iu.getDataNodeType(blockHeader) !== DataNodeType.Integer ) {
+								this.rtError('Expected integer as arguments block header!');
+							}
+							// Bit between block size part and block type must always be zero
+							if( (blockHeader & Consts.stackBlockHeaderCheckMask) !== 0 ) {
+								this.rtError('Seeems that stack is corrupted');
+							}
+							var
+								blockArgCount = blockHeader >> Consts.stackBlockHeaderSizeOffset,
+								blockType = blockHeader & Consts.stackBlockHeaderTypeMask;
+
+							switch( blockType ) {
+								case DirAttrKind.NamedAttr: {
+									var j = 0;
+									while( j < 2 * blockArgCount ) {
+										var
+											attrValue = this._stack.pop(),
+											attrName = this._stack.pop();
+										j += 2; // Parallel bookkeeping ;)
+										if( iu.getDataNodeType(attrName) !== DataNodeType.String ) {
+											this.rtError('Named attribute name must be String!');
+										}
+										this.setLocalValue(attrName, attrValue);
+									}
+									i += j; // Increase overall processed stack arguments count (2 items per iteration)
+									break;
+								}
+								case DirAttrKind.ExprAttr: {
+									// 2 is: 1, because of length PLUS 1 for body attr in the end
+									var currBlockIndex = attrBlocks.length - blockCounter - 2;
+									if( currBlockIndex >= attrBlocks.length ) {
+										this.rtError('Current attr block index is out of current bounds of declared blocks!');
+									}
+
+									var currBlock = attrBlocks[currBlockIndex];
+
+									if( currBlock.kind !== DirAttrKind.ExprAttr ) {
+										this.rtError('Expected positional arguments block in block metainfo');
+									}
+
+
+									for( var j = 0; j < blockArgCount; ++j, ++i ) {
+										var attrValue = this._stack.pop();
+										if( j >= currBlock.exprAttrs.length ) {
+											this.rtError('Unexpected number of attibutes in positional arguments block');
+										}
+
+										this.setLocalValue( currBlock.exprAttrs[blockArgCount -j -1].name, attrValue );
+									}
+									break;
+								}
+								default:
+									loger.internalAssert(false, "Unexpected arguments block type");
+							}
+
+							blockCounter += 1;
+						}
+					}
+
+					if( iu.getDataNodeType(this._stack.pop()) !== DataNodeType.Callable ) {
+						this.rtError('Expected callable object operand in call operation');
+					}
+
+					if( callableObj._codeObj ) {
+						this._stack.push(this._pk+1); // Put next instruction index on the stack to return at
+						this._stack.addStackBlock();
+						this._codeRange = callableObj._codeObj._instrs; // Set new instruction range to execute
+						this._pk = 0;
+						continue; // Skip _pk increment
+					} else if( callableObj._dirInterp ) {
+						this._stack.addStackBlock();
+						callableObj._dirInterp.interpret(this); // Run native directive interpreter
+						var result = this._stack.pop();
+						if( !this._stack.empty() ) {
+							this.rtError('Frame stack should be empty');
+						}
+
+						// If frame stack contains last frame - it means that we nave done with programme
+						// Else we expect to have result of directive on the stack
+						this.removeFrame(); // Drop frame from stack after end of execution
+						if( this._frameStack.length === 0 ) {
+							return result;
+						}
+						this._stack.push(result); // Get result back
+					} else {
+						this.rtError('Callable object expected to contain code object or directive interpreter object!');
+					}
 					break;
 				}
 
 				// Import another module
 				case ImportModule: {
+					var moduleName = this._stack.pop();
+					if( iu.getDataNodeType(moduleName) !== DataNodeType.String ) {
+						this.rtError('Expected String as module name');
+					}
+					
+					if( !this._moduleObjects.hasOwnProperty(moduleName) ) {
+						this.rtError('Failed to get module with name: ' + moduleName);
+					}
+
+					if( !this._moduleFrames.hasOwnProperty(moduleName) ) {
+						// Run module here
+						var
+							modObject = this._moduleObjects[moduleName],
+							codeObject = modObject.mainCodeObject(),
+							callableObj = new CallableObject(moduleName, codeObject),
+							dataDict = {
+								"__scopeName__": moduleName
+							},
+							// Create entry point module frame
+							frame = this.newFrame(callableObj, null, dataDict, false);
+
+						// We need to store module frame into storage
+						this._moduleFrames[moduleName] = frame; 
+
+						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreName)
+						this._stack.push(frame);
+						// Decided to put return address into parent frame`s stack block instead of current
+						this._stack.push(this._pk + 1);
+						// Add new stack block for execution frame
+						this._stack.addStackBlock(); 
+
+						// Preparing to run code object in newly created frame
+						this._codeRange = codeObject._instrs;
+						this._pk = 0;
+
+						continue; // Skip this._pk increment
+					} else {
+						// Put module root frame into previous execution frame (it will be stored with StoreName)
+						this._stack.push(this._moduleFrames[moduleName]); 
+						// As long as module returns some value at the end of execution, so put fake value there for consistency
+						this._stack.push(undefined);
+					}
 					break;
 				}
 				case FromImport: {
-					var symbolsNode = this._stack.pop(), symbolsType = iu.getDataNodeType(symbolsType);
+					var symbolsNode = this._stack.pop(), symbolsType = iu.getDataNodeType(symbolsNode);
 					if( symbolsType !== DataNodeType.Array ) {
 						this.rtError('Expected list of symbol names');
 					}
@@ -259,7 +577,7 @@ return __mixinProto(Interpreter, {
 						this.rtError('Expected ExecutionFrame');
 					}
 
-					for( var i = 0; i < symbolsNode; ++i ) {
+					for( var i = 0; i < symbolsNode.length; ++i ) {
 						if( typeof(symbolsNode[i]) !== 'string' ) {
 							this.rtError('Symbol name must be String');
 						}
@@ -277,12 +595,12 @@ return __mixinProto(Interpreter, {
 					if( instr[1] >= this._codeRange.length ) {
 						this.rtError('Cannot jump after the end of code object');
 					}
-					var jumpCond = evalAsBoolean(this._stack.back()); // This is actual condition to test
-					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].canFind(instr[0]) ) {
+					var jumpCond = this.evalAsBoolean(this._stack.back()); // This is actual condition to test
+					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].indexOf(instr[0]) > 0 ) {
 						jumpCond = !jumpCond; // Invert condition if False family is used
 					}
 
-					if( [OpCode.JumpIfTrue, OpCode.JumpIfFalse].canFind(instr[0]) || !jumpCond ) {
+					if( [OpCode.JumpIfTrue, OpCode.JumpIfFalse].indexOf(instr[0]) > 0 || !jumpCond ) {
 						// Drop condition from _stack on JumpIfTrue, JumpIfFalse anyway
 						// But for JumpIfTrueOrPop, JumpIfFalseOrPop drop it only if jumpCond is false
 						this._stack.pop();
@@ -303,6 +621,7 @@ return __mixinProto(Interpreter, {
 					continue; // Skip _pk increment
 				}
 				case Return: {
+					this.rtError('Unimplemented OpCode');
 					break;
 				}
 
@@ -315,16 +634,49 @@ return __mixinProto(Interpreter, {
 					var
 						tmp = this._stack.back(), len = this._stack.getLength(),
 						lastIndex = len - 1, prevIndex = len - 2;
-					this._stack.setAt(this.at(prevIndex), lastIndex);
+					this._stack.setAt(this._stack.at(prevIndex), lastIndex);
 					this._stack.setAt(tmp, prevIndex)
 					break;
 				}
 
 				// Loop initialization and execution
 				case GetDataRange: {
+					var aggr = this._stack.pop();
+					switch( iu.getDataNodeType(aggr) ) {
+						case DataNodeType.Array:
+							this._stack.push(new ArrayRange(aggr));
+							break;
+						case DataNodeType.ClassNode:
+							this._stack.push(aggr.opSlice());
+							break;
+						case DataNodeType.AssocArray:
+							this._stack.push(new AssocArrayRange(aggr));
+							break;
+						case DataNodeType.DataNodeRange:
+							this._stack.push(aggr);
+							break;
+						default: this.rtError('Expected Array, AssocArray, DataNodeRange or ClassNode as iterable');
+					}
 					break;
 				}
 				case RunLoop: {
+					var dataRange = this._stack.back();
+					if( iu.getDataNodeType(dataRange) !== DataNodeType.DataNodeRange ) {
+						this.rtError('Expected DataNodeRange to iterate over');
+					}
+					if( dataRange.empty() )
+					{
+						if( instr[1] >= this._codeRange.length ) {
+							this.rtError('Cannot jump after the end of code object');
+						}
+						this._pk = instr[1];
+						this._stack.pop(); // Drop data range from stack as we no longer need it
+						break;
+					}
+
+					// TODO: For now we just move range forward as take current value from it
+					// Maybe should fix it and make it move after loop block finish
+					this._stack.push(dataRange.pop());
 					break;
 				}
 
@@ -366,10 +718,15 @@ return __mixinProto(Interpreter, {
 				}
 
 				case MarkForEscape: {
+					if( instr.arg >= Consts.NodeEscapeStateItems.length ) {
+						this.rtError('Incorrect escape state provided');
+					}
+					this._stack.back().escapeState = instr.arg;
 					break;
 				}
 				default: this.rtError(`Unexpected opcode!!!`);
-			}
+			} // switch
+			++(this._pk);
 		}
 	},
 	rtError: function(msg) {
@@ -390,10 +747,20 @@ return __mixinProto(Interpreter, {
 		return [left, right];
 	},
 	getCurrentFrame: function() {
-		if( this._stack.empty() ) {
+		if( this._frameStack.length === 0 ) {
 			return null;
 		}
-		return this._frameStack.back();
+		return iu.back(this._frameStack);
+	},
+	/** Returns nearest independent execution frame that is not marked `noscope`*/
+	independentFrame: function() {
+		for( var i = this._frameStack.length; i > 0; --i ) {
+			var frame = this._frameStack[i-1];
+			if( frame.hasOwnScope() ) {
+				return frame;
+			}
+		}
+		this.rtError('Cannot get current independent execution frame!');
 	},
 	getCodeObject: function() {
 		var frame = this.getCurrentFrame();
@@ -423,10 +790,8 @@ return __mixinProto(Interpreter, {
 	getModuleConstCopy: function(index) {
 		return iu.deeperCopy( this.getModuleConst(index) );
 	},
-	evalAsBoolean: function(val)
-	{
-		switch(val)
-		{
+	evalAsBoolean: function(val) {
+		switch( iu.getDataNodeType(val) ) {
 			case DataNodeType.Undef:
 			case DataNodeType.Null:
 				return false;
@@ -450,15 +815,106 @@ return __mixinProto(Interpreter, {
 				throw new Error('Cannot evaluate value in logical context!');
 		}
 	},
-	setValue: function() {
-
-	},
 	newFrame: function(callableObj, modFrame, dataDict, isNoscope) {
-		this._frameStack.push( new ExecutionFrame(callableObj, modFrame, dataDict, isNoscope) );
+		var frame = new ExecutionFrame(callableObj, modFrame, dataDict, isNoscope);
+		this._frameStack.push(frame);
+		return frame;
 	},
 	removeFrame: function() {
 		this._stack.removeStackBlock();
 		this._frameStack.pop();
+	},
+	canFindValue: function(varName) {
+		return this.findValue(varName, FrameSearchMode.tryGet).node !== undefined;
+	},
+
+	findValue: function(varName, mode) {
+		var result;
+		for( var i = this._frameStack.length; i > 0; --i ) {
+			var frame = this._frameStack[i-1];
+
+			result = frame.findValue(varName, mode);
+
+			if( !frame.hasOwnScope() && result.node === undefined ) {
+				continue; // Let's try to find in parent
+			}
+
+			if( result.node !== undefined || (result.node === undefined && result.allowUndef) ) {
+				return result;
+			}
+		}
+
+		if( mode == FrameSearchMode.get || mode == FrameSearchMode.tryGet ) {
+			result = this._globalFrame.findValue(varName, mode);
+			if( result.node !== undefined ) {
+				return result;
+			}
+		}
+
+		return result;
+	},
+
+	findValueLocal: function(varName, mode) {
+		var result;
+		for( var i = this._frameStack.length; i > 0; --i ) {
+			var frame = this._frameStack[i-1];
+			result = frame.findLocalValue(varName, mode);
+			if( result.node !== undefined ) {
+				return result;
+			}
+		}
+		return iu.back(this._frameStack).findLocalValue(varName, mode);
+	},
+	getValue: function(varName) {
+		return this.findValue(varName, FrameSearchMode.get).node;
+	},
+
+	_assignNodeAttribute: function(parent, value, varName) {
+		var attrName = iu.back(varName.split('.'));
+		switch( iu.getDataNodeType(parent) )
+		{
+			case DataNodeType.AssocArray:
+				parent[attrName] = value;
+				break;
+			case DataNodeType.ClassNode:
+				parent.classNode.__setAttr__(value, attrName);
+				break;
+			default:
+				this.rtError('Unexpected node type');
+		}
+	},
+
+	setValue: function(varName, value) {
+		var result = this.findValue(varName, FrameSearchMode.set);
+		this._assignNodeAttribute(result.parent, value, varName);
+	},
+
+	setValueWithParents: function(varName, value) {
+		var result = this.findValue(varName, FrameSearchMode.setWithParents);
+		this._assignNodeAttribute(result.parent, value, varName);
+	},
+
+	setLocalValue: function(varName, value) {
+		var result = this.findValueLocal(varName, FrameSearchMode.set);
+		this._assignNodeAttribute(result.parent, value, varName);
+	},
+
+	setLocalValueWithParents: function(varName, value) {
+		var result = findValueLocal(varName, FrameSearchMode.setWithParents);
+		this._assignNodeAttribute(result.parent, value, varName);
+	},
+
+	_addNativeDirInterp: function(name, dirInterp) {
+		// Add custom native directive interpreters to global scope
+		var dirCallable = new CallableObject(name, dirInterp);
+		this._globalFrame.setValue(name, dirCallable);
+	},
+
+	// Method used to set custom global directive interpreters
+	addDirInterpreters: function(dirInterps) {
+		for( var name in dirInterps ) {
+			this._addNativeDirInterp(name, dirInterps[name]);
+		}
 	}
 });
 }); // define

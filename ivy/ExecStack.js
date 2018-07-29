@@ -1,7 +1,7 @@
 define('ivy/ExecStack', ['ivy/utils'], function(iu) {
 	function ExecStack() {
 		this._stack = [];
-		this._blocks = [0];
+		this._blocks = [];
 	};
 	return __mixinProto(ExecStack, {
 		/** Returns last item added into stack */
@@ -45,10 +45,10 @@ define('ivy/ExecStack', ['ivy/utils'], function(iu) {
 		},
 		/** Removes last block from stack */
 		removeStackBlock: function() {
-			if( this.empty() ) {
+			if( this._blocks.length === 0 ) {
 				throw Error(`Cannot remove stack block. Execution stack is empty!`);
 			}
-			this.popBackN(this.getLength());
+			this.popN(this.getLength());
 			this._blocks.pop();
 		},
 		/** Add item in the back of stack */

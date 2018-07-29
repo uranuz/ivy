@@ -1,19 +1,27 @@
 define('ivy/utils', [
+	'exports',
 	'ivy/Consts',
-	'ivy/CodeObject',
 	'ivy/ExecutionFrame',
+	'ivy/CodeObject',
 	'ivy/CallableObject',
+	'ivy/DataNodeRange',
+	'ivy/ClassNode'
+	
 ], function(
+	exports,
 	Consts,
-	CodeObject,
 	ExecutionFrame,
-	CallableObject
+	CodeObject,
+	CallableObject,
+	DataNodeRange,
+	ClassNode
 ) {
-	var DataNodeType = DataNodeType;
-return {
+var
+DataNodeType = Consts.DataNodeType,
+iu = {
 	back: function(arr) {
 		if( arr.length === 0 ) {
-			throw new Error('Cannot get back item, becaise array is empty!');
+			throw new Error('Cannot get back item, because array is empty!');
 		}
 		return arr[arr.length-1];
 	},
@@ -24,7 +32,7 @@ return {
 			return DataNodeType.Null;
 		} else if( con === true || con === false ) {
 			return DataNodeType.Boolean;
-		} else if( typeof( typeof(con) === 'string' ) ) {
+		} else if( typeof(con) === 'string' ) {
 			return DataNodeType.String;
 		} else if( typeof(con) === 'number' ) {
 			if( (''+con).indexOf('.') === -1 ) {
@@ -56,6 +64,7 @@ return {
 		var vType = this.getDataNodeType(val);
 		switch( vType ) {
 			case DataNodeType.Undef:
+			case DataNodeType.Null:
 			case DataNodeType.Boolean:
 			case DataNodeType.Integer:
 			case DataNodeType.Floating:
@@ -90,4 +99,10 @@ return {
 		}
 	}
 };
+// For now use CommonJS format to resolve cycle dependencies
+for( var key in iu ) {
+	if( iu.hasOwnProperty(key) ) {
+		exports[key] = iu[key];
+	}
+}
 });

@@ -99,9 +99,29 @@ var Consts = {
 		'NoscopeDirective',
 		'Module',
 		'Package'
+	],
+	DirAttrKindItems: [
+		'NamedAttr',
+		'ExprAttr',
+		'IdentAttr',
+		'KwdAttr',
+		'BodyAttr'
+	],
+	stackBlockHeaderSizeOffset: 4,
+	stackBlockHeaderCheckMask: 0b1000,
+	stackBlockHeaderTypeMask: 0b111,
+	NodeEscapeStateItems: [
+		'Init', 'Safe', 'Unsafe'
 	]
 },
-EnumConsts = ['DataNodeType', 'OpCode', 'FrameSearchMode'];
+EnumConsts = [
+	'DataNodeType',
+	'OpCode',
+	'FrameSearchMode',
+	'CallableKind',
+	'DirAttrKind',
+	'NodeEscapeState'
+];
 for( var i = 0; i < EnumConsts.length; ++i ) {
 	var
 		constName = EnumConsts[i],

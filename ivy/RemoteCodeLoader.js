@@ -62,7 +62,7 @@ return __mixinProto(RemoteCodeLoader, {
 		} else if( con instanceof Object ) {
 			switch( con._t ) {
 				case DataNodeType.CodeObject:
-					return new CodeObject(con.instrs, moduleObj);
+					return new CodeObject(con.instrs, moduleObj, con.attrBlocks);
 				case DataNodeType.DateTime:
 					return new Date(con._v);
 				default:

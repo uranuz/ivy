@@ -8,7 +8,7 @@ define('ivy/DataNodeRange', [], function() {
 			throw new Error('Not implemented!');
 		},
 		// Method must advance range to the next item
-		popFront: function() {
+		pop: function() {
 			throw new Error('Not implemented!');
 		},
 		// Method is used to check if range is empty

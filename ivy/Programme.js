@@ -14,6 +14,7 @@ define('ivy/Programme', [
 				this._mainModuleName,
 				mainModuleScope
 			);
+			interp.addDirInterpreters(this._dirInterps);
 			return interp.execLoop();
 		}
 	});

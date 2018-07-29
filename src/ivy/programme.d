@@ -132,13 +132,60 @@ JSONValue toStdJSON(TDataNode con)
 		case CodeObject: {
 			JSONValue jCode = [
 				"_t": JSONValue(con.type),
-				"moduleObj": JSONValue(con.codeObject._moduleObj._name)
+				"moduleObj": JSONValue(con.codeObject._moduleObj._name),
 			];
 			JSONValue[] jInstrs;
 			foreach( instr; con.codeObject._instrs ) {
 				jInstrs ~= JSONValue([ JSONValue(instr.opcode), JSONValue(instr.arg) ]);
 			}
 			jCode["instrs"] = jInstrs;
+			JSONValue[] jAttrBlocks;
+			import ivy.directive_stuff: DirAttrKind;
+			foreach( ref attrBlock; con.codeObject._attrBlocks )
+			{
+				JSONValue jBlock = ["kind": attrBlock.kind];
+				final switch( attrBlock.kind )
+				{
+					case DirAttrKind.NamedAttr:
+					{
+						JSONValue[string] block;
+						foreach( key, va; attrBlock.namedAttrs ) {
+							block[key] = _valueAttrToStdJSON(va);
+						}
+						jBlock["namedAttrs"] = block;
+						break;
+					}
+					case DirAttrKind.ExprAttr:
+					{
+						JSONValue[] block;
+						foreach( va; attrBlock.exprAttrs ) {
+							block ~= _valueAttrToStdJSON(va);
+						}
+						jBlock["exprAttrs"] = block;
+						break;
+					}
+					case DirAttrKind.IdentAttr:
+					{
+						jBlock["names"] = attrBlock.names;
+						break;
+					}
+					case DirAttrKind.KwdAttr:
+					{
+						jBlock["keyword"] = attrBlock.keyword;
+						break;
+					}
+					case DirAttrKind.BodyAttr:
+					{
+						jBlock["bodyAttr"] = [
+							"isNoscope": attrBlock.bodyAttr.isNoscope,
+							"isNoescape": attrBlock.bodyAttr.isNoescape
+						];
+						break;
+					}
+				}
+				jAttrBlocks ~= jBlock;
+			}
+			jCode["attrBlocks"] = jAttrBlocks;
 			return jCode;
 		}
 		case Callable, ClassNode, ExecutionFrame, DataNodeRange: {
@@ -146,6 +193,13 @@ JSONValue toStdJSON(TDataNode con)
 		}
 	}
 	assert(false);
+}
+
+JSONValue _valueAttrToStdJSON(VA)(auto ref VA va) {
+	return JSONValue([
+		"name": va.name,
+		"typeName": va.typeName
+	]);
 }
 
 ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
