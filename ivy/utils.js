@@ -35,7 +35,7 @@ iu = {
 		} else if( typeof(con) === 'string' ) {
 			return DataNodeType.String;
 		} else if( typeof(con) === 'number' ) {
-			if( (''+con).indexOf('.') === -1 ) {
+			if( (''+con).indexOf('.') < 0 ) {
 				return DataNodeType.Integer;
 			} else {
 				return DataNodeType.Floating;
@@ -94,6 +94,42 @@ iu = {
 			case DataNodeType.CodeObject:
 				// CodeObject's are constants so don't do copy
 				return val;
+			default:
+				throw new Error('Getting of deeper copy for this type is not implemented for now');
+		}
+	},
+	toString: function(val) {
+		var vType = this.getDataNodeType(val);
+		switch( vType ) {
+			case DataNodeType.Undef:
+			case DataNodeType.Null:
+				return '';
+			case DataNodeType.Boolean:
+				return (val? 'true': 'false');
+			case DataNodeType.Integer:
+			case DataNodeType.Floating:
+				return '' + val;
+			case DataNodeType.String:
+				return val;
+			case DataNodeType.DateTime:
+				return '' + val;
+			case DataNodeType.AssocArray: {
+				var result = '{';
+				for( var key in val ) {
+					if( val.hasOwnProperty(key) ) {
+						result += '"' + key + '": ' + this.toString(val[key]);
+					}
+				}
+				result += '}';
+				return result;
+			}
+			case DataNodeType.Array: {
+				var result = '';
+				for( var i = 0; i < val.length; ++i ) {
+					result += this.toString(val[i]);
+				}
+				return result;
+			}
 			default:
 				throw new Error('Getting of deeper copy for this type is not implemented for now');
 		}

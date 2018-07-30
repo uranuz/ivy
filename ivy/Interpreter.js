@@ -248,7 +248,7 @@ return __mixinProto(Interpreter, {
 				case LoadSubscr: {
 					var
 						indexValue = this._stack.pop(), indexType = iu.getDataNodeType(indexValue),
-						aggr = this.pop();
+						aggr = this._stack.pop();
 
 					switch( iu.getDataNodeType(aggr) ) {
 						case DataNodeType.String:
@@ -285,8 +285,7 @@ return __mixinProto(Interpreter, {
 					var
 						indexValue = this._stack.pop(), indexType = iu.getDataNodeType(indexValue),
 						value = this._stack.pop(),
-						// Don't pop result here
-						aggr = this.back();
+						aggr = this._stack.pop();
 
 					switch( iu.getDataNodeType(aggr) ) {
 						case DataNodeType.Array: {
@@ -296,14 +295,14 @@ return __mixinProto(Interpreter, {
 							if( indexValue >= aggr.length ) {
 								this.rtError('Index value is out of bounds of Array');
 							}
-							aggr[indexValue.integer] = value;
+							aggr[indexValue] = value;
 							break;
 						}
 						case DataNodeType.AssocArray: {
 							if( indexType !== DataNodeType.String ) {
 								this.rtError('Index value for AssocArray must be String');
 							}
-							aggr[indexValue.str] = value;
+							aggr[indexValue] = value;
 							break;
 						}
 						case DataNodeType.ClassNode: {
@@ -596,11 +595,11 @@ return __mixinProto(Interpreter, {
 						this.rtError('Cannot jump after the end of code object');
 					}
 					var jumpCond = this.evalAsBoolean(this._stack.back()); // This is actual condition to test
-					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].indexOf(instr[0]) > 0 ) {
+					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].indexOf(instr[0]) >= 0 ) {
 						jumpCond = !jumpCond; // Invert condition if False family is used
 					}
 
-					if( [OpCode.JumpIfTrue, OpCode.JumpIfFalse].indexOf(instr[0]) > 0 || !jumpCond ) {
+					if( [OpCode.JumpIfTrue, OpCode.JumpIfFalse].indexOf(instr[0]) >= 0 || !jumpCond ) {
 						// Drop condition from _stack on JumpIfTrue, JumpIfFalse anyway
 						// But for JumpIfTrueOrPop, JumpIfFalseOrPop drop it only if jumpCond is false
 						this._stack.pop();

@@ -116,7 +116,7 @@ return {
 					interp._stack.push(collection[key] !== undefined);
 					break;
 				case DataNodeType.Array:
-					interp._stack.push(collection.indexOf(key) > 0);
+					interp._stack.push(collection.indexOf(key) >= 0);
 					break;
 				default:
 					interp.rtError('Unexpected collection type');
@@ -273,7 +273,7 @@ return {
 				dt = interp.getValue("value"), dtType = iu.getDataNodeType(dt),
 				field = interp.getValue("field");
 			
-			if( [DataNodeType.Undef, DataNodeType.Null].indexOf(dtType) > 0 ) {
+			if( [DataNodeType.Undef, DataNodeType.Null].indexOf(dtType) >= 0 ) {
 				// Will not fail if it is null or undef, but just return it!
 				interp._stack.push(value);
 				return;

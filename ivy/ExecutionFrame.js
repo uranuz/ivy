@@ -104,7 +104,7 @@ return __mixinProto(ExecutionFrame, {
 					if( nodePtr !== undefined ) {
 						node = nodePtr;
 					} else {
-						if( [FrameSearchMode.setWithParents, FrameSearchMode.set].indexOf(mode) > 0 ) {
+						if( [FrameSearchMode.setWithParents, FrameSearchMode.set].indexOf(mode) >= 0 ) {
 							throw new errors.IvyError(
 								'Cannot set node with name: ' + varName + ', because parent node: ' + namePart
 								+ ' not exists or cannot set value in foreign execution frame!'

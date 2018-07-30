@@ -4,7 +4,7 @@ define('ivy/ArrayRange', [
 ], function(errors, DataNodeRange) {
 	__extends(ArrayRange, DataNodeRange);
 	function ArrayRange(aggr) {
-		if( aggr instanceof Array ) {
+		if( !(aggr instanceof Array) ) {
 			throw new errors.IvyError('Expected array as ArrayRange aggregate');
 		}
 		this._array = aggr;
