@@ -481,6 +481,57 @@ struct DataNode(S)
 		return undef;
 	}
 
+	bool opEquals(TDataNode rhs)
+	{
+		import std.range: zip;
+		if( rhs.type != this.type ) {
+			return false;
+		}
+		switch( this.type ) with(DataNodeType)
+		{
+			case Undef, Null: return true; // Undef and Null values are equal to each other
+			case Boolean: return this.boolean == rhs.boolean;
+			case Integer: return this.integer == rhs.integer;
+			case Floating: return this.floating == rhs.floating;
+			case DateTime: return this.dateTime == rhs.dateTime;
+			case String: return this.str == rhs.str;
+			case Array:
+			{
+				if( this.array.length != rhs.array.length ) {
+					return false;
+				}
+				foreach( pair; zip(this.array, rhs.array) ) {
+					// Use nested opEquals
+					if( pair[0] != pair[1] ) {
+						return false;
+					}
+				}
+				return true; // All equal - fantastic!
+			}
+			case AssocArray:
+			{
+				if( this.assocArray.length != rhs.assocArray.length ) {
+					return false;
+				}
+				foreach( key, val; this.assocArray )
+				{
+					if( auto valPtr = key in rhs.assocArray )
+					{
+						// Compare values
+						if( *valPtr != val ) {
+							return false;
+						}
+					} else {
+						return false; // There is no suck key so they are not equal
+					}
+				}
+				return true; // All keys exist and values are equal - fantastic!
+			}
+			case CodeObject: return this.codeObject == rhs.codeObject;
+			default: throw new Exception(`Cannot compare data nodes of type: ` ~ this.type.text);
+		}
+	}
+
 	void escapeState(NodeEscapeState state) @property {
 		_escapeState = state;
 	}

@@ -656,50 +656,14 @@ public:
 				// Shallow equality comparision
 				case OpCode.Equal, OpCode.NotEqual:
 				{
-					loger.internalAssert(!_stack.empty, "Cannot execute Equal instruction. Expected right operand, but exec stack is empty!");
 					// Right value was evaluated last so it goes first in the stack
 					TDataNode rightVal = _stack.back;
 					_stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute Equal instruction. Expected left operand, but exec stack is empty!");
 					TDataNode leftVal = _stack.back;
+					_stack.popBack();
 
-					if( leftVal.type != rightVal.type )
-					{
-						_stack.back = TDataNode(instr.opcode == OpCode.NotEqual);
-						break;
-					}
-
-					cmp_type_switch:
-					switch( leftVal.type )
-					{
-						case DataNodeType.Undef, DataNodeType.Null:
-							if( instr.opcode == OpCode.Equal ) {
-								_stack.back = TDataNode( leftVal.type == rightVal.type );
-							} else {
-								_stack.back = TDataNode( leftVal.type != rightVal.type );
-							}
-							break cmp_type_switch;
-
-						foreach( typeAndField; AliasSeq!(
-							tuple(DataNodeType.Boolean, "boolean"),
-							tuple(DataNodeType.Integer, "integer"),
-							tuple(DataNodeType.Floating, "floating"),
-							tuple(DataNodeType.String, "str"),
-							tuple(DataNodeType.DateTime, "dateTime")) )
-						{
-							case typeAndField[0]:
-								if( instr.opcode == OpCode.Equal ) {
-									mixin( `_stack.back = leftVal.` ~ typeAndField[1] ~ ` == rightVal.` ~ typeAndField[1] ~ `;` );
-								} else {
-									mixin( `_stack.back = leftVal.` ~ typeAndField[1] ~ ` != rightVal.` ~ typeAndField[1] ~ `;` );
-								}
-								break cmp_type_switch;
-						}
-						default:
-							loger.internalAssert(false, `Equality comparision doesn't support type "`, leftVal.type, `" yet!`);
-							break;
-					}
+					_stack ~= TDataNode( instr.opcode == OpCode.Equal? leftVal == rightVal: leftVal != rightVal );
 					break;
 				}
 

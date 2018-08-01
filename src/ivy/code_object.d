@@ -76,6 +76,7 @@ class CodeObject
 {
 	import ivy.bytecode: Instruction;
 
+	string _name;
 	Instruction[] _instrs; // Plain list of instructions
 	DirAttrsBlock!(false)[] _attrBlocks;
 	ModuleObject _moduleObj; // Module object which contains this code object
@@ -84,8 +85,14 @@ class CodeObject
 	SourceMapItem[] _revSourceMap; // Debugging info (source map sorted by startInstr)
 
 public:
-	this(ModuleObject moduleObj) {
+	this(string name, ModuleObject moduleObj)
+	{
+		_name = name;
 		_moduleObj = moduleObj;
+	}
+
+	string name() @property {
+		return _name;
 	}
 
 	size_t addInstr(Instruction instr, size_t line)
@@ -149,5 +156,30 @@ public:
 			_revSourceMap.sort!_sourceMapByAddrPred();
 		}
 		return assumeSorted!_sourceMapByAddrPred(_revSourceMap);
+	}
+
+	override bool opEquals(Object o)
+	{
+		auto rhs = cast(typeof(this)) o;
+		if( rhs is null )
+			return false;
+
+		// Very shallow checks for equality, but think enough
+		if( this._name != rhs._name ) {
+			return false;
+		}
+
+		// At least want to see the same number of instructions
+		if( this._instrs.length != rhs._instrs.length ) {
+			return false;
+		}
+		if( (this._moduleObj is null) != (rhs._moduleObj is null) ) {
+			return false;
+		}
+		// Must be from the same module
+		if( this._moduleObj && this._moduleObj._name != rhs._moduleObj._name ) {
+			return false;
+		}
+		return true; // They are equal at the first look
 	}
 }

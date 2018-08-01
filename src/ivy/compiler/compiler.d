@@ -91,6 +91,8 @@ private:
 	// Dictionary with module objects that compiler produces
 	ModuleObject[string] _moduleObjects;
 
+	size_t[][ ubyte[16] ][string] _moduleConstHashes; // Mapping moduleName -> constHash -> constIndex (list)
+
 	// Current stack of symbol table frames
 	SymbolTableFrame[] _symbolTableStack;
 
@@ -134,7 +136,7 @@ public:
 
 		_mainModuleName = mainModuleName;
 		enterModuleScope(mainModuleName);
-		enterNewCodeObject( newModuleObject(mainModuleName) );
+		enterNewCodeObject(null, newModuleObject(mainModuleName));
 	}
 
 	mixin NodeVisitWrapperImpl!();
@@ -229,17 +231,17 @@ public:
 		return newModObj;
 	}
 
-	size_t enterNewCodeObject(ModuleObject moduleObj)
+	size_t enterNewCodeObject(string name, ModuleObject moduleObj)
 	{
 		import std.range: back;
-		_codeObjStack ~= new CodeObject(moduleObj);
+		_codeObjStack ~= new CodeObject(name, moduleObj);
 		return this.addConst( TDataNode(_codeObjStack.back) );
 	}
 
-	size_t enterNewCodeObject()
+	size_t enterNewCodeObject(string name)
 	{
 		import std.range: back;
-		_codeObjStack ~= new CodeObject( this.currentModule() );
+		_codeObjStack ~= new CodeObject(name, this.currentModule());
 		return this.addConst( TDataNode(_codeObjStack.back) );
 	}
 
@@ -289,12 +291,29 @@ public:
 	size_t addConst(TDataNode value)
 	{
 		import std.range: empty, back;
+		import std.digest.md: md5Of;
 		loger.internalAssert(!_codeObjStack.empty, "Cannot add constant, because compiler code object stack is empty!");
 		loger.internalAssert(_codeObjStack.back, "Cannot add constant, because current compiler code object is null!");
 		loger.internalAssert(_codeObjStack.back._moduleObj, "Cannot add constant, because current module object is null!");
-
-		return _codeObjStack.back._moduleObj.addConst(value);
+		ModuleObject mod = _codeObjStack.back._moduleObj;
+		if( mod.name !in _moduleConstHashes ) {
+			_moduleConstHashes[mod.name] = null;
+		}
+		ubyte[16] valHash = md5Of(value.toString());
+		if( valHash !in _moduleConstHashes[mod.name] ) {
+			_moduleConstHashes[mod.name][valHash] = null;
+		}
+		foreach( size_t constIndex; _moduleConstHashes[mod.name][valHash] ) {
+			if( mod._consts[constIndex] == value ) {
+				return constIndex; // Constant is already here. Return it's index
+			}
+		}
+		size_t newIndex = _codeObjStack.back._moduleObj.addConst(value);
+		_moduleConstHashes[mod.name][valHash] ~= newIndex;
+		return newIndex;
 	}
+
+
 
 	ModuleObject currentModule() @property
 	{
@@ -361,7 +380,7 @@ public:
 			loger.internalAssert(moduleNode, `Module node is null`);
 
 			loger.write(`Entering new code object`);
-			enterNewCodeObject( newModuleObject(moduleName) );
+			enterNewCodeObject(null, newModuleObject(moduleName));
 			loger.write(`Entering module scope`);
 			enterModuleScope(moduleName);
 			loger.write(`Starting compiling module AST`);

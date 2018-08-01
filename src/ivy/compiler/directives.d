@@ -610,7 +610,7 @@ class DefCompiler: IDirectiveCompiler
 				compiler.enterScope(bodyStatement.location.index);
 			}
 
-			codeObjIndex = compiler.enterNewCodeObject(); // Creating code object
+			codeObjIndex = compiler.enterNewCodeObject(defNameExpr.name); // Creating code object
 
 			// Generating code for def.body
 			bodyStatement.accept(compiler);
