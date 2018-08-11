@@ -48,6 +48,8 @@ function Interpreter(moduleObjs, mainModuleName, dataDict) {
 		};
 	this._globalFrame = new ExecutionFrame(null, null, globalDataDict, false);
 	this._moduleFrames = {'__global__': this._globalFrame};
+	dataDict = dataDict || {};
+	dataDict.__scopeName__ = '__main__'; // Allocating a dict if it's not
 	this._moduleFrames[mainModuleName] = this.newFrame(rootCallableObj, null, dataDict, false);
 	this._stack.addStackBlock();
 }
@@ -646,7 +648,7 @@ return __mixinProto(Interpreter, {
 							this._stack.push(new ArrayRange(aggr));
 							break;
 						case DataNodeType.ClassNode:
-							this._stack.push(aggr.opSlice());
+							this._stack.push(aggr.range());
 							break;
 						case DataNodeType.AssocArray:
 							this._stack.push(new AssocArrayRange(aggr));
@@ -876,7 +878,7 @@ return __mixinProto(Interpreter, {
 				parent[attrName] = value;
 				break;
 			case DataNodeType.ClassNode:
-				parent.classNode.__setAttr__(value, attrName);
+				parent.setAttr(value, attrName);
 				break;
 			default:
 				this.rtError('Unexpected node type');

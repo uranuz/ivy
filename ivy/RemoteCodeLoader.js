@@ -19,7 +19,7 @@ var DataNodeType = Consts.DataNodeType;
 return __mixinProto(RemoteCodeLoader, {
 	load: function(moduleName, callback) {
 		var self = this;
-		$.ajax(this._endpoint + '?moduleName=' + moduleName, {
+		$.ajax(this._endpoint + '?moduleName=' + moduleName + '&generalTemplate=no', {
 			success: function(jsonText) {
 				var json = JSON.parse(jsonText);
 				callback(self.parseModules(json), moduleName);
@@ -55,14 +55,14 @@ return __mixinProto(RemoteCodeLoader, {
 			|| con === true
 			|| con === false
 			|| typeof(con) === 'number'
-			|| typeof(con) === 'string'
+			|| typeof(con) === 'string' || con instanceof String
 			|| con instanceof Array
 		) {
 			return con;
 		} else if( con instanceof Object ) {
 			switch( con._t ) {
 				case DataNodeType.CodeObject:
-					return new CodeObject(con.instrs, moduleObj, con.attrBlocks);
+					return new CodeObject(con.name, con.instrs, moduleObj, con.attrBlocks);
 				case DataNodeType.DateTime:
 					return new Date(con._v);
 				default:

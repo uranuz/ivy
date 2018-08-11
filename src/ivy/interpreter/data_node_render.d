@@ -35,7 +35,7 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref O
 
 			if( escapedSymb.canFind(symb) ) {
 				outRange.put(str[chunkStart..i]);
-				chunkStart = i;
+				chunkStart = i + 1; // Set chunk start to the next symbol
 			}
 			
 			static if( renderType == DataRenderType.HTML )

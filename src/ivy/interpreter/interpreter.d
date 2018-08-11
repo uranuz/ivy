@@ -6,6 +6,8 @@ import ivy.code_object;
 import ivy.interpreter.data_node;
 import ivy.interpreter.data_node_types;
 import ivy.interpreter.execution_frame;
+import ivy.interpreter.exec_stack;
+import ivy.interpreter.common;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyInterpreterDebug;
@@ -22,99 +24,6 @@ interface INativeDirectiveInterpreter
 }
 
 alias TDataNode = DataNode!string;
-
-class IvyInterpretException: IvyException
-{
-public:
-	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
-	{
-		super(msg, file, line, next);
-	}
-}
-
-struct ExecStack
-{
-	TDataNode[] _stack;
-	size_t[] _stackBlocks;
-
-	void addStackBlock() {
-		_stackBlocks ~= _stack.length;
-	}
-
-	void removeStackBlock()
-	{
-		import std.range: popBack, empty;
-		assert(!_stackBlocks.empty, `Cannot remove stack block!`);
-		this.popBackN(this.length); // Remove odd items from stack
-		_stackBlocks.popBack;
-	}
-
-	// Test if current stack block is empty
-	bool empty() @property
-	{
-		import std.range: back, empty;
-		if( _stackBlocks.empty || _stack.empty )
-			return true;
-		return _stack.length <= _stackBlocks.back;
-	}
-
-	// Get current item from the stack
-	ref TDataNode back() @property
-	{
-		import std.range: back;
-		assert(!this.empty, `Cannot get exec stack "back" property, because it is empty!!!`);
-		return _stack.back;
-	}
-
-	// Drop current item from the stack
-	void popBack()
-	{
-		import std.range: popBack;
-		assert(!this.empty, `Cannot execute "popBack" for exec stack, because it is empty!!!`);
-		_stack.popBack;
-	}
-
-	void popBackN(size_t count)
-	{
-		import std.range: popBackN;
-		assert(count <= this.length, `Requested to remove more items than exists in stack block`);
-		_stack.popBackN(count);
-	}
-
-	void opOpAssign(string op : "~", T)(auto ref T arg) {
-		_stack ~= arg;
-	}
-
-	import std.traits: isIntegral;
-
-	void opIndexAssign(T, Int)(auto ref T arg, Int index)
-		if( isIntegral!Int )
-	{
-		import std.range: back;
-		assert(!this.empty, `Cannot assign item of empty exec stack!!!`);
-		_stack[index + _stackBlocks.back] = arg;
-	}
-
-	ref TDataNode opIndex(Int)(Int index)
-		if( isIntegral!Int )
-	{
-		import std.range: back;
-		assert(!this.empty, `Cannot get item by index for empty exec stack!!!`);
-		return _stack[index + _stackBlocks.back];
-	}
-
-	size_t length() @property
-	{
-		import std.range: empty, back;
-		if( _stackBlocks.empty )
-			return 0;
-		return _stack.length - _stackBlocks.back;
-	}
-
-	size_t opDollar() {
-		return this.length;
-	}
-}
 
 import ivy.bytecode;
 
@@ -166,6 +75,7 @@ public:
 		_moduleFrames["__global__"] = _globalFrame; // We need to add entry point module frame to storage manually
 		loger.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
 
+		dataDict["__scopeName__"] = "__main__"; // Allocating a dict if it's not
 		newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
 		_stack.addStackBlock();
 		_moduleFrames[mainModuleName] = _frameStack.back; // We need to add entry point module frame to storage manually
@@ -537,10 +447,8 @@ public:
 				loger.write("_frameStack on code object end: ", _frameStack);
 				loger.internalAssert(!_frameStack.empty, "Frame stack shouldn't be empty yet'");
 				// Else we expect to have result of directive on the stack
-				loger.internalAssert(!_stack.empty, "Expected directive result, but data stack is empty!" );
 
-				TDataNode result = _stack.back;
-				_stack.popBack(); // We saved result - so drop it!
+				TDataNode result = _stack.popBack();
 				loger.internalAssert(_stack.empty, "Frame stack should be empty now! But there is: ", _stack);
 
 				this.removeFrame(); // Exit out of this frame
@@ -548,7 +456,6 @@ public:
 					return result; // If there is no frames left - then we finished
 				}
 
-				loger.internalAssert(!_stack.empty, "Expected integer as instruction pointer, but got end of execution stack");
 				loger.internalAssert(_stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer, but got: ", _stack.back.type);
 				_pk = cast(size_t) _stack.back.integer;
 				_stack.popBack(); // Drop return address
@@ -565,12 +472,9 @@ public:
 				// Base arithmetic operations execution
 				case OpCode.Add, OpCode.Sub, OpCode.Mul, OpCode.Div, OpCode.Mod:
 				{
-					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected right operand, but exec stack is empty!");
 					// Right value was evaluated last so it goes first in the stack
-					TDataNode rightVal = _stack.back;
-					_stack.popBack();
+					TDataNode rightVal = _stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute " ~ instr.opcode.to!string ~ " instruction. Expected left operand, but exec stack is empty!" );
 					TDataNode leftVal = _stack.back;
 					loger.internalAssert( ( leftVal.type == DataNodeType.Integer || leftVal.type == DataNodeType.Floating ) && leftVal.type == rightVal.type,
 						`Left and right values of arithmetic operation must have the same integer or floating type! But got: `, leftVal.type, ` and `, rightVal.type );
@@ -607,12 +511,9 @@ public:
 				case OpCode.LT, OpCode.GT, OpCode.LTEqual, OpCode.GTEqual:
 				{
 					import std.conv: to;
-					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected right operand, but exec stack is empty!");
 					// Right value was evaluated last so it goes first in the stack
-					TDataNode rightVal = _stack.back;
-					_stack.popBack();
+					TDataNode rightVal = _stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected left operand, but exec stack is empty!");
 					TDataNode leftVal = _stack.back;
 					loger.internalAssert(leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type`);
 
@@ -657,11 +558,8 @@ public:
 				case OpCode.Equal, OpCode.NotEqual:
 				{
 					// Right value was evaluated last so it goes first in the stack
-					TDataNode rightVal = _stack.back;
-					_stack.popBack();
-
-					TDataNode leftVal = _stack.back;
-					_stack.popBack();
+					TDataNode rightVal = _stack.popBack();
+					TDataNode leftVal = _stack.popBack();
 
 					_stack ~= TDataNode( instr.opcode == OpCode.Equal? leftVal == rightVal: leftVal != rightVal );
 					break;
@@ -675,13 +573,9 @@ public:
 
 					loger.write(`OpCode.LoadSubscr. _stack: `, _stack);
 
-					loger.internalAssert(!_stack.empty, "Cannot execute LoadSubscr instruction. Expected index value, but exec stack is empty!");
-					TDataNode indexValue = _stack.back;
-					_stack.popBack();
+					TDataNode indexValue = _stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute LoadSubscr instruction. Expected aggregate, but exec stack is empty!");
-					TDataNode aggr = _stack.back;
-					_stack.popBack();
+					TDataNode aggr = _stack.popBack();
 					loger.write(`OpCode.LoadSubscr. aggr: `, aggr);
 					loger.write(`OpCode.LoadSubscr. indexValue: `, indexValue);
 
@@ -739,17 +633,10 @@ public:
 
 					loger.write(`OpCode.LoadSlice. _stack: `, _stack);
 
-					loger.internalAssert(!_stack.empty, "Cannot execute LoadSlice instruction. Expected index value, but exec stack is empty!");
-					TDataNode endValue = _stack.back;
-					_stack.popBack();
+					TDataNode endValue = _stack.popBack();
+					TDataNode beginValue = _stack.popBack();
+					TDataNode aggr = _stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute LoadSlice instruction. Expected index value, but exec stack is empty!");
-					TDataNode beginValue = _stack.back;
-					_stack.popBack();
-
-					loger.internalAssert(!_stack.empty, "Cannot execute LoadSlice instruction. Expected aggregate, but exec stack is empty!");
-					TDataNode aggr = _stack.back;
-					_stack.popBack();
 					loger.write(`OpCode.LoadSlice. aggr: `, aggr);
 					loger.write(`OpCode.LoadSlice. beginValue: `, beginValue);
 					loger.write(`OpCode.LoadSlice. endValue: `, endValue);
@@ -816,17 +703,9 @@ public:
 
 					loger.write(`OpCode.StoreSubscr. _stack: `, _stack);
 
-					loger.internalAssert(!_stack.empty, "Cannot execute StoreSubscr instruction. Expected index value, but exec stack is empty!");
-					TDataNode indexValue = _stack.back;
-					_stack.popBack();
-					
-					loger.internalAssert(!_stack.empty, "Cannot execute StoreSubscr instruction. Expected value to set, but exec stack is empty!");
-					TDataNode value = _stack.back;
-					_stack.popBack();
-
-					loger.internalAssert(!_stack.empty, "Cannot execute StoreSubscr instruction. Expected aggregate, but exec stack is empty!");
-					TDataNode aggr = _stack.back;
-					_stack.popBack();
+					TDataNode indexValue = _stack.popBack();
+					TDataNode value = _stack.popBack();
+					TDataNode aggr = _stack.popBack();
 
 					// Do not support setting individual characters of strings for now and maybe forever... Who knowns how it turns...
 					loger.internalAssert(
@@ -871,11 +750,8 @@ public:
 				// Concatenates two arrays or strings and puts result onto stack
 				case OpCode.Concat:
 				{
-					loger.internalAssert(!_stack.empty, "Cannot execute Concat instruction. Expected right operand, but exec stack is empty!");
-					TDataNode rightVal = _stack.back;
-					_stack.popBack();
+					TDataNode rightVal = _stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute Concat instruction. Expected left operand, but exec stack is empty!");
 					TDataNode leftVal = _stack.back;
 					loger.internalAssert( ( leftVal.type == DataNodeType.String || leftVal.type == DataNodeType.Array ) && leftVal.type == rightVal.type,
 						`Left and right values for concatenation operation must have the same string or array type!`
@@ -893,13 +769,8 @@ public:
 				case OpCode.Append:
 				{
 					loger.write("OpCode.Append _stack: ", _stack);
-					loger.internalAssert(!_stack.empty,
-						"Cannot execute Append instruction. Expected right operand, but exec stack is empty!");
-					TDataNode rightVal = _stack.back;
-					_stack.popBack();
+					TDataNode rightVal = _stack.popBack();
 
-					loger.internalAssert(!_stack.empty,
-						"Cannot execute Append instruction. Expected left operand, but exec stack is empty!");
 					loger.internalAssert(_stack.back.type == DataNodeType.Array,
 						"Left operand for Append instruction expected to be array, but got: ", _stack.back.type);
 
@@ -913,20 +784,15 @@ public:
 					import std.array: insertInPlace;
 
 					loger.write("OpCode.Insert _stack: ", _stack);
-					loger.internalAssert(!_stack.empty, "Cannot execute Insert instruction. Expected right operand, but exec stack is empty!");
-					TDataNode positionNode = _stack.back;
-					_stack.popBack();
+					TDataNode positionNode = _stack.popBack();
 					import std.algorithm: canFind;
 					loger.internalAssert(
 						[DataNodeType.Integer, DataNodeType.Null, DataNodeType.Undef].canFind(positionNode.type),
 						"Cannot execute Insert instruction. Position argument expected to be an integer or empty (for append), but got: ", positionNode.type
 					);
 
-					loger.internalAssert(!_stack.empty, "Cannot execute Insert instruction. Expected left operand, but exec stack is empty!");
-					TDataNode valueNode = _stack.back;
-					_stack.popBack();
+					TDataNode valueNode = _stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute Insert instruction. Expected left operand, but exec stack is empty!");
 					TDataNode listNode = _stack.back;
 					loger.internalAssert(
 						listNode.type == DataNodeType.Array,
@@ -951,14 +817,12 @@ public:
 				case OpCode.InsertMass:
 				{
 					loger.write("OpCode.InsertMass _stack: ", _stack);
-					loger.internalAssert(!_stack.empty, "Cannot execute ListInsert instruction. Expected right operand, but exec stack is empty!");
 					assert(false, `Not implemented yet!`);
 				}
 
 				// Useless unary plus operation
 				case OpCode.UnaryPlus:
 				{
-					loger.internalAssert(!_stack.empty, "Cannot execute UnaryPlus instruction. Operand expected, but exec stack is empty!");
 					loger.internalAssert(_stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
 						`Operand for unary plus operation must have integer or floating type!` );
 
@@ -968,7 +832,6 @@ public:
 
 				case OpCode.UnaryMin:
 				{
-					loger.internalAssert(!_stack.empty, "Cannot execute UnaryMin instruction. Operand expected, but exec stack is empty!");
 					loger.internalAssert(_stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
 						`Operand for unary minus operation must have integer or floating type!`);
 
@@ -983,8 +846,6 @@ public:
 
 				case OpCode.UnaryNot:
 				{
-					loger.internalAssert(!_stack.empty, "Cannot execute UnaryNot instruction. Operand expected, but exec stack is empty!");
-
 					_stack.back = !evalAsBoolean(_stack.back);
 					break;
 				}
@@ -999,9 +860,7 @@ public:
 				case OpCode.StoreName, OpCode.StoreLocalName, OpCode.StoreNameWithParents:
 				{
 					loger.write(instr.opcode, " _stack: ", _stack);
-					loger.internalAssert(!_stack.empty, "Cannot execute ", instr.opcode, " instruction. Expected var value operand, but exec stack is empty!");
-					TDataNode varValue = _stack.back;
-					_stack.popBack();
+					TDataNode varValue = _stack.popBack();
 
 					TDataNode varNameNode = getModuleConstCopy(instr.arg);
 					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute `, instr.opcode, ` instruction. Variable name const must have string type!`);
@@ -1028,7 +887,6 @@ public:
 
 				case OpCode.ImportModule:
 				{
-					loger.internalAssert(!_stack.empty, "Cannot execute ImportModule instruction. Expected module name operand, but exec stack is empty!");
 					loger.internalAssert(_stack.back.type == DataNodeType.String, "Cannot execute ImportModule instruction. Module name operand must be a string!");
 					string moduleName = _stack.back.str;
 					_stack.popBack();
@@ -1082,12 +940,10 @@ public:
 					import std.algorithm: map;
 					import std.array: array;
 
-					loger.internalAssert(!_stack.empty, "Cannot execute FromImport instruction, because exec stack is empty!");
 					loger.internalAssert(_stack.back.type == DataNodeType.Array, "Cannot execute FromImport instruction. Expected list of symbol names");
 					string[] symbolNames = _stack.back.array.map!( it => it.str ).array;
 					_stack.popBack();
 
-					loger.internalAssert(!_stack.empty, "Cannot execute FromImport instruction, because exec stack is empty!");
 					loger.internalAssert(_stack.back.type == DataNodeType.ExecutionFrame, "Cannot execute FromImport instruction. Expected execution frame argument");
 
 					ExecutionFrame moduleFrame = _stack.back.execFrame;
@@ -1104,7 +960,6 @@ public:
 				{
 					import std.range: empty, back, popBack;
 					import std.algorithm: canFind;
-					loger.internalAssert(!_stack.empty, `Expected aggregate type for loop, but empty execution stack found`);
 					loger.write(`GetDataRange begin _stack: `, _stack);
 					loger.internalAssert([
 							DataNodeType.Array,
@@ -1152,7 +1007,6 @@ public:
 				case OpCode.RunLoop:
 				{
 					loger.write("RunLoop beginning _stack: ", _stack);
-					loger.internalAssert(!_stack.empty, `Expected data range, but empty execution stack found` );
 					loger.internalAssert(_stack.back.type == DataNodeType.DataNodeRange, `Expected DataNodeRange` );
 					auto dataRange = _stack.back.dataRange;
 					loger.write("RunLoop dataRange.empty: ", dataRange.empty);
@@ -1186,7 +1040,6 @@ public:
 				case OpCode.JumpIfTrue, OpCode.JumpIfFalse, OpCode.JumpIfTrueOrPop, OpCode.JumpIfFalseOrPop:
 				{
 					import std.algorithm: canFind;
-					loger.internalAssert(!_stack.empty, `Cannot evaluate logical value, because stack is empty`);
 
 					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 					bool jumpCond = evalAsBoolean(_stack.back); // This is actual condition to test
@@ -1221,7 +1074,6 @@ public:
 
 				case OpCode.PopTop:
 				{
-					loger.internalAssert(!_stack.empty, "Cannot pop value from stack, because stack is empty");
 					_stack.popBack();
 					break;
 				}
@@ -1246,7 +1098,6 @@ public:
 
 					_stack.popBack();
 
-					loger.internalAssert(!_stack.empty, `Expected directive code object, but got empty execution stack!`);
 					loger.internalAssert(_stack.back.type == DataNodeType.CodeObject,
 						`Code object operand for directive loading instruction should have CodeObject type`);
 
@@ -1321,7 +1172,6 @@ public:
 
 						for( size_t i = 0; i < (stackArgCount - 1); )
 						{
-							loger.internalAssert(!_stack.empty, `Expected integer as arguments block header, but got empty exec stack!`);
 							loger.internalAssert(_stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!`);
 							size_t blockArgCount = _stack.back.integer >> _stackBlockHeaderSizeOffset;
 							loger.write("blockArgCount: ", blockArgCount);
@@ -1340,11 +1190,9 @@ public:
 									size_t j = 0;
 									while( j < 2 * blockArgCount )
 									{
-										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
 										TDataNode attrValue = _stack.back;
 										_stack.popBack(); ++j; // Parallel bookkeeping ;)
 
-										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
 										loger.write(`RunCallable debug, _stack is: `, _stack);
 										loger.internalAssert(_stack.back.type == DataNodeType.String, "Named attribute name must be string!");
 										string attrName = _stack.back.str;
@@ -1377,7 +1225,6 @@ public:
 
 									for( size_t j = 0; j < blockArgCount; ++j, ++i /* Inc overall processed arg count*/ )
 									{
-										loger.internalAssert(!_stack.empty, "Execution stack is empty!");
 										TDataNode attrValue = _stack.back;
 										_stack.popBack();
 
@@ -1397,7 +1244,6 @@ public:
 					}
 					loger.write("_stack after parsing all arguments: ", _stack);
 
-					loger.internalAssert(!_stack.empty, "Expected callable object to call, but found end of execution stack!");
 					loger.internalAssert(_stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation`);
 					_stack.popBack(); // Drop callable object from stack
 
@@ -1416,10 +1262,8 @@ public:
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
 						// If frame stack contains last frame - it means that we nave done with programme
 						// Else we expect to have result of directive on the stack
-						loger.internalAssert(!_stack.empty, "Expected directive result, but execution stack is empty!" );
-						TDataNode result = _stack.back;
-						_stack.popBack(); // We saved result - so drop it!
-						loger.internalAssert(_stack.empty, "Frame stack should be empty now! Breakpoint 1.");
+						TDataNode result = _stack.popBack();
+						loger.internalAssert(_stack.empty, "Frame stack should be empty now!");
 
 						this.removeFrame(); // Drop frame from stack after end of execution
 						if( _frameStack.empty ) {
@@ -1438,12 +1282,9 @@ public:
 					newArray.length = arrayLen; // Preallocating is good ;)
 					loger.write("MakeArray _stack: ", _stack);
 					loger.write("MakeArray arrayLen: ", arrayLen);
-					for( size_t i = arrayLen; i > 0; --i )
-					{
-						loger.internalAssert(!_stack.empty, `Expected new array element, but got empty stack`);
+					for( size_t i = arrayLen; i > 0; --i ) {
 						// We take array items from the tail, so we must consider it!
-						newArray[i-1] = _stack.back;
-						_stack.popBack();
+						newArray[i-1] = _stack.popBack();
 					}
 					_stack ~= TDataNode(newArray);
 
@@ -1459,11 +1300,9 @@ public:
 
 					for( size_t i = 0; i < aaLen; ++i )
 					{
-						loger.internalAssert(!_stack.empty, `Expected assoc array value, but got empty stack` );
 						TDataNode val = _stack.back;
 						_stack.popBack();
 
-						loger.internalAssert(!_stack.empty, `Expected assoc array key, but got empty stack`);
 						loger.internalAssert(_stack.back.type == DataNodeType.String, `Expected string as assoc array key`);
 
 						newAssocArray[_stack.back.str] = val;
@@ -1474,7 +1313,6 @@ public:
 				}
 
 				case OpCode.MarkForEscape: {
-					loger.internalAssert(!_stack.empty, "Cannot execute MarkForEscape instruction. Expected operand for mark, but exec stack is empty!");
 					_stack.back.escapeState = cast(NodeEscapeState) instr.arg;
 					break;
 				}

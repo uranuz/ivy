@@ -32,7 +32,7 @@ iu = {
 			return DataNodeType.Null;
 		} else if( con === true || con === false ) {
 			return DataNodeType.Boolean;
-		} else if( typeof(con) === 'string' ) {
+		} else if( typeof(con) === 'string' || con instanceof String ) {
 			return DataNodeType.String;
 		} else if( typeof(con) === 'number' ) {
 			if( (''+con).indexOf('.') < 0 ) {

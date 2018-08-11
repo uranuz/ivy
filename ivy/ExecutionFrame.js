@@ -118,7 +118,7 @@ return __mixinProto(ExecutionFrame, {
 				case DataNodeType.ClassNode: {
 					// If there is class nodes in the path to target path, so it's property this way
 					// No matter if it's set or get mode. The last node setting is handled by code at the start of loop
-					var tmpNode = parent.__getAttr__(namePart);
+					var tmpNode = parent.getAttr(namePart);
 					if( tmpNode !== undefined ) {
 						node = tmpNode;
 					} else {
@@ -169,7 +169,7 @@ return __mixinProto(ExecutionFrame, {
 				parent[attrName] = value;
 				break;
 			case DataNodeType.ClassNode:
-				parent.classNode.__setAttr__(value, attrName);
+				parent.classNode.setAttr(value, attrName);
 				break;
 			default:
 				throw new errors.IvyError('Unexpected node type');

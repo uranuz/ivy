@@ -58,14 +58,12 @@ public:
 	/// Run programme main module with arguments passed as mainModuleScope parameter
 	TDataNode run(TDataNode mainModuleScope = TDataNode(), TDataNode[string] extraGlobals = null)
 	{
-		mainModuleScope["__scopeName__"] = "__main__"; // Allocating a dict if it's not
 		import std.range: back;
 
 		import ivy.interpreter.interpreter: Interpreter;
 		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
 		interp.addDirInterpreters(_dirInterpreters);
 		interp.addExtraGlobals(extraGlobals);
-
 		return interp.execLoop();
 	}
 
@@ -132,6 +130,7 @@ JSONValue toStdJSON(TDataNode con)
 		case CodeObject: {
 			JSONValue jCode = [
 				"_t": JSONValue(con.type),
+				"name": JSONValue(con.codeObject.name),
 				"moduleObj": JSONValue(con.codeObject._moduleObj._name),
 			];
 			JSONValue[] jInstrs;
