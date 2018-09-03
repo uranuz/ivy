@@ -1,8 +1,8 @@
 module ivy.interpreter.data_node_types;
 
 import ivy.code_object: CodeObject;
-import ivy.directive_stuff: DirAttrsBlock;
-import ivy.interpreter.data_node: IDataNodeRange, DataNode, DataNodeType;
+import ivy.directive_stuff: DirAttrsBlock, DirAttrKind;
+import ivy.interpreter.data_node: IvyNodeRange, IvyData, IvyDataType;
 import ivy.interpreter.interpreter: INativeDirectiveInterpreter;
 
 enum CallableKind { ScopedDirective, NoscopeDirective, Module, Package }
@@ -13,6 +13,22 @@ enum CallableKind { ScopedDirective, NoscopeDirective, Module, Package }
 */
 class CallableObject
 {
+	import std.exception: enforce;
+	
+	this() {}
+	this(string name, CodeObject codeObject, CallableKind kind = CallableKind.ScopedDirective)
+	{
+		_name = name;
+		_codeObj = codeObject;
+		_kind = kind;
+	}
+	this(string name, INativeDirectiveInterpreter dirInterp, CallableKind kind = CallableKind.ScopedDirective)
+	{
+		_name = name;
+		_dirInterp = dirInterp;
+		_kind = kind;
+	}
+
 	string _name; // Name of directive
 	CallableKind _kind; // Used to know whether is's directive or module, or package module
 	CodeObject _codeObj; // Code object related to this directive
@@ -31,17 +47,25 @@ class CallableObject
 		}
 		assert(false, `Cannot get attr blocks for callable, because code object and and native interpreter are null`);
 	}
+
+	bool isNoscope() @property
+	{
+		import std.conv: text;
+		enforce(attrBlocks.length > 0, `Attr block count must be > 1`);
+		enforce(
+			attrBlocks[$-1].kind == DirAttrKind.BodyAttr,
+			`Last attr block definition expected to be BodyAttr, but got: ` ~ attrBlocks[$-1].kind.text);
+		return attrBlocks[$-1].bodyAttr.isNoscope;
+	}
 }
 
-class ArrayRange: IDataNodeRange
+class ArrayRange: IvyNodeRange
 {
-	alias TDataNode = DataNode!string;
-
 private:
-	TDataNode[] _array;
+	IvyData[] _array;
 
 public:
-	this( TDataNode[] arr )
+	this( IvyData[] arr )
 	{
 		_array = arr;
 	}
@@ -53,7 +77,7 @@ public:
 			return _array.empty;
 		}
 
-		TDataNode front()
+		IvyData front()
 		{
 			import std.range: front;
 			return _array.front;
@@ -67,15 +91,14 @@ public:
 	}
 }
 
-class AssocArrayRange: IDataNodeRange
+class AssocArrayRange: IvyNodeRange
 {
-	alias TDataNode = DataNode!string;
 private:
-	TDataNode[string] _assocArray;
+	IvyData[string] _assocArray;
 	string[] _keys;
 
 public:
-	this( TDataNode[string] assocArr )
+	this( IvyData[string] assocArr )
 	{
 		_assocArray = assocArr;
 		_keys = _assocArray.keys;
@@ -88,10 +111,10 @@ public:
 			return _keys.empty;
 		}
 
-		TDataNode front()
+		IvyData front()
 		{
 			import std.range: front;
-			return TDataNode(_keys.front);
+			return IvyData(_keys.front);
 		}
 
 		void popFront()
@@ -102,9 +125,8 @@ public:
 	}
 }
 
-class IntegerRange: IDataNodeRange
+class IntegerRange: IvyNodeRange
 {
-	alias TDataNode = DataNode!string;
 private:
 	long _current;
 	long _end;
@@ -122,8 +144,8 @@ public:
 			return _current >= _end;
 		}
 
-		TDataNode front() {
-			return TDataNode(_current);
+		IvyData front() {
+			return IvyData(_current);
 		}
 
 		void popFront() {

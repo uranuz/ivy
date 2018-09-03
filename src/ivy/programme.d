@@ -9,8 +9,6 @@ import ivy.interpreter.data_node;
 import ivy.interpreter.interpreter;
 import ivy.interpreter.directives;
 
-alias TDataNode = DataNode!string;
-
 // Structure for configuring Ivy
 struct IvyConfig
 {
@@ -56,15 +54,18 @@ public:
 	}
 
 	/// Run programme main module with arguments passed as mainModuleScope parameter
-	TDataNode run(TDataNode mainModuleScope = TDataNode(), TDataNode[string] extraGlobals = null)
-	{
-		import std.range: back;
+	IvyData run(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null) {
+		return runSaveState(mainModuleScope, extraGlobals)._stack.back();
+	}
 
+	Interpreter runSaveState(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null)
+	{
 		import ivy.interpreter.interpreter: Interpreter;
 		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
 		interp.addDirInterpreters(_dirInterpreters);
 		interp.addExtraGlobals(extraGlobals);
-		return interp.execLoop();
+		interp.execLoop();
+		return interp;
 	}
 
 	void logerMethod(LogerMethod method) @property {
@@ -83,7 +84,7 @@ public:
 		foreach( string modName, ModuleObject modObj; _moduleObjects )
 		{
 			JSONValue[] jConsts;
-			foreach( ref TDataNode con; modObj._consts ) {
+			foreach( ref IvyData con; modObj._consts ) {
 				jConsts ~= .toStdJSON(con);
 			}
 			moduleObjects[modName] = [
@@ -98,9 +99,9 @@ public:
 }
 
 import std.json: JSONValue;
-JSONValue toStdJSON(TDataNode con)
+JSONValue toStdJSON(IvyData con)
 {
-	final switch( con.type ) with(DataNodeType)
+	final switch( con.type ) with(IvyDataType)
 	{
 		case Undef: return JSONValue("undef");
 		case Null: return JSONValue();
@@ -115,14 +116,14 @@ JSONValue toStdJSON(TDataNode con)
 			]);
 		case Array: {
 			JSONValue[] arr;
-			foreach( TDataNode node; con.array ) {
+			foreach( IvyData node; con.array ) {
 				arr ~= toStdJSON(node);
 			}
 			return JSONValue(arr);
 		}
 		case AssocArray: {
 			JSONValue[string] arr;
-			foreach( string key, TDataNode node; con.assocArray ) {
+			foreach( string key, IvyData node; con.assocArray ) {
 				arr[key] ~= toStdJSON(node);
 			}
 			return JSONValue(arr);

@@ -17,7 +17,7 @@ define('ivy/utils', [
 	ClassNode
 ) {
 var
-DataNodeType = Consts.DataNodeType,
+IvyDataType = Consts.IvyDataType,
 iu = {
 	back: function(arr) {
 		if( arr.length === 0 ) {
@@ -27,35 +27,35 @@ iu = {
 	},
 	getDataNodeType: function(con) {
 		if( con === undefined ) {
-			return DataNodeType.Undef;
+			return IvyDataType.Undef;
 		} else if( con === null) {
-			return DataNodeType.Null;
+			return IvyDataType.Null;
 		} else if( con === true || con === false ) {
-			return DataNodeType.Boolean;
+			return IvyDataType.Boolean;
 		} else if( typeof(con) === 'string' || con instanceof String ) {
-			return DataNodeType.String;
+			return IvyDataType.String;
 		} else if( typeof(con) === 'number' ) {
 			if( (''+con).indexOf('.') < 0 ) {
-				return DataNodeType.Integer;
+				return IvyDataType.Integer;
 			} else {
-				return DataNodeType.Floating;
+				return IvyDataType.Floating;
 			}
 		} else if( con instanceof Array ) {
-			return DataNodeType.Array;
+			return IvyDataType.Array;
 		} else if( con instanceof CodeObject ) {
-			return DataNodeType.CodeObject;
+			return IvyDataType.CodeObject;
 		} else if( con instanceof Date ) {
-			return DataNodeType.DateTime;
+			return IvyDataType.DateTime;
 		} else if( con instanceof CallableObject ) {
-			return DataNodeType.Callable;
+			return IvyDataType.Callable;
 		} else if( con instanceof ExecutionFrame ) {
-			return DataNodeType.ExecutionFrame;
+			return IvyDataType.ExecutionFrame;
 		} else if( con instanceof DataNodeRange ) {
-			return DataNodeType.DataNodeRange;
+			return IvyDataType.DataNodeRange;
 		} else if( con instanceof ClassNode ) {
-			return DataNodeType.ClassNode;
+			return IvyDataType.ClassNode;
 		} else if( con instanceof Object ) {
-			return DataNodeType.AssocArray;
+			return IvyDataType.AssocArray;
 		} else {
 			throw new Error('Unrecognized node type!');
 		}
@@ -63,18 +63,18 @@ iu = {
 	deeperCopy: function(val) {
 		var vType = this.getDataNodeType(val);
 		switch( vType ) {
-			case DataNodeType.Undef:
-			case DataNodeType.Null:
-			case DataNodeType.Boolean:
-			case DataNodeType.Integer:
-			case DataNodeType.Floating:
-			case DataNodeType.String:
+			case IvyDataType.Undef:
+			case IvyDataType.Null:
+			case IvyDataType.Boolean:
+			case IvyDataType.Integer:
+			case IvyDataType.Floating:
+			case IvyDataType.String:
 				// All of these are value types so just return plain copy
 				return val;
-			case DataNodeType.DateTime:
+			case IvyDataType.DateTime:
 				// Copy date object
 				return new Date(val.getTime());
-			case DataNodeType.AssocArray: {
+			case IvyDataType.AssocArray: {
 				var newObj = {};
 				for( var key in val ) {
 					if( val.hasOwnProperty(key) ) {
@@ -83,7 +83,7 @@ iu = {
 				}
 				return newObj;
 			}
-			case DataNodeType.Array: {
+			case IvyDataType.Array: {
 				var newArr = [];
 				newArr.length = val.length; // Preallocate
 				for( var i = 0; i < val.length; ++i ) {
@@ -91,7 +91,7 @@ iu = {
 				}
 				return newArr;
 			}
-			case DataNodeType.CodeObject:
+			case IvyDataType.CodeObject:
 				// CodeObject's are constants so don't do copy
 				return val;
 			default:
@@ -101,19 +101,19 @@ iu = {
 	toString: function(val) {
 		var vType = this.getDataNodeType(val);
 		switch( vType ) {
-			case DataNodeType.Undef:
-			case DataNodeType.Null:
+			case IvyDataType.Undef:
+			case IvyDataType.Null:
 				return '';
-			case DataNodeType.Boolean:
+			case IvyDataType.Boolean:
 				return (val? 'true': 'false');
-			case DataNodeType.Integer:
-			case DataNodeType.Floating:
+			case IvyDataType.Integer:
+			case IvyDataType.Floating:
 				return '' + val;
-			case DataNodeType.String:
+			case IvyDataType.String:
 				return val;
-			case DataNodeType.DateTime:
+			case IvyDataType.DateTime:
 				return '' + val;
-			case DataNodeType.AssocArray: {
+			case IvyDataType.AssocArray: {
 				var result = '{';
 				for( var key in val ) {
 					if( val.hasOwnProperty(key) ) {
@@ -123,7 +123,7 @@ iu = {
 				result += '}';
 				return result;
 			}
-			case DataNodeType.Array: {
+			case IvyDataType.Array: {
 				var result = '';
 				for( var i = 0; i < val.length; ++i ) {
 					result += this.toString(val[i]);

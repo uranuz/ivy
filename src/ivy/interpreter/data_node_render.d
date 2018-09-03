@@ -1,6 +1,6 @@
 module ivy.interpreter.data_node_render;
 
-import ivy.interpreter.data_node: DataNodeType;
+import ivy.interpreter.data_node: IvyDataType;
 
 /// Варианты типов отрисовки узла данных в буфер:
 /// Text - для вывода пользователю в виде текста (не включает отображение значений внутренних типов данных)
@@ -74,11 +74,11 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref O
 }
 
 import std.traits: isInstanceOf;
-import ivy.interpreter.data_node: DataNode, NodeEscapeState;
-private void _writeEscapedString(DataRenderType renderType, OutRange, TDataNode)(auto ref OutRange outRange, TDataNode strNode)
-	if( isInstanceOf!(DataNode, TDataNode) )
+import ivy.interpreter.data_node: TIvyData, NodeEscapeState;
+private void _writeEscapedString(DataRenderType renderType, OutRange, IvyData)(auto ref OutRange outRange, IvyData strNode)
+	if( isInstanceOf!(TIvyData, IvyData) )
 {
-	assert(strNode.type == DataNodeType.String);
+	assert(strNode.type == IvyDataType.String);
 	if( strNode.escapeState == NodeEscapeState.Safe && renderType == DataRenderType.HTML ) {
 		outRange._writeEscapedString!(DataRenderType.Text)(strNode.str);
 	} else {
@@ -90,8 +90,8 @@ private void _writeEscapedString(DataRenderType renderType, OutRange, TDataNode)
 	}
 }
 
-void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
-	auto ref TDataNode node, auto ref OutRange outRange, size_t maxRecursion = size_t.max)
+void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
+	auto ref IvyData node, auto ref OutRange outRange, size_t maxRecursion = size_t.max)
 {
 	import std.range: put;
 	import std.conv: to;
@@ -99,7 +99,7 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 
 	assert( maxRecursion, "Recursion is too deep!" );
 
-	final switch(node.type) with(DataNodeType)
+	final switch(node.type) with(IvyDataType)
 	{
 		case Undef:
 			static if( [DataRenderType.Text, DataRenderType.HTML].canFind(renderType) ) {
@@ -165,7 +165,7 @@ void renderDataNode(DataRenderType renderType, TDataNode, OutRange)(
 			import std.conv: text;
 			if( node.classNode )
 			{
-				TDataNode serialized = node.classNode.__serialize__();
+				IvyData serialized = node.classNode.__serialize__();
 				if( serialized.isUndef ) {
 					outRange._writeEscapedString!renderType("<class node>");
 				} else {

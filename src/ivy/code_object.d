@@ -1,6 +1,6 @@
 module ivy.code_object;
 
-import ivy.interpreter.data_node: DataNode, DataNodeType, NodeEscapeState;
+import ivy.interpreter.data_node: IvyData, IvyDataType, NodeEscapeState;
 import ivy.directive_stuff: DirAttrsBlock;
 
 /**
@@ -9,13 +9,11 @@ import ivy.directive_stuff: DirAttrsBlock;
 */
 class ModuleObject
 {
-	alias TDataNode = DataNode!string;
-
 	string _name; // Module name that used to reference it in source code
 	string _fileName; // Source file name for this module
 	size_t _entryPointIndex; // Index of callable in _consts that is entry point to module
 
-	TDataNode[] _consts; // List of constant data for this module
+	IvyData[] _consts; // List of constant data for this module
 
 public:
 	this(string name, string fileName)
@@ -34,7 +32,7 @@ public:
 
 	// Append const to list and return it's index
 	// This function can return index of already existing object if it's equal to passed data
-	size_t addConst(TDataNode data)
+	size_t addConst(IvyData data)
 	{
 		import std.range: back;
 		size_t index = _consts.length;
@@ -43,7 +41,7 @@ public:
 		return index;
 	}
 
-	TDataNode getConst(size_t index)
+	IvyData getConst(size_t index)
 	{
 		import std.conv: text;
 		assert( index < _consts.length, `There is no constant with index ` ~ index.text ~ ` in module "` ~ _name ~ `"`);
@@ -54,7 +52,7 @@ public:
 	{
 		import std.conv: text;
 		assert( _entryPointIndex < _consts.length, `Cannot get main code object, because there is no constant with index ` ~ _entryPointIndex.text );
-		assert( _consts[_entryPointIndex].type == DataNodeType.CodeObject, `Cannot get main code object, because const with index ` ~ _entryPointIndex.text ~ ` is not code object`  );
+		assert( _consts[_entryPointIndex].type == IvyDataType.CodeObject, `Cannot get main code object, because const with index ` ~ _entryPointIndex.text ~ ` is not code object`  );
 
 		return _consts[_entryPointIndex].codeObject;
 	}

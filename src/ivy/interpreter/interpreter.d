@@ -23,15 +23,11 @@ interface INativeDirectiveInterpreter
 	Symbol compilerSymbol() @property;
 }
 
-alias TDataNode = DataNode!string;
-
 import ivy.bytecode;
 
 class Interpreter
 {
 public:
-	alias String = string;
-	alias TDataNode = DataNode!String;
 	alias LogerMethod = void delegate(LogInfo);
 
 	// Stack of execution frames with directives or modules local data
@@ -53,7 +49,7 @@ public:
 
 	size_t _pk; // Programme counter
 
-	this(ModuleObject[string] moduleObjects, string mainModuleName, TDataNode dataDict, LogerMethod logerMethod = null)
+	this(ModuleObject[string] moduleObjects, string mainModuleName, IvyData dataDict, LogerMethod logerMethod = null)
 	{
 		import std.range: back;
 
@@ -63,13 +59,11 @@ public:
 
 		loger.write(`Passed dataDict: `, dataDict);
 
-		CallableObject rootCallableObj = new CallableObject;
-		rootCallableObj._codeObj = _moduleObjects[mainModuleName].mainCodeObject;
-		rootCallableObj._kind = CallableKind.Module;
-		rootCallableObj._name = "__main__";
-		loger.write(`CallableObj._codeObj._moduleObj: `, rootCallableObj._codeObj._moduleObj._name);
+		CallableObject rootCallableObj = new CallableObject(
+			"__main__", _moduleObjects[mainModuleName].mainCodeObject, CallableKind.Module
+		);
 
-		TDataNode globalDataDict;
+		IvyData globalDataDict;
 		globalDataDict["__scopeName__"] = "__global__"; // Allocating dict
 		_globalFrame = new ExecutionFrame(null, null, globalDataDict, _logerMethod, false);
 		_moduleFrames["__global__"] = _globalFrame; // We need to add entry point module frame to storage manually
@@ -83,13 +77,10 @@ public:
 
 	private void _addNativeDirInterp(string name, INativeDirectiveInterpreter dirInterp)
 	{
-		loger.internalAssert(name.length && dirInterp, `Directive name is empty or dirInterp is null!`);
+		loger.internalAssert(name.length && dirInterp, `Directive name is empty or direxecInterp is null!`);
 
 		// Add custom native directive interpreters to global scope
-		CallableObject dirCallable = new CallableObject();
-		dirCallable._name = name;
-		dirCallable._dirInterp = dirInterp;
-		_globalFrame.setValue(name, TDataNode(dirCallable));
+		_globalFrame.setValue(name, IvyData(new CallableObject(name, dirInterp)));
 	}
 
 	// Method used to set custom global directive interpreters
@@ -102,9 +93,9 @@ public:
 
 	// Method used to add extra global data into interpreter
 	// Consider not to bloat it to much ;)
-	void addExtraGlobals(TDataNode[string] extraGlobals)
+	void addExtraGlobals(IvyData[string] extraGlobals)
 	{
-		foreach( string name, TDataNode dataNode; extraGlobals ) {
+		foreach( string name, IvyData dataNode; extraGlobals ) {
 			// Take a copy of it just like with consts
 			_globalFrame.setValue(name, dataNode);
 		}
@@ -217,7 +208,7 @@ public:
 		return _frameStack.back;
 	}
 
-	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, bool isNoscope)
+	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, IvyData dataDict, bool isNoscope)
 	{
 		_frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict, _logerMethod, isNoscope);
 		loger.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict, `, and modFrame `, (modFrame? `is not null`: `is null`));
@@ -308,7 +299,7 @@ public:
 		return result;
 	}
 
-	TDataNode getValue(string varName)
+	IvyData getValue(string varName)
 	{
 		FrameSearchResult result = findValue!(FrameSearchMode.get)(varName);
 		if( result.node.isUndef && !result.allowUndef )
@@ -331,17 +322,17 @@ public:
 		return result.node;
 	}
 
-	private void _assignNodeAttribute(ref TDataNode parent, ref TDataNode value, string varName)
+	private void _assignNodeAttribute(ref IvyData parent, ref IvyData value, string varName)
 	{
 		import std.array: split;
 		import std.range: back;
 		string attrName = varName.split(`.`).back;
 		switch( parent.type )
 		{
-			case DataNodeType.AssocArray:
+			case IvyDataType.AssocArray:
 				parent.assocArray[attrName] = value;
 				break;
-			case DataNodeType.ClassNode:
+			case IvyDataType.ClassNode:
 				if( !parent.classNode ) {
 					loger.error(`Cannot assign attribute, because class node is null`);
 				}
@@ -352,35 +343,35 @@ public:
 		}
 	}
 
-	void setValue(string varName, TDataNode value)
+	void setValue(string varName, IvyData value)
 	{
 		loger.write(`Call for: ` ~ varName);
 		FrameSearchResult result = findValue!(FrameSearchMode.set)(varName);
 		_assignNodeAttribute(result.parent, value, varName);
 	}
 
-	void setValueWithParents(string varName, TDataNode value)
+	void setValueWithParents(string varName, IvyData value)
 	{
 		loger.write(`Call for: ` ~ varName);
 		FrameSearchResult result = findValue!(FrameSearchMode.setWithParents)(varName);
 		_assignNodeAttribute(result.parent, value, varName);
 	}
 
-	void setLocalValue(string varName, TDataNode value)
+	void setLocalValue(string varName, IvyData value)
 	{
 		loger.write(`Call for: ` ~ varName);
 		FrameSearchResult result = findValueLocal!(FrameSearchMode.set)(varName);
 		_assignNodeAttribute(result.parent, value, varName);
 	}
 
-	void setLocalValueWithParents(string varName, TDataNode value)
+	void setLocalValueWithParents(string varName, IvyData value)
 	{
 		loger.write(`Call for: ` ~ varName);
 		FrameSearchResult result = findValueLocal!(FrameSearchMode.setWithParents)(varName);
 		_assignNodeAttribute(result.parent, value, varName);
 	}
 
-	TDataNode getModuleConst( size_t index )
+	IvyData getModuleConst( size_t index )
 	{
 		import std.range: back, empty;
 		import std.conv: text;
@@ -393,28 +384,28 @@ public:
 		return _frameStack.back._callableObj._codeObj._moduleObj.getConst(index);
 	}
 
-	TDataNode getModuleConstCopy( size_t index )
+	IvyData getModuleConstCopy( size_t index )
 	{
 		return deeperCopy( getModuleConst(index) );
 	}
 
-	bool evalAsBoolean(ref TDataNode value)
+	bool evalAsBoolean(ref IvyData value)
 	{
 		switch(value.type)
 		{
-			case DataNodeType.Undef, DataNodeType.Null: return false;
-			case DataNodeType.Boolean: return value.boolean;
-			case DataNodeType.Integer, DataNodeType.Floating, DataNodeType.DateTime:
+			case IvyDataType.Undef, IvyDataType.Null: return false;
+			case IvyDataType.Boolean: return value.boolean;
+			case IvyDataType.Integer, IvyDataType.Floating, IvyDataType.DateTime:
 				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
 				// because in many cases they could be treated as significant values
 				// DateTime and Boolean are not empty too, because we cannot say what value should be treated as empty
 				return true;
-			case DataNodeType.String: return !!value.str.length;
-			case DataNodeType.Array: return !!value.array.length;
-			case DataNodeType.AssocArray: return !!value.assocArray.length;
-			case DataNodeType.DataNodeRange:
+			case IvyDataType.String: return !!value.str.length;
+			case IvyDataType.Array: return !!value.array.length;
+			case IvyDataType.AssocArray: return !!value.assocArray.length;
+			case IvyDataType.DataNodeRange:
 				return !!value.dataRange && !value.dataRange.empty;
-			case DataNodeType.ClassNode:
+			case IvyDataType.ClassNode:
 				// Basic check for ClassNode for emptyness is that it should not be null reference
 				// If some interface method will be introduced to check for empty then we shall consider to check it too
 				return value.classNode !is null;
@@ -425,7 +416,7 @@ public:
 		assert(false);
 	}
 
-	TDataNode execLoop()
+	IvyData execLoop()
 	{
 		import std.range: empty, back, popBack;
 		import std.conv: to, text;
@@ -446,17 +437,18 @@ public:
 				loger.write("_stack on code object end: ", _stack);
 				loger.write("_frameStack on code object end: ", _frameStack);
 				loger.internalAssert(!_frameStack.empty, "Frame stack shouldn't be empty yet'");
+
 				// Else we expect to have result of directive on the stack
-
-				TDataNode result = _stack.popBack();
-				loger.internalAssert(_stack.empty, "Frame stack should be empty now! But there is: ", _stack);
-
-				this.removeFrame(); // Exit out of this frame
-				if( this._frameStack.empty ) {
-					return result; // If there is no frames left - then we finished
+				loger.internalAssert(_stack.length == 1, "Frame stack should contain 1 item now! But there is: ", _stack);
+				if( this._frameStack.length == 1 ) {
+					// If there is the last frame it means that it is the last module frame.
+					// We need to leave frame here for case when we want to execute specific function of module
+					return _stack.back();
 				}
+				IvyData result = _stack.popBack();
+				this.removeFrame(); // Exit out of this frame
 
-				loger.internalAssert(_stack.back.type == DataNodeType.Integer, "Expected integer as instruction pointer, but got: ", _stack.back.type);
+				loger.internalAssert(_stack.back.type == IvyDataType.Integer, "Expected integer as instruction pointer, but got: ", _stack.back.type);
 				_pk = cast(size_t) _stack.back.integer;
 				_stack.popBack(); // Drop return address
 
@@ -473,10 +465,10 @@ public:
 				case OpCode.Add, OpCode.Sub, OpCode.Mul, OpCode.Div, OpCode.Mod:
 				{
 					// Right value was evaluated last so it goes first in the stack
-					TDataNode rightVal = _stack.popBack();
+					IvyData rightVal = _stack.popBack();
 
-					TDataNode leftVal = _stack.back;
-					loger.internalAssert( ( leftVal.type == DataNodeType.Integer || leftVal.type == DataNodeType.Floating ) && leftVal.type == rightVal.type,
+					IvyData leftVal = _stack.back;
+					loger.internalAssert( ( leftVal.type == IvyDataType.Integer || leftVal.type == IvyDataType.Floating ) && leftVal.type == rightVal.type,
 						`Left and right values of arithmetic operation must have the same integer or floating type! But got: `, leftVal.type, ` and `, rightVal.type );
 
 					arithm_op_switch:
@@ -490,7 +482,7 @@ public:
 							tuple(OpCode.Mod, "%")) )
 						{
 							case arithmOp[0]: {
-								if( leftVal.type == DataNodeType.Integer )
+								if( leftVal.type == IvyDataType.Integer )
 								{
 									mixin( `_stack.back = leftVal.integer ` ~ arithmOp[1] ~ ` rightVal.integer;` );
 								}
@@ -512,9 +504,9 @@ public:
 				{
 					import std.conv: to;
 					// Right value was evaluated last so it goes first in the stack
-					TDataNode rightVal = _stack.popBack();
+					IvyData rightVal = _stack.popBack();
 
-					TDataNode leftVal = _stack.back;
+					IvyData leftVal = _stack.back;
 					loger.internalAssert(leftVal.type == rightVal.type, `Left and right operands of comparision must have the same type`);
 
 					compare_op_switch:
@@ -529,17 +521,17 @@ public:
 							case compareOp[0]: {
 								switch( leftVal.type )
 								{
-									case DataNodeType.Undef, DataNodeType.Null:
+									case IvyDataType.Undef, IvyDataType.Null:
 										// Undef and Null are not less or equal to something
-										_stack.back = TDataNode(false);
+										_stack.back = IvyData(false);
 										break;
-									case DataNodeType.Integer:
+									case IvyDataType.Integer:
 										mixin( `_stack.back = leftVal.integer ` ~ compareOp[1] ~ ` rightVal.integer;` );
 										break;
-									case DataNodeType.Floating:
+									case IvyDataType.Floating:
 										mixin( `_stack.back = leftVal.floating ` ~ compareOp[1] ~ ` rightVal.floating;` );
 										break;
-									case DataNodeType.String:
+									case IvyDataType.String:
 										mixin( `_stack.back = leftVal.str ` ~ compareOp[1] ~ ` rightVal.str;` );
 										break;
 									default:
@@ -558,10 +550,10 @@ public:
 				case OpCode.Equal, OpCode.NotEqual:
 				{
 					// Right value was evaluated last so it goes first in the stack
-					TDataNode rightVal = _stack.popBack();
-					TDataNode leftVal = _stack.popBack();
+					IvyData rightVal = _stack.popBack();
+					IvyData leftVal = _stack.popBack();
 
-					_stack ~= TDataNode( instr.opcode == OpCode.Equal? leftVal == rightVal: leftVal != rightVal );
+					_stack ~= IvyData( instr.opcode == OpCode.Equal? leftVal == rightVal: leftVal != rightVal );
 					break;
 				}
 
@@ -573,20 +565,20 @@ public:
 
 					loger.write(`OpCode.LoadSubscr. _stack: `, _stack);
 
-					TDataNode indexValue = _stack.popBack();
+					IvyData indexValue = _stack.popBack();
 
-					TDataNode aggr = _stack.popBack();
+					IvyData aggr = _stack.popBack();
 					loger.write(`OpCode.LoadSubscr. aggr: `, aggr);
 					loger.write(`OpCode.LoadSubscr. indexValue: `, indexValue);
 
 					loger.internalAssert(
-						[DataNodeType.String, DataNodeType.Array, DataNodeType.AssocArray, DataNodeType.ClassNode].canFind(aggr.type),
+						[IvyDataType.String, IvyDataType.Array, IvyDataType.AssocArray, IvyDataType.ClassNode].canFind(aggr.type),
 						"Cannot execute LoadSubscr instruction. Aggregate value must be string, array, assoc array or class node!");
 
 					switch( aggr.type )
 					{
-						case DataNodeType.String:
-							loger.internalAssert(indexValue.type == DataNodeType.Integer,
+						case IvyDataType.String:
+							loger.internalAssert(indexValue.type == IvyDataType.Integer,
 								"Cannot execute LoadSubscr instruction. Index value for string aggregate must be integer!");
 
 							// Index operation for string in D is little more complicated
@@ -595,25 +587,25 @@ public:
 							 aggr.str.decode(endIndex); // decode increases passed index
 							 loger.internalAssert(startIndex < aggr.str.length, `String slice start index must be less than str length`);
 							 loger.internalAssert(endIndex <= aggr.str.length, `String slice end index must be less or equal to str length`);
-							_stack ~= TDataNode( aggr.str[startIndex..endIndex] );
+							_stack ~= IvyData( aggr.str[startIndex..endIndex] );
 							break;
-						case DataNodeType.Array:
-							loger.internalAssert(indexValue.type == DataNodeType.Integer,
+						case IvyDataType.Array:
+							loger.internalAssert(indexValue.type == IvyDataType.Integer,
 								"Cannot execute LoadSubscr instruction. Index value for array aggregate must be integer!");
 							loger.internalAssert(indexValue.integer < aggr.array.length, `Array index must be less than array length`);
 							_stack ~= aggr.array[indexValue.integer];
 							break;
-						case DataNodeType.AssocArray:
-							loger.internalAssert(indexValue.type == DataNodeType.String,
+						case IvyDataType.AssocArray:
+							loger.internalAssert(indexValue.type == IvyDataType.String,
 								"Cannot execute LoadSubscr instruction. Index value for assoc array aggregate must be string!");
 							loger.internalAssert(indexValue.str in aggr.assocArray,
 								`Assoc array key "`, indexValue.str, `" must be present in assoc array`);
 							_stack ~= aggr.assocArray[indexValue.str];
 							break;
-						case DataNodeType.ClassNode:
-							if( indexValue.type == DataNodeType.Integer ) {
+						case IvyDataType.ClassNode:
+							if( indexValue.type == IvyDataType.Integer ) {
 								_stack ~= aggr.classNode[indexValue.integer];
-							} else if( indexValue.type == DataNodeType.String ) {
+							} else if( indexValue.type == IvyDataType.String ) {
 								_stack ~= aggr.classNode[indexValue.str];
 							} else {
 								loger.error("Cannot execute LoadSubscr instruction. Index value for class node must be string or integer!");
@@ -633,28 +625,28 @@ public:
 
 					loger.write(`OpCode.LoadSlice. _stack: `, _stack);
 
-					TDataNode endValue = _stack.popBack();
-					TDataNode beginValue = _stack.popBack();
-					TDataNode aggr = _stack.popBack();
+					IvyData endValue = _stack.popBack();
+					IvyData beginValue = _stack.popBack();
+					IvyData aggr = _stack.popBack();
 
 					loger.write(`OpCode.LoadSlice. aggr: `, aggr);
 					loger.write(`OpCode.LoadSlice. beginValue: `, beginValue);
 					loger.write(`OpCode.LoadSlice. endValue: `, endValue);
 
 					loger.internalAssert(
-						[DataNodeType.String, DataNodeType.Array, DataNodeType.ClassNode].canFind(aggr.type),
+						[IvyDataType.String, IvyDataType.Array, IvyDataType.ClassNode].canFind(aggr.type),
 						"Cannot execute LoadSlice instruction. Aggregate value must be string, array, assoc array or class node!");
 					
-					loger.internalAssert(beginValue.type == DataNodeType.Integer,
+					loger.internalAssert(beginValue.type == IvyDataType.Integer,
 						"Cannot execute LoadSlice instruction. Begin value of slice must be integer!");
 
-					loger.internalAssert(endValue.type == DataNodeType.Integer,
+					loger.internalAssert(endValue.type == IvyDataType.Integer,
 						"Cannot execute LoadSlice instruction. End value of slice must be integer!");
 
 					size_t startIndex; size_t endIndex; size_t len;
-					if( [DataNodeType.String, DataNodeType.Array].canFind(aggr.type) )
+					if( [IvyDataType.String, IvyDataType.Array].canFind(aggr.type) )
 					{
-						if( aggr.type == DataNodeType.String )
+						if( aggr.type == IvyDataType.String )
 						{
 							startIndex = aggr.str.toUTFindex(beginValue.integer); // Get code unit index by index of symbol
 							endIndex = endValue.integer;
@@ -679,15 +671,15 @@ public:
 
 					switch( aggr.type )
 					{
-						case DataNodeType.String:
-							_stack ~= TDataNode( aggr.str[startIndex..endIndex] );
+						case IvyDataType.String:
+							_stack ~= IvyData( aggr.str[startIndex..endIndex] );
 							break;
-						case DataNodeType.Array:
+						case IvyDataType.Array:
 							_stack ~= aggr.array[beginValue.integer..endValue.integer];
 							break;
-						case DataNodeType.ClassNode:
+						case IvyDataType.ClassNode:
 							// Class node must have it's own range checks
-							_stack ~= TDataNode(aggr.classNode[beginValue.integer..endValue.integer]);
+							_stack ~= IvyData(aggr.classNode[beginValue.integer..endValue.integer]);
 							break;
 						default:
 							loger.internalAssert(false, `Cannot execute LoadSlice instruction. Unexpected aggregate type`);
@@ -703,32 +695,32 @@ public:
 
 					loger.write(`OpCode.StoreSubscr. _stack: `, _stack);
 
-					TDataNode indexValue = _stack.popBack();
-					TDataNode value = _stack.popBack();
-					TDataNode aggr = _stack.popBack();
+					IvyData indexValue = _stack.popBack();
+					IvyData value = _stack.popBack();
+					IvyData aggr = _stack.popBack();
 
 					// Do not support setting individual characters of strings for now and maybe forever... Who knowns how it turns...
 					loger.internalAssert(
-						[DataNodeType.Array, DataNodeType.AssocArray, DataNodeType.ClassNode].canFind(aggr.type),
+						[IvyDataType.Array, IvyDataType.AssocArray, IvyDataType.ClassNode].canFind(aggr.type),
 						"Cannot execute StoreSubscr instruction. Aggregate value must be array, assoc array or class node!");
 
 					switch( aggr.type )
 					{
-						case DataNodeType.Array:
-							loger.internalAssert(indexValue.type == DataNodeType.Integer,
+						case IvyDataType.Array:
+							loger.internalAssert(indexValue.type == IvyDataType.Integer,
 								"Cannot execute StoreSubscr instruction. Index value for array aggregate must be integer!");
 							loger.internalAssert(indexValue.integer < aggr.array.length, `Array index must be less than array length`);
 							aggr[indexValue.integer] = value;
 							break;
-						case DataNodeType.AssocArray:
-							loger.internalAssert(indexValue.type == DataNodeType.String,
+						case IvyDataType.AssocArray:
+							loger.internalAssert(indexValue.type == IvyDataType.String,
 								"Cannot execute StoreSubscr instruction. Index value for assoc array aggregate must be string!");
 							aggr[indexValue.str] = value;
 							break;
-						case DataNodeType.ClassNode:
-							if( indexValue.type == DataNodeType.Integer ) {
+						case IvyDataType.ClassNode:
+							if( indexValue.type == IvyDataType.Integer ) {
 								aggr[indexValue.integer] = value;
-							} else if( indexValue.type == DataNodeType.String ) {
+							} else if( indexValue.type == IvyDataType.String ) {
 								aggr[indexValue.str] = value;
 							} else {
 								loger.error("Cannot execute StoreSubscr instruction. Index value for class node must be string or integer!");
@@ -750,14 +742,14 @@ public:
 				// Concatenates two arrays or strings and puts result onto stack
 				case OpCode.Concat:
 				{
-					TDataNode rightVal = _stack.popBack();
+					IvyData rightVal = _stack.popBack();
 
-					TDataNode leftVal = _stack.back;
-					loger.internalAssert( ( leftVal.type == DataNodeType.String || leftVal.type == DataNodeType.Array ) && leftVal.type == rightVal.type,
+					IvyData leftVal = _stack.back;
+					loger.internalAssert( ( leftVal.type == IvyDataType.String || leftVal.type == IvyDataType.Array ) && leftVal.type == rightVal.type,
 						`Left and right values for concatenation operation must have the same string or array type!`
 					);
 
-					if( leftVal.type == DataNodeType.String ) {
+					if( leftVal.type == IvyDataType.String ) {
 						_stack.back = leftVal.str ~ rightVal.str;
 					} else {
 						_stack.back = leftVal.array ~ rightVal.array;
@@ -769,9 +761,9 @@ public:
 				case OpCode.Append:
 				{
 					loger.write("OpCode.Append _stack: ", _stack);
-					TDataNode rightVal = _stack.popBack();
+					IvyData rightVal = _stack.popBack();
 
-					loger.internalAssert(_stack.back.type == DataNodeType.Array,
+					loger.internalAssert(_stack.back.type == IvyDataType.Array,
 						"Left operand for Append instruction expected to be array, but got: ", _stack.back.type);
 
 					_stack.back ~= rightVal;
@@ -784,22 +776,22 @@ public:
 					import std.array: insertInPlace;
 
 					loger.write("OpCode.Insert _stack: ", _stack);
-					TDataNode positionNode = _stack.popBack();
+					IvyData positionNode = _stack.popBack();
 					import std.algorithm: canFind;
 					loger.internalAssert(
-						[DataNodeType.Integer, DataNodeType.Null, DataNodeType.Undef].canFind(positionNode.type),
+						[IvyDataType.Integer, IvyDataType.Null, IvyDataType.Undef].canFind(positionNode.type),
 						"Cannot execute Insert instruction. Position argument expected to be an integer or empty (for append), but got: ", positionNode.type
 					);
 
-					TDataNode valueNode = _stack.popBack();
+					IvyData valueNode = _stack.popBack();
 
-					TDataNode listNode = _stack.back;
+					IvyData listNode = _stack.back;
 					loger.internalAssert(
-						listNode.type == DataNodeType.Array,
+						listNode.type == IvyDataType.Array,
 						"Cannot execute Insert instruction. Aggregate must be an array, but got: ", listNode.type
 					);
 					size_t pos;
-					if( positionNode.type != DataNodeType.Integer ) {
+					if( positionNode.type != IvyDataType.Integer ) {
 						pos = listNode.array.length; // Do append
 					} else if( positionNode.integer >= 0 ) {
 						pos = positionNode.integer;
@@ -823,7 +815,7 @@ public:
 				// Useless unary plus operation
 				case OpCode.UnaryPlus:
 				{
-					loger.internalAssert(_stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
+					loger.internalAssert(_stack.back.type == IvyDataType.Integer || _stack.back.type == IvyDataType.Floating,
 						`Operand for unary plus operation must have integer or floating type!` );
 
 					// Do nothing for now:)
@@ -832,10 +824,10 @@ public:
 
 				case OpCode.UnaryMin:
 				{
-					loger.internalAssert(_stack.back.type == DataNodeType.Integer || _stack.back.type == DataNodeType.Floating,
+					loger.internalAssert(_stack.back.type == IvyDataType.Integer || _stack.back.type == IvyDataType.Floating,
 						`Operand for unary minus operation must have integer or floating type!`);
 
-					if( _stack.back.type == DataNodeType.Integer ) {
+					if( _stack.back.type == IvyDataType.Integer ) {
 						_stack.back = - _stack.back.integer;
 					} else {
 						_stack.back = - _stack.back.floating;
@@ -860,10 +852,10 @@ public:
 				case OpCode.StoreName, OpCode.StoreLocalName, OpCode.StoreNameWithParents:
 				{
 					loger.write(instr.opcode, " _stack: ", _stack);
-					TDataNode varValue = _stack.popBack();
+					IvyData varValue = _stack.popBack();
 
-					TDataNode varNameNode = getModuleConstCopy(instr.arg);
-					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute `, instr.opcode, ` instruction. Variable name const must have string type!`);
+					IvyData varNameNode = getModuleConstCopy(instr.arg);
+					loger.internalAssert(varNameNode.type == IvyDataType.String, `Cannot execute `, instr.opcode, ` instruction. Variable name const must have string type!`);
 
 
 					switch(instr.opcode) {
@@ -878,8 +870,8 @@ public:
 				// Loads data from local context frame variable by index of var name in module constants
 				case OpCode.LoadName:
 				{
-					TDataNode varNameNode = getModuleConstCopy(instr.arg);
-					loger.internalAssert(varNameNode.type == DataNodeType.String, `Cannot execute LoadName instruction. Variable name operand must have string type!`);
+					IvyData varNameNode = getModuleConstCopy(instr.arg);
+					loger.internalAssert(varNameNode.type == IvyDataType.String, `Cannot execute LoadName instruction. Variable name operand must have string type!`);
 
 					_stack ~= getValue( varNameNode.str );
 					break;
@@ -887,7 +879,7 @@ public:
 
 				case OpCode.ImportModule:
 				{
-					loger.internalAssert(_stack.back.type == DataNodeType.String, "Cannot execute ImportModule instruction. Module name operand must be a string!");
+					loger.internalAssert(_stack.back.type == IvyDataType.String, "Cannot execute ImportModule instruction. Module name operand must be a string!");
 					string moduleName = _stack.back.str;
 					_stack.popBack();
 
@@ -902,19 +894,16 @@ public:
 						CodeObject codeObject = modObject.mainCodeObject;
 						loger.internalAssert(codeObject, `Cannot execute ImportModule instruction, because main code object for module "`, moduleName, `" is null!` );
 
-						CallableObject callableObj = new CallableObject;
-						callableObj._name = moduleName;
-						callableObj._kind = CallableKind.Module;
-						callableObj._codeObj = codeObject;
+						CallableObject callableObj = new CallableObject(moduleName, codeObject, CallableKind.Module);
 
-						TDataNode dataDict = ["__scopeName__": moduleName];
+						IvyData dataDict = ["__scopeName__": moduleName];
 						newFrame(callableObj, null, dataDict, false); // Create entry point module frame
 						_moduleFrames[moduleName] = _frameStack.back; // We need to store module frame into storage
 
 						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreName)
-						_stack ~= TDataNode(_frameStack.back);
+						_stack ~= IvyData(_frameStack.back);
 						// Decided to put return address into parent frame`s stack block instead of current
-						_stack ~= TDataNode(_pk+1);
+						_stack ~= IvyData(_pk+1);
 
 						_stack.addStackBlock(); // Add new stack block for execution frame
 
@@ -927,9 +916,9 @@ public:
 					else
 					{
 						// Put module root frame into previous execution frame (it will be stored with StoreName)
-						_stack ~= TDataNode(_moduleFrames[moduleName]); 
+						_stack ~= IvyData(_moduleFrames[moduleName]); 
 						// As long as module returns some value at the end of execution, so put fake value there for consistency
-						_stack ~= TDataNode();
+						_stack ~= IvyData();
 					}
 
 					break;
@@ -940,11 +929,11 @@ public:
 					import std.algorithm: map;
 					import std.array: array;
 
-					loger.internalAssert(_stack.back.type == DataNodeType.Array, "Cannot execute FromImport instruction. Expected list of symbol names");
+					loger.internalAssert(_stack.back.type == IvyDataType.Array, "Cannot execute FromImport instruction. Expected list of symbol names");
 					string[] symbolNames = _stack.back.array.map!( it => it.str ).array;
 					_stack.popBack();
 
-					loger.internalAssert(_stack.back.type == DataNodeType.ExecutionFrame, "Cannot execute FromImport instruction. Expected execution frame argument");
+					loger.internalAssert(_stack.back.type == IvyDataType.ExecutionFrame, "Cannot execute FromImport instruction. Expected execution frame argument");
 
 					ExecutionFrame moduleFrame = _stack.back.execFrame;
 					loger.internalAssert(moduleFrame, "Cannot execute FromImport instruction, because module frame argument is null");
@@ -962,35 +951,35 @@ public:
 					import std.algorithm: canFind;
 					loger.write(`GetDataRange begin _stack: `, _stack);
 					loger.internalAssert([
-							DataNodeType.Array,
-							DataNodeType.AssocArray,
-							DataNodeType.DataNodeRange,
-							DataNodeType.ClassNode
+							IvyDataType.Array,
+							IvyDataType.AssocArray,
+							IvyDataType.DataNodeRange,
+							IvyDataType.ClassNode
 						].canFind(_stack.back.type),
 						`Expected array or assoc array as loop aggregate, but got: `,
 						_stack.back.type
 					);
 
-					TDataNode dataRange;
+					IvyData dataRange;
 					switch( _stack.back.type )
 					{
-						case DataNodeType.Array:
+						case IvyDataType.Array:
 						{
 							dataRange = new ArrayRange(_stack.back.array);
 							break;
 						}
-						case DataNodeType.ClassNode:
+						case IvyDataType.ClassNode:
 						{
 							loger.internalAssert(_stack.back.classNode, "Aggregate class node for loop is null!");
-							dataRange = TDataNode(_stack.back.classNode[]);
+							dataRange = IvyData(_stack.back.classNode[]);
 							break;
 						}
-						case DataNodeType.AssocArray:
+						case IvyDataType.AssocArray:
 						{
 							dataRange = new AssocArrayRange(_stack.back.assocArray);
 							break;
 						}
-						case DataNodeType.DataNodeRange:
+						case IvyDataType.DataNodeRange:
 						{
 							dataRange = _stack.back;
 							break;
@@ -1007,7 +996,7 @@ public:
 				case OpCode.RunLoop:
 				{
 					loger.write("RunLoop beginning _stack: ", _stack);
-					loger.internalAssert(_stack.back.type == DataNodeType.DataNodeRange, `Expected DataNodeRange` );
+					loger.internalAssert(_stack.back.type == IvyDataType.DataNodeRange, `Expected DataNodeRange` );
 					auto dataRange = _stack.back.dataRange;
 					loger.write("RunLoop dataRange.empty: ", dataRange.empty);
 					if( dataRange.empty )
@@ -1015,7 +1004,7 @@ public:
 						loger.write("RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack);
 						loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
 						_pk = instr.arg;
-						loger.internalAssert(_stack.back.type == DataNodeType.DataNodeRange, "RunLoop. Expected DataNodeRange to drop");
+						loger.internalAssert(_stack.back.type == IvyDataType.DataNodeRange, "RunLoop. Expected DataNodeRange to drop");
 						_stack.popBack(); // Drop data range from stack as we no longer need it
 						break;
 					}
@@ -1065,7 +1054,7 @@ public:
 				{
 					// Set instruction index at the end of code object in order to finish 
 					_pk = codeRange.length;
-					TDataNode result = _stack.back;
+					IvyData result = _stack.back;
 					// Erase all from the current stack
 					_stack.popBackN(_stack.length);
 					_stack ~= result; // Put result on the stack
@@ -1082,7 +1071,7 @@ public:
 				case OpCode.SwapTwo:
 				{
 					loger.internalAssert(_stack.length > 1, "Stack must have at least two items to swap");
-					TDataNode tmp = _stack[$-1];
+					IvyData tmp = _stack[$-1];
 					_stack[$-1] = _stack[$-2];
 					_stack[$-2] = tmp;
 					break;
@@ -1090,40 +1079,16 @@ public:
 
 				case OpCode.LoadDirective:
 				{
-					loger.write(`LoadDirective _stack: `, _stack);
+					loger.internalAssert(_stack.back.type == IvyDataType.String, `Expected String as directive name operand`);
+					string varName = _stack.popBack().str;
 
-					loger.internalAssert(_stack.back.type == DataNodeType.String,
-						`Name operand for directive loading instruction should have string type` );
-					string varName = _stack.back.str;
-
-					_stack.popBack();
-
-					loger.internalAssert(_stack.back.type == DataNodeType.CodeObject,
-						`Code object operand for directive loading instruction should have CodeObject type`);
-
-					CodeObject codeObj = _stack.back.codeObject;
-					_stack.popBack(); // Remove code object from stack
+					loger.internalAssert(_stack.back.type == IvyDataType.CodeObject, `Expected CodeObject as callable`);
+					CodeObject codeObj = _stack.popBack().codeObject;
 
 					loger.internalAssert(codeObj, `Code object operand for directive loading instruction is null`);
-					CallableObject dirObj = new CallableObject;
-					dirObj._name = varName;
-					dirObj._codeObj = codeObj;
 
-					setLocalValue( varName, TDataNode(dirObj) ); // Put this directive in context
-					_stack ~= TDataNode(); // We should return something
-
-					debug {
-						foreach( lvl, frame; _frameStack )
-						{
-							loger.write(`LoadDirective, frameStack lvl `, lvl, ` dataDict: `, frame._dataDict);
-							if( frame._moduleFrame ) {
-								loger.write(`LoadDirective, frameStack lvl `, lvl, ` moduleFrame.dataDict: `, frame._dataDict);
-							} else {
-								loger.write(`LoadDirective, frameStack lvl `, lvl, ` moduleFrame is null`);
-							}
-						}
-					}
-
+					setLocalValue( varName, IvyData(new CallableObject(varName, codeObj)) ); // Put this directive in context
+					_stack ~= IvyData(); // We should return something
 					break;
 				}
 
@@ -1139,7 +1104,7 @@ public:
 					loger.internalAssert(stackArgCount <= _stack.length, "Not enough arguments in execution stack");
 					loger.write("RunCallable _stack: ", _stack);
 					loger.write("RunCallable callable type: ", _stack[_stack.length - stackArgCount].type);
-					loger.internalAssert(_stack[_stack.length - stackArgCount].type == DataNodeType.Callable,
+					loger.internalAssert(_stack[_stack.length - stackArgCount].type == IvyDataType.Callable,
 						`Expected directive object operand in directive call operation`);
 
 					CallableObject callableObj = _stack[_stack.length - stackArgCount].callable;
@@ -1149,22 +1114,10 @@ public:
 					DirAttrsBlock!(false)[] attrBlocks = callableObj.attrBlocks;
 					loger.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
 
-					bool isNoscope = false;
-					if( attrBlocks.length > 0 )
-					{
-						loger.internalAssert(attrBlocks[$-1].kind == DirAttrKind.BodyAttr,
-							`Last attr block definition expected to be BodyAttr, but got: `, attrBlocks[$-1].kind);
-						isNoscope = attrBlocks[$-1].bodyAttr.isNoscope;
-					}
-
-					string moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__";
-					ExecutionFrame moduleFrame = _moduleFrames.get(moduleName, null);
-					loger.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callableObj._name, ` does not exist!` );
-
 					loger.write("RunCallable creating execution frame...");
-					TDataNode dataDict;
+					IvyData dataDict;
 					dataDict["__scopeName__"] = callableObj._name; // Allocating scope
-					newFrame(callableObj, moduleFrame, dataDict, isNoscope);
+					newFrame(callableObj, _getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{
@@ -1172,7 +1125,7 @@ public:
 
 						for( size_t i = 0; i < (stackArgCount - 1); )
 						{
-							loger.internalAssert(_stack.back.type == DataNodeType.Integer, `Expected integer as arguments block header!`);
+							loger.internalAssert(_stack.back.type == IvyDataType.Integer, `Expected integer as arguments block header!`);
 							size_t blockArgCount = _stack.back.integer >> _stackBlockHeaderSizeOffset;
 							loger.write("blockArgCount: ", blockArgCount);
 							DirAttrKind blockType = cast(DirAttrKind)( _stack.back.integer & _stackBlockHeaderTypeMask );
@@ -1190,11 +1143,11 @@ public:
 									size_t j = 0;
 									while( j < 2 * blockArgCount )
 									{
-										TDataNode attrValue = _stack.back;
+										IvyData attrValue = _stack.back;
 										_stack.popBack(); ++j; // Parallel bookkeeping ;)
 
 										loger.write(`RunCallable debug, _stack is: `, _stack);
-										loger.internalAssert(_stack.back.type == DataNodeType.String, "Named attribute name must be string!");
+										loger.internalAssert(_stack.back.type == IvyDataType.String, "Named attribute name must be string!");
 										string attrName = _stack.back.str;
 										_stack.popBack(); ++j;
 
@@ -1225,7 +1178,7 @@ public:
 
 									for( size_t j = 0; j < blockArgCount; ++j, ++i /* Inc overall processed arg count*/ )
 									{
-										TDataNode attrValue = _stack.back;
+										IvyData attrValue = _stack.back;
 										_stack.popBack();
 
 										loger.internalAssert(j < currBlock.exprAttrs.length, `Unexpected number of attibutes in positional arguments block`);
@@ -1244,31 +1197,32 @@ public:
 					}
 					loger.write("_stack after parsing all arguments: ", _stack);
 
-					loger.internalAssert(_stack.back.type == DataNodeType.Callable, `Expected callable object operand in call operation`);
+					loger.internalAssert(_stack.back.type == IvyDataType.Callable, `Expected callable object operand in call operation`);
 					_stack.popBack(); // Drop callable object from stack
 
 					if( callableObj._codeObj )
 					{
-						_stack ~= TDataNode(_pk+1); // Put next instruction index on the stack to return at
+						_stack ~= IvyData(_pk+1); // Put next instruction index on the stack to return at
 						_stack.addStackBlock();
 						codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
 						_pk = 0;
-						continue execution_loop;  // Skip _pk increment
+						continue execution_loop; // Skip _pk increment
 					}
 					else
 					{
 						loger.internalAssert(callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!`);
 						_stack.addStackBlock();
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
-						// If frame stack contains last frame - it means that we nave done with programme
-						// Else we expect to have result of directive on the stack
-						TDataNode result = _stack.popBack();
-						loger.internalAssert(_stack.empty, "Frame stack should be empty now!");
 
-						this.removeFrame(); // Drop frame from stack after end of execution
-						if( _frameStack.empty ) {
-							return result;
+						// Else we expect to have result of directive on the stack
+						loger.internalAssert(_stack.length, "Stack should contain 1 item empty now!");
+
+						// If frame stack contains last frame - it means that we nave done with programme
+						if( this._frameStack.length == 1 ) {
+							return _stack.back();
 						}
+						IvyData result = _stack.popBack();
+						this.removeFrame(); // Drop frame from stack after end of execution
 						_stack ~= result; // Get result back
 					}
 
@@ -1278,7 +1232,7 @@ public:
 				case OpCode.MakeArray:
 				{
 					size_t arrayLen = instr.arg;
-					TDataNode[] newArray;
+					IvyData[] newArray;
 					newArray.length = arrayLen; // Preallocating is good ;)
 					loger.write("MakeArray _stack: ", _stack);
 					loger.write("MakeArray arrayLen: ", arrayLen);
@@ -1286,7 +1240,7 @@ public:
 						// We take array items from the tail, so we must consider it!
 						newArray[i-1] = _stack.popBack();
 					}
-					_stack ~= TDataNode(newArray);
+					_stack ~= IvyData(newArray);
 
 					break;
 				}
@@ -1294,21 +1248,21 @@ public:
 				case OpCode.MakeAssocArray:
 				{
 					size_t aaLen = instr.arg;
-					TDataNode[string] newAssocArray;
+					IvyData[string] newAssocArray;
 					newAssocArray[`__mentalModuleMagic_0451__`] = 451;
 					newAssocArray.remove(`__mentalModuleMagic_0451__`);
 
 					for( size_t i = 0; i < aaLen; ++i )
 					{
-						TDataNode val = _stack.back;
+						IvyData val = _stack.back;
 						_stack.popBack();
 
-						loger.internalAssert(_stack.back.type == DataNodeType.String, `Expected string as assoc array key`);
+						loger.internalAssert(_stack.back.type == IvyDataType.String, `Expected string as assoc array key`);
 
 						newAssocArray[_stack.back.str] = val;
 						_stack.popBack();
 					}
-					_stack ~= TDataNode(newAssocArray);
+					_stack ~= IvyData(newAssocArray);
 					break;
 				}
 
@@ -1329,4 +1283,34 @@ public:
 
 		assert(false, `Failed to get result of execution`);
 	} // void execLoop()
+
+	ExecutionFrame _getModuleFrame(CallableObject callableObj) {
+		string moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__";
+		ExecutionFrame moduleFrame = _moduleFrames.get(moduleName, null);
+		loger.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callableObj._name, ` does not exist!` );
+		return moduleFrame;
+	}
+
+	IvyData runModuleDirective(string name, IvyData[string] args)
+	{
+		ExecutionFrame moduleFrame = this.currentFrame;
+		loger.internalAssert(moduleFrame, `Could not get module frame!`);
+		IvyData callableNode = moduleFrame.getValue(name);
+		loger.internalAssert(callableNode.type == IvyDataType.Callable, `Expected Callable!`);
+		moduleFrame = _getModuleFrame(callableNode.callable); // Rewriting?
+
+		loger.internalAssert(_stack.length < 2, `Expected 0 or 1 items in stack!`);
+		if( _stack.length == 1 ) {
+			_stack.popBack(); // Drop old result from stack
+		}
+		// Set return address for call
+		_stack ~= IvyData(moduleFrame._callableObj._codeObj.getInstrCount());
+		IvyData dataDict = ["__scopeName__": name]; // Allocating scope
+		newFrame(callableNode.callable, moduleFrame, dataDict, callableNode.callable.isNoscope);
+		_stack.addStackBlock(); // Add new stack block for execution frame
+		foreach( string attrName, IvyData attrValue; args ) {
+			setLocalValue(attrName, attrValue);
+		}
+		return this.execLoop();
+	}
 }

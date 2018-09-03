@@ -1,14 +1,13 @@
 module ivy.interpreter.exec_stack;
 
-import ivy.interpreter.data_node: DataNode;
+import ivy.interpreter.data_node: IvyData;
 import ivy.interpreter.common: IvyInterpretException;
 
 struct ExecStack
 {
-	alias TDataNode = DataNode!string;
 	import std.exception: enforce;
 
-	TDataNode[] _stack;
+	IvyData[] _stack;
 	size_t[] _stackBlocks;
 
 	void addStackBlock() {
@@ -33,7 +32,7 @@ struct ExecStack
 	}
 
 	// Get current item from the stack
-	ref TDataNode back() @property
+	ref IvyData back() @property
 	{
 		import std.range: back;
 		enforce!IvyInterpretException(!this.empty, `Cannot get exec stack "back" property, because it is empty!!!`);
@@ -41,11 +40,11 @@ struct ExecStack
 	}
 
 	// Drop current item from the stack
-	TDataNode popBack()
+	IvyData popBack()
 	{
 		import std.range: popBack;
 		enforce!IvyInterpretException(!this.empty, `Cannot execute "popBack" for exec stack, because it is empty!!!`);
-		TDataNode val = this.back;
+		IvyData val = this.back;
 		_stack.popBack();
 		return val;
 	}
@@ -71,7 +70,7 @@ struct ExecStack
 		_stack[index + _stackBlocks.back] = arg;
 	}
 
-	ref TDataNode opIndex(Int)(Int index)
+	ref IvyData opIndex(Int)(Int index)
 		if( isIntegral!Int )
 	{
 		import std.range: back;

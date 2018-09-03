@@ -11,7 +11,6 @@ void main()
 	import std.path;
 
 	alias TextRange = TextForwardRange!(string, LocationConfig());
-	alias TDataNode = DataNode!string;
 
 	string sourceFileName = "test/compiler_test_template.html";
 	string source = cast(string) std.file.read(sourceFileName);
@@ -58,8 +57,8 @@ void main()
 	ModuleObject[string] moduleObjects = compiler.moduleObjects;
 	writeln( `Module objects after compilation: `, moduleObjects );
 
-	TDataNode[string] dataDict;
-	Interpreter interp = new Interpreter(moduleObjects, mainModuleName, TDataNode(dataDict));
+	IvyData[string] dataDict;
+	Interpreter interp = new Interpreter(moduleObjects, mainModuleName, IvyData(dataDict));
 	interp.execLoop();
 
 	import std.range: back;

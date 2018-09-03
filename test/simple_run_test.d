@@ -22,8 +22,8 @@ void main()
 	auto progCache = new ProgrammeCache!(true)(ivyConfig);
 	auto prog = progCache.getByModuleName("compiler_test_template");
 	
-	TDataNode dataDict;
-	TDataNode result = prog.run(dataDict);
+	IvyData dataDict;
+	IvyData result = prog.run(dataDict);
 
 	writeln(result.toString());
 }

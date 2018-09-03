@@ -19,7 +19,7 @@ struct JSONParser(S = string, LocationConfig c = LocationConfig.init)
 	alias String = S;
 	alias SourceRange = TextForwardRange!(String, c);
 	alias Char = SourceRange.Char;
-	alias TDataNode = DataNode!(String);
+	alias IvyData = TIvyData!(String);
 
 private:
 	SourceRange _source;
@@ -164,7 +164,7 @@ public:
 		}
 	}
 
-	TDataNode parseNumber()
+	IvyData parseNumber()
 	{
 		import std.conv: to;
 		assert( isDigit( getChar() ) || getChar() == '-', `Expected number` );
@@ -184,12 +184,12 @@ public:
 
 		String strValue= _source.str[ beginRange.index .. _source.index ];
 		if( isFloat )
-			return TDataNode( strValue.to!double );
+			return IvyData( strValue.to!double );
 		else
-			return TDataNode( strValue.to!int );
+			return IvyData( strValue.to!int );
 	}
 
-	TDataNode parseValue()
+	IvyData parseValue()
 	{
 		while( !_source.empty )
 		{
@@ -199,7 +199,7 @@ public:
 				case '{':
 				{
 					_source.popFront(); // Skip {
-					TDataNode[String] assocArray;
+					IvyData[String] assocArray;
 					while( !_source.empty && getChar() != '}' )
 					{
 						string key = parseString();
@@ -209,7 +209,7 @@ public:
 
 						_source.popFront(); // Skip :
 
-						TDataNode value = parseValue();
+						IvyData value = parseValue();
 						assocArray[key] = value;
 
 						if( getChar() == '}' )
@@ -224,12 +224,12 @@ public:
 						error("Expected }");
 					_source.popFront(); // Skip }
 
-					return TDataNode(assocArray);
+					return IvyData(assocArray);
 				}
 				case '[':
 				{
 					_source.popFront(); // Skip [
-					TDataNode[] nodeArray;
+					IvyData[] nodeArray;
 					while( !_source.empty && getChar() != ']' )
 					{
 						nodeArray ~= parseValue();
@@ -245,31 +245,31 @@ public:
 						error("Expected ]");
 					_source.popFront(); // Skip ]
 
-					return TDataNode(nodeArray);
+					return IvyData(nodeArray);
 				}
 				case '"':
-					return TDataNode(parseString());
+					return IvyData(parseString());
 				case '0': .. case '9':
 				case '-':
 					return parseNumber();
 				case 't':
 					if( !_source.match("true") )
 						error( "Expected true" );
-					return TDataNode(true);
+					return IvyData(true);
 				case 'f':
 					if( !_source.match("false") )
 						error( "Expected false" );
-					return TDataNode(false);
+					return IvyData(false);
 				case 'n':
 					if( !_source.match("null") )
 						error( "Expected null" );
-					return TDataNode(null);
+					return IvyData(null);
 				default:
 					error( "Unexpected escaped character" );
 			}
 		}
 
-		return TDataNode();
+		return IvyData();
 	}
 }
 
@@ -283,40 +283,38 @@ auto parseIvyJSON(S)(S src)
 import std.json;
 auto toIvyJSON(ref JSONValue src)
 {
-	alias TDataNode = DataNode!string;
-
 	final switch( src.type )
 	{
 		case JSON_TYPE.NULL:
-			return TDataNode(null);
+			return IvyData(null);
 		case JSON_TYPE.TRUE:
-			return TDataNode(true);
+			return IvyData(true);
 		case JSON_TYPE.FALSE:
-			return TDataNode(false);
+			return IvyData(false);
 		case JSON_TYPE.INTEGER:
-			return TDataNode(src.integer);
+			return IvyData(src.integer);
 		case JSON_TYPE.UINTEGER:
-			return TDataNode(src.uinteger);
+			return IvyData(src.uinteger);
 		case JSON_TYPE.FLOAT:
-			return TDataNode(src.floating);
+			return IvyData(src.floating);
 		case JSON_TYPE.STRING:
-			return TDataNode(src.str);
+			return IvyData(src.str);
 		case JSON_TYPE.ARRAY:
 		{
-			TDataNode[] nodeArray;
+			IvyData[] nodeArray;
 			nodeArray.length = src.array.length;
 			foreach( size_t i, val; src.array ) {
 				nodeArray[i] = val.toIvyJSON;
 			}
-			return TDataNode(nodeArray);
+			return IvyData(nodeArray);
 		}
 		case JSON_TYPE.OBJECT:
 		{
-			TDataNode[string] nodeAA;
+			IvyData[string] nodeAA;
 			foreach( string key, val; src.object ) {
 				nodeAA[key] = val.toIvyJSON;
 			}
-			return TDataNode(nodeAA);
+			return IvyData(nodeAA);
 		}
 	}
 	assert(false, `Shouldn't be reached!`);

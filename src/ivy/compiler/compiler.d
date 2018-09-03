@@ -61,8 +61,6 @@ T takeFrontAs(T)( IAttributeRange range, string errorMsg = null, string file = _
 	return typedAttr;
 }
 
-alias TDataNode = DataNode!string;
-
 enum JumpKind {
 	Break = 1,
 	Continue = 0
@@ -235,14 +233,14 @@ public:
 	{
 		import std.range: back;
 		_codeObjStack ~= new CodeObject(name, moduleObj);
-		return this.addConst( TDataNode(_codeObjStack.back) );
+		return this.addConst( IvyData(_codeObjStack.back) );
 	}
 
 	size_t enterNewCodeObject(string name)
 	{
 		import std.range: back;
 		_codeObjStack ~= new CodeObject(name, this.currentModule());
-		return this.addConst( TDataNode(_codeObjStack.back) );
+		return this.addConst( IvyData(_codeObjStack.back) );
 	}
 
 	void exitCodeObject()
@@ -288,7 +286,7 @@ public:
 		return _codeObjStack.back.getInstrCount();
 	}
 
-	size_t addConst(TDataNode value)
+	size_t addConst(IvyData value)
 	{
 		import std.range: empty, back;
 		import std.digest.md: md5Of;
@@ -413,22 +411,22 @@ public:
 		switch( node.literalType )
 		{
 			case LiteralType.Undef:
-				constIndex = addConst( TDataNode.makeUndef() );
+				constIndex = addConst( IvyData.makeUndef() );
 				break;
 			case LiteralType.Null:
-				constIndex = addConst( TDataNode(null) );
+				constIndex = addConst( IvyData(null) );
 				break;
 			case LiteralType.Boolean:
-				constIndex = addConst( TDataNode(node.toBoolean()) );
+				constIndex = addConst( IvyData(node.toBoolean()) );
 				break;
 			case LiteralType.Integer:
-				constIndex = addConst( TDataNode(node.toInteger()) );
+				constIndex = addConst( IvyData(node.toInteger()) );
 				break;
 			case LiteralType.Floating:
-				constIndex = addConst( TDataNode(node.toFloating()) );
+				constIndex = addConst( IvyData(node.toFloating()) );
 				break;
 			case LiteralType.String:
-				constIndex = addConst( TDataNode(node.toStr()) );
+				constIndex = addConst( IvyData(node.toStr()) );
 				break;
 			case LiteralType.Array:
 				uint arrayLen = 0;
@@ -447,7 +445,7 @@ public:
 					if( !aaPair )
 						loger.error("Expected assoc array pair!");
 
-					addInstr(OpCode.LoadConst, addConst( TDataNode(aaPair.key) ));
+					addInstr(OpCode.LoadConst, addConst( IvyData(aaPair.key) ));
 
 					if( !aaPair.value )
 						loger.error("Expected assoc array value!");
@@ -467,7 +465,7 @@ public:
 
 	void _visit(INameExpression node)
 	{
-		size_t constIndex = addConst( TDataNode(node.name) );
+		size_t constIndex = addConst( IvyData(node.name) );
 		// Load name constant instruction
 		addInstr( OpCode.LoadName, constIndex );
 	}
@@ -568,7 +566,7 @@ public:
 			DirAttrsBlock!(true)[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
 
 			// Add instruction to load directive object from context by name
-			addInstr(OpCode.LoadName, addConst( TDataNode(node.name) ));
+			addInstr(OpCode.LoadName, addConst( IvyData(node.name) ));
 
 			// Keeps count of stack arguments actualy used by this call. First is directive object
 			size_t stackItemsCount = 1;
@@ -599,7 +597,7 @@ public:
 								loger.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
 
 							// Add name of named argument into stack
-							addInstr(OpCode.LoadConst, addConst( TDataNode(keyValueAttr.name) ));
+							addInstr(OpCode.LoadConst, addConst( IvyData(keyValueAttr.name) ));
 							++stackItemsCount;
 
 							// Compile value expression (it should put result value on the stack)
@@ -620,7 +618,7 @@ public:
 								if( defVal )
 								{
 									// Add name of named argument into stack
-									addInstr(OpCode.LoadConst, addConst( TDataNode(name) ));
+									addInstr(OpCode.LoadConst, addConst( IvyData(name) ));
 									++stackItemsCount;
 
 									// Generate code to set default values
@@ -633,7 +631,7 @@ public:
 
 						// Add instruction to load value that consists of number of pairs in block and type of block
 						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
-						addInstr(OpCode.LoadConst, addConst( TDataNode(blockHeader) ));
+						addInstr(OpCode.LoadConst, addConst( IvyData(blockHeader) ));
 						++stackItemsCount; // We should count args block header
 						break;
 					}
@@ -674,7 +672,7 @@ public:
 
 						// Add instruction to load value that consists of number of positional arguments in block and type of block
 						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
-						addInstr(OpCode.LoadConst, addConst( TDataNode(blockHeader) ));
+						addInstr(OpCode.LoadConst, addConst( IvyData(blockHeader) ));
 						++stackItemsCount; // We should count args block header
 						break;
 					}
@@ -725,7 +723,7 @@ public:
 	void _visit(IDataFragmentStatement node)
 	{
 		// Nothing special. Just store this piece of data into table and output then
-		addInstr(OpCode.LoadConst, addConst( TDataNode(node.data) ));
+		addInstr(OpCode.LoadConst, addConst( IvyData(node.data) ));
 	}
 
 	void _visit(ICompoundStatement node) {
@@ -739,7 +737,7 @@ public:
 
 		if( node.isListBlock )
 		{
-			TDataNode emptyArray = TDataNode[].init;
+			IvyData emptyArray = IvyData[].init;
 			addInstr(OpCode.LoadConst, addConst(emptyArray));
 		}
 
@@ -762,7 +760,7 @@ public:
 		if( !node )
 			loger.error( "Mixed block statement node is null!" );
 
-		TDataNode emptyArray = TDataNode[].init;
+		IvyData emptyArray = IvyData[].init;
 		addInstr(OpCode.LoadConst, addConst(emptyArray));
 
 		auto stmtRange = node[];
@@ -810,7 +808,7 @@ public:
 			result ~= "\r\nCODE\r\n";
 			foreach( i, con; modObj._consts )
 			{
-				if( con.type == DataNodeType.CodeObject )
+				if( con.type == IvyDataType.CodeObject )
 				{
 					if( !con.codeObject ) {
 						result ~= "\r\nCode object " ~ i.text ~ " is null\r\n";

@@ -22,7 +22,7 @@ define('ivy/Interpreter', [
 	iu
 ) {
 	var
-		DataNodeType = Consts.DataNodeType,
+		IvyDataType = Consts.IvyDataType,
 		CallableKind = Consts.CallableKind,
 		FrameSearchMode = Consts.FrameSearchMode,
 		OpCode = Consts.OpCode,
@@ -71,7 +71,7 @@ return __mixinProto(Interpreter, {
 					return result; // If there is no frames left - then we finished
 				}
 				var returnPk = this._stack.pop();
-				if( iu.getDataNodeType(returnPk) !== DataNodeType.Integer ) {
+				if( iu.getDataNodeType(returnPk) !== IvyDataType.Integer ) {
 					this.rtError('Expected integer as instruction pointer');
 				}
 				this._pk = returnPk;
@@ -127,10 +127,10 @@ return __mixinProto(Interpreter, {
 					var
 						right = this._stack.pop(), left = this._stack.pop(),
 						rType = iu.getDataNodeType(right), lType = iu.getDataNodeType(left);
-					if( rType !== DataNodeType.Array && rType !== DataNodeType.String || lType !== rType ) {
+					if( rType !== IvyDataType.Array && rType !== IvyDataType.String || lType !== rType ) {
 						this.rtError('Expected String or Array operands')
 					}
-					if( rType === DataNodeType.String ) {
+					if( rType === IvyDataType.String ) {
 						this._stack.push(left + right);
 					} else {
 						this._stack.push(left.concat(right));
@@ -139,7 +139,7 @@ return __mixinProto(Interpreter, {
 				}
 				case Append: {
 					var right = this._stack.pop(), left = this._stack.back(), lType = iu.getDataNodeType(left);
-					if( lType !== DataNodeType.Array ) {
+					if( lType !== IvyDataType.Array ) {
 						this.rtError('Expected Array target operand');
 					}
 					left.push(right);
@@ -152,10 +152,10 @@ return __mixinProto(Interpreter, {
 						// Don't pop result form stack here
 						arrNode = this._stack.back(), arrType = iu.getDataNodeType(arrNode);
 					
-					if( [DataNodeType.Integer, DataNodeType.Null, DataNodeType.Undef].indexOf(posType) < 0 ) {
+					if( [IvyDataType.Integer, IvyDataType.Null, IvyDataType.Undef].indexOf(posType) < 0 ) {
 						this.rtError('Expected Null, Undef (for append) or Integer as position operand');
 					}
-					if( arrType !== DataNodeType.Array ) {
+					if( arrType !== IvyDataType.Array ) {
 						this.rtError('Expected Array target operand')
 					}
 					if( posNode == null ) {
@@ -202,11 +202,11 @@ return __mixinProto(Interpreter, {
 						break;
 					}
 					if( [
-						DataNodeType.Boolean,
-						DataNodeType.Integer,
-						DataNodeType.Floating,
-						DataNodeType.String,
-						DataNodeType.DateTime
+						IvyDataType.Boolean,
+						IvyDataType.Integer,
+						IvyDataType.Floating,
+						IvyDataType.String,
+						IvyDataType.DateTime
 						].indexOf(rType) < 0
 					) {
 						this.rtError('Cannot compare values!')
@@ -228,9 +228,9 @@ return __mixinProto(Interpreter, {
 						this.rtError(`Left and right operands of comparision must have the same type`);
 					}
 					if( [
-						DataNodeType.Integer,
-						DataNodeType.Floating,
-						DataNodeType.String
+						IvyDataType.Integer,
+						IvyDataType.Floating,
+						IvyDataType.String
 						].indexOf(rType) < 0
 					) {
 						this.rtError(`Unsupported type of operand in comparision operation`)
@@ -253,9 +253,9 @@ return __mixinProto(Interpreter, {
 						aggr = this._stack.pop();
 
 					switch( iu.getDataNodeType(aggr) ) {
-						case DataNodeType.String:
-						case DataNodeType.Array: {
-							if( indexType !== DataNodeType.Integer ) {
+						case IvyDataType.String:
+						case IvyDataType.Array: {
+							if( indexType !== IvyDataType.Integer ) {
 								this.rtError('Index value for String or Array must be Integer');
 							}
 							if( indexValue >= aggr.length ) {
@@ -264,15 +264,15 @@ return __mixinProto(Interpreter, {
 							this._stack.push(aggr[indexValue]);
 							break;
 						}
-						case DataNodeType.AssocArray: {
-							if( indexType !== DataNodeType.String ) {
+						case IvyDataType.AssocArray: {
+							if( indexType !== IvyDataType.String ) {
 								this.rtError('Index value for AssocArray must be String');
 							}
 							this._stack.push(aggr[indexValue]);
 							break;
 						}
-						case DataNodeType.ClassNode: {
-							if( [DataNodeType.String, DataNodeType.Integer].indexOf(indexType) < 0 ) {
+						case IvyDataType.ClassNode: {
+							if( [IvyDataType.String, IvyDataType.Integer].indexOf(indexType) < 0 ) {
 								this.rtError('Expected String or Integer as index value');
 							}
 							this._stack.push(aggr.at( indexValue ));
@@ -290,8 +290,8 @@ return __mixinProto(Interpreter, {
 						aggr = this._stack.pop();
 
 					switch( iu.getDataNodeType(aggr) ) {
-						case DataNodeType.Array: {
-							if( indexType !== DataNodeType.Integer ) {
+						case IvyDataType.Array: {
+							if( indexType !== IvyDataType.Integer ) {
 								this.rtError('Index value for Array must be Integer');
 							}
 							if( indexValue >= aggr.length ) {
@@ -300,15 +300,15 @@ return __mixinProto(Interpreter, {
 							aggr[indexValue] = value;
 							break;
 						}
-						case DataNodeType.AssocArray: {
-							if( indexType !== DataNodeType.String ) {
+						case IvyDataType.AssocArray: {
+							if( indexType !== IvyDataType.String ) {
 								this.rtError('Index value for AssocArray must be String');
 							}
 							aggr[indexValue] = value;
 							break;
 						}
-						case DataNodeType.ClassNode: {
-							if( [DataNodeType.String, DataNodeType.Integer].indexOf(indexType) < 0 ) {
+						case IvyDataType.ClassNode: {
+							if( [IvyDataType.String, IvyDataType.Integer].indexOf(indexType) < 0 ) {
 								this.rtError('Expected String or Integer as index value');
 							}
 							aggr.setAt(value, indexType);
@@ -325,15 +325,15 @@ return __mixinProto(Interpreter, {
 						beginValue = this._stack.pop(), beginType = iu.getDataNodeType(beginValue),
 						aggr = this._stack.pop(), aggrType = iu.getDataNodeType(aggr);
 
-					if( beginType !== DataNodeType.Integer ) {
+					if( beginType !== IvyDataType.Integer ) {
 						this.rtError('Begin value of slice must be integer');
 					}
-					if( endValue !== DataNodeType.Integer ) {
+					if( endValue !== IvyDataType.Integer ) {
 						this.rtError('End value of slice must be integer');
 					}
 
 					switch( aggrType ) {
-						case DataNodeType.String: case DataNodeType.Array: {
+						case IvyDataType.String: case IvyDataType.Array: {
 							this._stack.push( aggr.slice(beginValue, endValue) );
 							break;
 						}
@@ -349,7 +349,7 @@ return __mixinProto(Interpreter, {
 						varValue = this._stack.pop(),
 						varName = this.getModuleConstCopy(instr[1]);
 
-					if( iu.getDataNodeType(varName) !== DataNodeType.String ) {
+					if( iu.getDataNodeType(varName) !== IvyDataType.String ) {
 						this.rtError('Expected String as variable name');
 					}
 
@@ -363,7 +363,7 @@ return __mixinProto(Interpreter, {
 				}
 				case LoadName: {
 					var varName = this.getModuleConstCopy(instr[1]);
-					if( iu.getDataNodeType(varName) !== DataNodeType.String ) {
+					if( iu.getDataNodeType(varName) !== IvyDataType.String ) {
 						this.rtError('Expected String as variable name');
 					}
 					this._stack.push(this.getValue(varName));
@@ -375,10 +375,10 @@ return __mixinProto(Interpreter, {
 					var
 						dirName = this._stack.pop(),
 						codeObj = this._stack.pop();
-					if( iu.getDataNodeType(dirName) !== DataNodeType.String ) {
+					if( iu.getDataNodeType(dirName) !== IvyDataType.String ) {
 						this.rtError('Expected String as directive name');
 					}
-					if( iu.getDataNodeType(codeObj) !== DataNodeType.CodeObject ) {
+					if( iu.getDataNodeType(codeObj) !== IvyDataType.CodeObject ) {
 						this.rtError('Expected CodeObject to execute');
 					}
 
@@ -397,7 +397,7 @@ return __mixinProto(Interpreter, {
 						this.rtError('Not enough arguments in execution stack');
 					}
 					var callableObj = this._stack.at(this._stack.getLength() - stackArgCount);
-					if( iu.getDataNodeType(callableObj) !== DataNodeType.Callable ) {
+					if( iu.getDataNodeType(callableObj) !== IvyDataType.Callable ) {
 						this.rtError('Expected Callable object');
 					}
 
@@ -432,7 +432,7 @@ return __mixinProto(Interpreter, {
 						for( var i = 0; i < (stackArgCount - 1); ) {
 							var blockHeader = this._stack.pop();
 							++i; // Block header was eaten, so increase counter
-							if( iu.getDataNodeType(blockHeader) !== DataNodeType.Integer ) {
+							if( iu.getDataNodeType(blockHeader) !== IvyDataType.Integer ) {
 								this.rtError('Expected integer as arguments block header!');
 							}
 							// Bit between block size part and block type must always be zero
@@ -451,7 +451,7 @@ return __mixinProto(Interpreter, {
 											attrValue = this._stack.pop(),
 											attrName = this._stack.pop();
 										j += 2; // Parallel bookkeeping ;)
-										if( iu.getDataNodeType(attrName) !== DataNodeType.String ) {
+										if( iu.getDataNodeType(attrName) !== IvyDataType.String ) {
 											this.rtError('Named attribute name must be String!');
 										}
 										this.setLocalValue(attrName, attrValue);
@@ -491,7 +491,7 @@ return __mixinProto(Interpreter, {
 						}
 					}
 
-					if( iu.getDataNodeType(this._stack.pop()) !== DataNodeType.Callable ) {
+					if( iu.getDataNodeType(this._stack.pop()) !== IvyDataType.Callable ) {
 						this.rtError('Expected callable object operand in call operation');
 					}
 
@@ -525,7 +525,7 @@ return __mixinProto(Interpreter, {
 				// Import another module
 				case ImportModule: {
 					var moduleName = this._stack.pop();
-					if( iu.getDataNodeType(moduleName) !== DataNodeType.String ) {
+					if( iu.getDataNodeType(moduleName) !== IvyDataType.String ) {
 						this.rtError('Expected String as module name');
 					}
 					
@@ -570,11 +570,11 @@ return __mixinProto(Interpreter, {
 				}
 				case FromImport: {
 					var symbolsNode = this._stack.pop(), symbolsType = iu.getDataNodeType(symbolsNode);
-					if( symbolsType !== DataNodeType.Array ) {
+					if( symbolsType !== IvyDataType.Array ) {
 						this.rtError('Expected list of symbol names');
 					}
 					var frameNode = this._stack.pop(), frameType = iu.getDataNodeType(frameNode);
-					if( frameType !== DataNodeType.ExecutionFrame ) {
+					if( frameType !== IvyDataType.ExecutionFrame ) {
 						this.rtError('Expected ExecutionFrame');
 					}
 
@@ -644,16 +644,16 @@ return __mixinProto(Interpreter, {
 				case GetDataRange: {
 					var aggr = this._stack.pop();
 					switch( iu.getDataNodeType(aggr) ) {
-						case DataNodeType.Array:
+						case IvyDataType.Array:
 							this._stack.push(new ArrayRange(aggr));
 							break;
-						case DataNodeType.ClassNode:
+						case IvyDataType.ClassNode:
 							this._stack.push(aggr.range());
 							break;
-						case DataNodeType.AssocArray:
+						case IvyDataType.AssocArray:
 							this._stack.push(new AssocArrayRange(aggr));
 							break;
-						case DataNodeType.DataNodeRange:
+						case IvyDataType.DataNodeRange:
 							this._stack.push(aggr);
 							break;
 						default: this.rtError('Expected Array, AssocArray, DataNodeRange or ClassNode as iterable');
@@ -662,7 +662,7 @@ return __mixinProto(Interpreter, {
 				}
 				case RunLoop: {
 					var dataRange = this._stack.back();
-					if( iu.getDataNodeType(dataRange) !== DataNodeType.DataNodeRange ) {
+					if( iu.getDataNodeType(dataRange) !== IvyDataType.DataNodeRange ) {
 						this.rtError('Expected DataNodeRange to iterate over');
 					}
 					if( dataRange.empty() )
@@ -686,7 +686,7 @@ return __mixinProto(Interpreter, {
 					var
 						arrayLen = instr[1],
 						newArray = [];
-					if( iu.getDataNodeType(arrayLen) !== DataNodeType.Integer ) {
+					if( iu.getDataNodeType(arrayLen) !== IvyDataType.Integer ) {
 						this.rtError('Expected Integer as new Array length');
 					}
 					newArray.length = arrayLen; // Preallocating is good ;)
@@ -702,13 +702,13 @@ return __mixinProto(Interpreter, {
 					var
 						aaLen = instr[1],
 						newAA = {};
-					if( iu.getDataNodeType(aaLen) !== DataNodeType.Integer ) {
+					if( iu.getDataNodeType(aaLen) !== IvyDataType.Integer ) {
 						this.rtError('Expected Integer as new AssocArray length');
 					}
 
 					for( var i = 0; i < aaLen; ++i ) {
 						var val = this._stack.pop(), key = this._stack.pop(), keyType = iu.getDataNodeType(key);
-						if( keyType !== DataNodeType.String ) {
+						if( keyType !== IvyDataType.String ) {
 							this.rtError('Expected String as AssocArray key');
 						}
 
@@ -793,24 +793,24 @@ return __mixinProto(Interpreter, {
 	},
 	evalAsBoolean: function(val) {
 		switch( iu.getDataNodeType(val) ) {
-			case DataNodeType.Undef:
-			case DataNodeType.Null:
+			case IvyDataType.Undef:
+			case IvyDataType.Null:
 				return false;
-			case DataNodeType.Boolean:
+			case IvyDataType.Boolean:
 				return val;
-			case DataNodeType.Integer:
-			case DataNodeType.Floating:
-			case DataNodeType.DateTime:
-			case DataNodeType.ClassNode:
+			case IvyDataType.Integer:
+			case IvyDataType.Floating:
+			case IvyDataType.DateTime:
+			case IvyDataType.ClassNode:
 				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
 				// because in many cases they could be treated as significant values
 				// DateTime and Boolean are not empty too, because we cannot say what value should be treated as empty
 				return true;
-			case DataNodeType.String:
-			case DataNodeType.Array:
-			case DataNodeType.AssocArray:
+			case IvyDataType.String:
+			case IvyDataType.Array:
+			case IvyDataType.AssocArray:
 				return !!val.length;
-			case DataNodeType.DataNodeRange:
+			case IvyDataType.DataNodeRange:
 				return !val.empty();
 			default:
 				throw new Error('Cannot evaluate value in logical context!');
@@ -874,10 +874,10 @@ return __mixinProto(Interpreter, {
 		var attrName = iu.back(varName.split('.'));
 		switch( iu.getDataNodeType(parent) )
 		{
-			case DataNodeType.AssocArray:
+			case IvyDataType.AssocArray:
 				parent[attrName] = value;
 				break;
-			case DataNodeType.ClassNode:
+			case IvyDataType.ClassNode:
 				parent.setAttr(value, attrName);
 				break;
 			default:

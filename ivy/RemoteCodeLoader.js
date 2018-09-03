@@ -15,7 +15,7 @@ function RemoteCodeLoader(endpoint) {
 	this._moduleObjects = {};
 	this._mainModuleName = null;
 };
-var DataNodeType = Consts.DataNodeType;
+var IvyDataType = Consts.IvyDataType;
 return __mixinProto(RemoteCodeLoader, {
 	load: function(moduleName, callback) {
 		var self = this;
@@ -61,9 +61,9 @@ return __mixinProto(RemoteCodeLoader, {
 			return con;
 		} else if( con instanceof Object ) {
 			switch( con._t ) {
-				case DataNodeType.CodeObject:
+				case IvyDataType.CodeObject:
 					return new CodeObject(con.name, con.instrs, moduleObj, con.attrBlocks);
-				case DataNodeType.DateTime:
+				case IvyDataType.DateTime:
 					return new Date(con._v);
 				default:
 					return con;

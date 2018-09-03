@@ -39,17 +39,17 @@ class IntCtorDirInterpreter: INativeDirectiveInterpreter
 	override void interpret(Interpreter interp)
 	{
 		import std.conv: to;
-		TDataNode value = interp.getValue("value");
+		IvyData value = interp.getValue("value");
 		switch(value.type)
 		{
-			case DataNodeType.Boolean:
-				interp._stack ~= TDataNode(value.boolean? 1: 0);
+			case IvyDataType.Boolean:
+				interp._stack ~= IvyData(value.boolean? 1: 0);
 				break;
-			case DataNodeType.Integer:
+			case IvyDataType.Integer:
 				interp._stack ~= value;
 				break;
-			case DataNodeType.String:
-				interp._stack ~= TDataNode(value.str.to!long);
+			case IvyDataType.String:
+				interp._stack ~= IvyData(value.str.to!long);
 				break;
 			default:
 				interp.loger.error(`Cannot convert value of type: `, value.type, ` to integer`);
@@ -72,20 +72,20 @@ class FloatCtorDirInterpreter: INativeDirectiveInterpreter
 	override void interpret(Interpreter interp)
 	{
 		import std.conv: to;
-		TDataNode value = interp.getValue("value");
+		IvyData value = interp.getValue("value");
 		switch(value.type)
 		{
-			case DataNodeType.Boolean:
-				interp._stack ~= TDataNode(value.boolean? 1.0: 0.0);
+			case IvyDataType.Boolean:
+				interp._stack ~= IvyData(value.boolean? 1.0: 0.0);
 				break;
-			case DataNodeType.Integer:
-				interp._stack ~= TDataNode(value.integer.to!double);
+			case IvyDataType.Integer:
+				interp._stack ~= IvyData(value.integer.to!double);
 				break;
-			case DataNodeType.Floating:
+			case IvyDataType.Floating:
 				interp._stack ~= value;
 				break;
-			case DataNodeType.String:
-				interp._stack ~= TDataNode(value.str.to!double);
+			case IvyDataType.String:
+				interp._stack ~= IvyData(value.str.to!double);
 				break;
 			default:
 				interp.loger.error(`Cannot convert value of type: `, value.type, ` to integer`);
@@ -106,7 +106,7 @@ class FloatCtorDirInterpreter: INativeDirectiveInterpreter
 class StrCtorDirInterpreter: INativeDirectiveInterpreter
 {
 	override void interpret(Interpreter interp) {
-		interp._stack ~= TDataNode(interp.getValue("value").toString());
+		interp._stack ~= IvyData(interp.getValue("value").toString());
 	}
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
@@ -125,18 +125,18 @@ class HasDirInterpreter: INativeDirectiveInterpreter
 	{
 		import std.conv: to;
 		import std.algorithm: canFind;
-		TDataNode collection = interp.getValue("collection");
-		TDataNode key = interp.getValue("key");
+		IvyData collection = interp.getValue("collection");
+		IvyData key = interp.getValue("key");
 		switch(collection.type)
 		{
-			case DataNodeType.AssocArray:
-				if( key.type != DataNodeType.String ) {
+			case IvyDataType.AssocArray:
+				if( key.type != IvyDataType.String ) {
 					interp.loger.error(`Expected string as second "has" directive attribute, but got: `, key.type);
 				}
-				interp._stack ~= TDataNode(cast(bool)(key.str in collection));
+				interp._stack ~= IvyData(cast(bool)(key.str in collection));
 				break;
-			case DataNodeType.Array:
-				interp._stack ~= TDataNode(collection.array.canFind(key));
+			case IvyDataType.Array:
+				interp._stack ~= IvyData(collection.array.canFind(key));
 				break;
 			default:
 				interp.loger.error(`Expected array or assoc array as first "has" directive attribute, but got: `, collection.type);
@@ -160,8 +160,8 @@ class TypeStrDirInterpreter: INativeDirectiveInterpreter
 	override void interpret(Interpreter interp)
 	{
 		import std.conv: text;
-		TDataNode value = interp.getValue("value");
-		interp._stack ~= TDataNode(value.type.text);
+		IvyData value = interp.getValue("value");
+		interp._stack ~= IvyData(value.type.text);
 	}
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
@@ -179,20 +179,20 @@ class LenDirInterpreter: INativeDirectiveInterpreter
 	override void interpret(Interpreter interp)
 	{
 		import std.conv: text;
-		TDataNode value = interp.getValue("value");
+		IvyData value = interp.getValue("value");
 		switch(value.type)
 		{
-			case DataNodeType.String:
-				interp._stack ~= TDataNode(value.str.length);
+			case IvyDataType.String:
+				interp._stack ~= IvyData(value.str.length);
 				break;
-			case DataNodeType.Array:
-				interp._stack ~= TDataNode(value.array.length);
+			case IvyDataType.Array:
+				interp._stack ~= IvyData(value.array.length);
 				break;
-			case DataNodeType.AssocArray:
-				interp._stack ~= TDataNode(value.assocArray.length);
+			case IvyDataType.AssocArray:
+				interp._stack ~= IvyData(value.assocArray.length);
 				break;
-			case DataNodeType.ClassNode:
-				interp._stack ~= TDataNode(value.classNode.length);
+			case IvyDataType.ClassNode:
+				interp._stack ~= IvyData(value.classNode.length);
 				break;
 			default:
 				interp.loger.error(`Cannot get length for value of type: `, value.type);
@@ -214,34 +214,34 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 {
 	override void interpret(Interpreter interp)
 	{
-		TDataNode value = interp.getValue("value");
+		IvyData value = interp.getValue("value");
 		switch(value.type)
 		{
-			case DataNodeType.Undef, DataNodeType.Null:
-				interp._stack ~= TDataNode(true);
+			case IvyDataType.Undef, IvyDataType.Null:
+				interp._stack ~= IvyData(true);
 				break;
-			case DataNodeType.Integer, DataNodeType.Floating, DataNodeType.DateTime, DataNodeType.Boolean:
+			case IvyDataType.Integer, IvyDataType.Floating, IvyDataType.DateTime, IvyDataType.Boolean:
 				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
 				// because in many cases they could be treated as significant values
 				// DateTime and Boolean are not empty too, because we cannot say what value should be treated as empty
-				interp._stack ~= TDataNode(false);
+				interp._stack ~= IvyData(false);
 				break;
-			case DataNodeType.String:
-				interp._stack ~= TDataNode(!value.str.length);
+			case IvyDataType.String:
+				interp._stack ~= IvyData(!value.str.length);
 				break;
-			case DataNodeType.Array:
-				interp._stack ~= TDataNode(!value.array.length);
+			case IvyDataType.Array:
+				interp._stack ~= IvyData(!value.array.length);
 				break;
-			case DataNodeType.AssocArray:
-				interp._stack ~= TDataNode(!value.assocArray.length);
+			case IvyDataType.AssocArray:
+				interp._stack ~= IvyData(!value.assocArray.length);
 				break;
-			case DataNodeType.DataNodeRange:
-				interp._stack ~= TDataNode(!value.dataRange || value.dataRange.empty);
+			case IvyDataType.DataNodeRange:
+				interp._stack ~= IvyData(!value.dataRange || value.dataRange.empty);
 				break;
-			case DataNodeType.ClassNode:
+			case IvyDataType.ClassNode:
 				// Basic check for ClassNode for emptyness is that it should not be null reference
 				// If some interface method will be introduced to check for empty then we shall consider to check it too
-				interp._stack ~= TDataNode(value.classNode is null);
+				interp._stack ~= IvyData(value.classNode is null);
 				break;
 			default:
 				interp.loger.error(`Cannot test type: `, value.type, ` for emptyness`);
@@ -267,7 +267,7 @@ class ToJSONBase64DirInterpreter: INativeDirectiveInterpreter
 	{
 		import std.base64: Base64;
 		ubyte[] jsonStr = cast(ubyte[]) interp.getValue("value").toJSONString();
-		interp._stack ~= TDataNode(cast(string) Base64.encode(jsonStr));
+		interp._stack ~= IvyData(cast(string) Base64.encode(jsonStr));
 	}
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
@@ -307,16 +307,16 @@ class DateTimeGetDirInterpreter: INativeDirectiveInterpreter
 
 	override void interpret(Interpreter interp)
 	{
-		TDataNode value = interp.getValue("value");
-		TDataNode field = interp.getValue("field");
+		IvyData value = interp.getValue("value");
+		IvyData field = interp.getValue("field");
 
-		if( ![DataNodeType.DateTime, DataNodeType.Undef, DataNodeType.Null].canFind(value.type) ) {
+		if( ![IvyDataType.DateTime, IvyDataType.Undef, IvyDataType.Null].canFind(value.type) ) {
 			interp.loger.error(`Expected DateTime as first argument in dtGet!`);
 		}
-		if( field.type !=  DataNodeType.String ) {
+		if( field.type !=  IvyDataType.String ) {
 			interp.loger.error(`Expected string as second argument in dtGet!`);
 		}
-		if( value.type != DataNodeType.DateTime ) {
+		if( value.type != IvyDataType.DateTime ) {
 			interp._stack ~= value; // Will not fail if it is null or undef, but just return it!
 			return;
 		}
@@ -324,16 +324,16 @@ class DateTimeGetDirInterpreter: INativeDirectiveInterpreter
 		SysTime dt = value.dateTime;
 		switch( field.str )
 		{
-			case "year": interp._stack ~= TDataNode(dt.year); break;
-			case "month": interp._stack ~= TDataNode(dt.month); break;
-			case "day": interp._stack ~= TDataNode(dt.day); break;
-			case "hour": interp._stack ~= TDataNode(dt.hour); break;
-			case "minute": interp._stack ~= TDataNode(dt.minute); break;
-			case "second": interp._stack ~= TDataNode(dt.second); break;
-			case "millisecond": interp._stack ~= TDataNode(dt.fracSecs.split().msecs); break;
-			case "dayOfWeek": interp._stack ~= TDataNode(cast(int) dt.dayOfWeek); break;
-			case "dayOfYear": interp._stack ~= TDataNode(dt.dayOfYear); break;
-			case "utcMinuteOffset" : interp._stack ~= TDataNode(dt.utcOffset.total!("minutes")); break;
+			case "year": interp._stack ~= IvyData(dt.year); break;
+			case "month": interp._stack ~= IvyData(dt.month); break;
+			case "day": interp._stack ~= IvyData(dt.day); break;
+			case "hour": interp._stack ~= IvyData(dt.hour); break;
+			case "minute": interp._stack ~= IvyData(dt.minute); break;
+			case "second": interp._stack ~= IvyData(dt.second); break;
+			case "millisecond": interp._stack ~= IvyData(dt.fracSecs.split().msecs); break;
+			case "dayOfWeek": interp._stack ~= IvyData(cast(int) dt.dayOfWeek); break;
+			case "dayOfYear": interp._stack ~= IvyData(dt.dayOfYear); break;
+			case "utcMinuteOffset" : interp._stack ~= IvyData(dt.utcOffset.total!("minutes")); break;
 			default:
 				interp.loger.error("Unexpected date field specifier: ", field.str);
 		}
@@ -356,17 +356,17 @@ class RangeDirInterpreter: INativeDirectiveInterpreter
 
 	override void interpret(Interpreter interp)
 	{
-		TDataNode begin = interp.getValue("begin");
-		TDataNode end = interp.getValue("end");
+		IvyData begin = interp.getValue("begin");
+		IvyData end = interp.getValue("end");
 
-		if( begin.type !=  DataNodeType.Integer ) {
+		if( begin.type !=  IvyDataType.Integer ) {
 			interp.loger.error(`Expected integer as 'begin' argument!`);
 		}
-		if( end.type !=  DataNodeType.Integer ) {
+		if( end.type !=  IvyDataType.Integer ) {
 			interp.loger.error(`Expected integer as 'end' argument!`);
 		}
 
-		interp._stack ~= TDataNode(new IntegerRange(begin.integer, end.integer));
+		interp._stack ~= IvyData(new IntegerRange(begin.integer, end.integer));
 	}
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
@@ -388,14 +388,14 @@ class EscapeDirInterpreter: INativeDirectiveInterpreter
 
 	override void interpret(Interpreter interp)
 	{
-		TDataNode begin = interp.getValue("begin");
-		TDataNode end = interp.getValue("end");
+		IvyData begin = interp.getValue("begin");
+		IvyData end = interp.getValue("end");
 
-		if( begin.type !=  DataNodeType.Integer ) {
+		if( begin.type !=  IvyDataType.Integer ) {
 			interp.loger.error(`Expected integer as 'begin' argument!`);
 		}
 
-		interp._stack ~= TDataNode(new IntegerRange(begin.integer, end.integer));
+		interp._stack ~= IvyData(new IntegerRange(begin.integer, end.integer));
 	}
 
 	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [

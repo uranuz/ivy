@@ -12,7 +12,7 @@ define('ivy/directives', [
 	base64
 ) {
 	var
-		DataNodeType = Consts.DataNodeType,
+		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
 return {
 	IntCtorDirInterpreter: __mixinProto(__extends(function IntCtorDirInterpreter() {
@@ -28,9 +28,9 @@ return {
 		interpret: function(interp) {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) ) {
-				case DataNodeType.Boolean: interp._stack.push(value.boolean? 1: 0); break;
-				case DataNodeType.Integer: interp._stack.push(value); break;
-				case DataNodeType.String: {
+				case IvyDataType.Boolean: interp._stack.push(value.boolean? 1: 0); break;
+				case IvyDataType.Integer: interp._stack.push(value); break;
+				case IvyDataType.String: {
 					var parsed = parseInt(value, 10);
 					if( isNaN(parsed) || String(parsed) !== value ) {
 						interp.rtError('Unable to parse value as Integer');
@@ -58,9 +58,9 @@ return {
 		interpret: function(interp) {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) ) {
-				case DataNodeType.Boolean: interp._stack.push(value.boolean? 1.0: 0.0); break;
-				case DataNodeType.Integer: case DataNodeType.Floating: interp._stack.push(value); break;
-				case DataNodeType.String: {
+				case IvyDataType.Boolean: interp._stack.push(value.boolean? 1.0: 0.0); break;
+				case IvyDataType.Integer: case IvyDataType.Floating: interp._stack.push(value); break;
+				case IvyDataType.String: {
 					var parsed = parseFloat(value, 10);
 					if( isNaN(parsed) || String(parsed) !== value ) {
 						interp.rtError('Unable to parse value as Floating');
@@ -109,13 +109,13 @@ return {
 				key = interp.getValue("key");
 			switch( iu.getDataNodeType(collection) )
 			{
-				case DataNodeType.AssocArray:
-					if( iu.getDataNodeType(key) !== DataNodeType.String ) {
+				case IvyDataType.AssocArray:
+					if( iu.getDataNodeType(key) !== IvyDataType.String ) {
 						interp.rtError('Expected String as attribute name');
 					}
 					interp._stack.push(collection[key] !== undefined);
 					break;
-				case DataNodeType.Array:
+				case IvyDataType.Array:
 					interp._stack.push(collection.indexOf(key) >= 0);
 					break;
 				default:
@@ -157,11 +157,11 @@ return {
 		interpret: function(interp) {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) ) {
-				case DataNodeType.String:
-				case DataNodeType.Array:
+				case IvyDataType.String:
+				case IvyDataType.Array:
 					this._stack.push(value.length);
 					break;
-				case DataNodeType.AssocArray:
+				case IvyDataType.AssocArray:
 					this._stack.push(Object.keys(value).length);
 					break;
 				default:
@@ -184,29 +184,29 @@ return {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) )
 			{
-				case DataNodeType.Undef, DataNodeType.Null:
+				case IvyDataType.Undef, IvyDataType.Null:
 					interp._stack.push(true);
 					break;
-				case DataNodeType.Integer:
-				case DataNodeType.Floating:
-				case DataNodeType.DateTime:
-				case DataNodeType.Boolean:
+				case IvyDataType.Integer:
+				case IvyDataType.Floating:
+				case IvyDataType.DateTime:
+				case IvyDataType.Boolean:
 					// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
 					// because in many cases they could be treated as significant values
 					// DateTime and Boolean are not empty too, because we cannot say what value should be treated as empty
 					interp._stack.push(false);
 					break;
-				case DataNodeType.String:
-				case DataNodeType.Array:
+				case IvyDataType.String:
+				case IvyDataType.Array:
 					interp._stack.push(!value.length);
 					break;
-				case DataNodeType.AssocArray:
+				case IvyDataType.AssocArray:
 					interp._stack.push(!Object.keys(value).length);
 					break;
-				case DataNodeType.DataNodeRange:
+				case IvyDataType.DataNodeRange:
 					interp._stack.push(value.empty());
 					break;
-				case DataNodeType.ClassNode:
+				case IvyDataType.ClassNode:
 					// Basic check for ClassNode for emptyness is that it should not be null reference
 					// If some interface method will be introduced to check for empty then we shall consider to check it too
 					interp._stack.push(false);
@@ -273,16 +273,16 @@ return {
 				dt = interp.getValue("value"), dtType = iu.getDataNodeType(dt),
 				field = interp.getValue("field");
 			
-			if( [DataNodeType.Undef, DataNodeType.Null].indexOf(dtType) >= 0 ) {
+			if( [IvyDataType.Undef, IvyDataType.Null].indexOf(dtType) >= 0 ) {
 				// Will not fail if it is null or undef, but just return it!
 				interp._stack.push(value);
 				return;
 			}
 
-			if( dtType !== DataNodeType.DateTime ) {
+			if( dtType !== IvyDataType.DateTime ) {
 				interp.rtError('Expected DateTime as first argument in dtGet');
 			}
-			if( iu.getDataNodeType(field) !== DataNodeType.String ) {
+			if( iu.getDataNodeType(field) !== IvyDataType.String ) {
 				interp.rtError('Expected String as second argument in dtGet');
 			}
 			switch( field ) {
@@ -320,10 +320,10 @@ return {
 				begin = interp.getValue("begin"),
 				end = interp.getValue("end");
 
-			if( iu.getDataNodeType(begin) !=  DataNodeType.Integer ) {
+			if( iu.getDataNodeType(begin) !=  IvyDataType.Integer ) {
 				interp.rtError('Expected Integer as "begin" argument');
 			}
-			if( iu.getDataNodeType(end) !=  DataNodeType.Integer ) {
+			if( iu.getDataNodeType(end) !=  IvyDataType.Integer ) {
 				interp.rtError('Expected Integer as "end" argument');
 			}
 

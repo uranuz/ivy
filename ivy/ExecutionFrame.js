@@ -7,7 +7,7 @@ define('ivy/ExecutionFrame', [
 ) {
 var
 	FrameSearchMode = Consts.FrameSearchMode,
-	DataNodeType = Consts.DataNodeType;
+	IvyDataType = Consts.IvyDataType;
 function ExecutionFrame(callableObj, modFrame, dataDict, isNoscope) {
 	this._callableObj = callableObj;
 	this._moduleFrame = modFrame;
@@ -58,7 +58,7 @@ return __mixinProto(ExecutionFrame, {
 
 			switch( iu.getDataNodeType(parent) )
 			{
-				case DataNodeType.AssocArray:
+				case IvyDataType.AssocArray:
 				{
 					var nodePtr = parent[namePart];
 					if( nodePtr !== undefined ) {
@@ -89,9 +89,9 @@ return __mixinProto(ExecutionFrame, {
 					}
 					break;
 				}
-				case DataNodeType.ExecutionFrame:
+				case IvyDataType.ExecutionFrame:
 				{
-					if( iu.getDataNodeType(parent._dataDict) !== DataNodeType.AssocArray )
+					if( iu.getDataNodeType(parent._dataDict) !== IvyDataType.AssocArray )
 					{
 						if( mode === FrameSearchMode.tryGet ) {
 							return {allowUndef: allowUndef};
@@ -115,7 +115,7 @@ return __mixinProto(ExecutionFrame, {
 					}
 					break;
 				}
-				case DataNodeType.ClassNode: {
+				case IvyDataType.ClassNode: {
 					// If there is class nodes in the path to target path, so it's property this way
 					// No matter if it's set or get mode. The last node setting is handled by code at the start of loop
 					var tmpNode = parent.getAttr(namePart);
@@ -165,10 +165,10 @@ return __mixinProto(ExecutionFrame, {
 	_assignNodeAttribute: function(parent, value, varName) {
 		var attrName = iu.back(varName.split('.'));
 		switch( iu.getDataNodeType(parent) ) {
-			case DataNodeType.AssocArray:
+			case IvyDataType.AssocArray:
 				parent[attrName] = value;
 				break;
-			case DataNodeType.ClassNode:
+			case IvyDataType.ClassNode:
 				parent.classNode.setAttr(value, attrName);
 				break;
 			default:

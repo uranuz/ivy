@@ -6,9 +6,7 @@ import ivy.parser.statement;
 import ivy.parser.expression;
 import ivy.compiler.compiler: IDirectiveCompiler, ByteCodeCompiler, takeFrontAs, JumpKind;
 import ivy.compiler.symbol_table: Symbol, SymbolKind, DirectiveDefinitionSymbol;
-import ivy.interpreter.data_node: DataNode;
-
-alias TDataNode = DataNode!string;
+import ivy.interpreter.data_node: IvyData;
 
 /++
 	`Var` directive is defined as list of elements. Each of them could be of following forms:
@@ -44,7 +42,7 @@ public:
 			{
 				if( kwPair.name.empty )
 					compiler.loger.error(`Variable name cannot be empty`);
-				varNameConstIndex = compiler.addConst( TDataNode(kwPair.name) );
+				varNameConstIndex = compiler.addConst( IvyData(kwPair.name) );
 
 				if( !kwPair.value )
 					compiler.loger.error("Expected value for 'var' directive");
@@ -56,7 +54,7 @@ public:
 			{
 				if( nameExpr.name.empty )
 					compiler.loger.error(`Variable name cannot be empty`);
-				varNameConstIndex = compiler.addConst( TDataNode(nameExpr.name) );
+				varNameConstIndex = compiler.addConst( IvyData(nameExpr.name) );
 
 				stmtRange.popFront();
 			}
@@ -88,7 +86,7 @@ public:
 		}
 
 		// For now we expect that directive should return some value on the stack
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
 		if( !stmtRange.empty )
 			compiler.loger.error("Expected end of directive after key-value pair. Maybe ';' is missing");
@@ -124,11 +122,11 @@ public:
 
 			kwPair.value.accept(compiler); //Evaluating expression
 
-			compiler.addInstr(OpCode.StoreName, compiler.addConst( TDataNode(kwPair.name) ));
+			compiler.addInstr(OpCode.StoreName, compiler.addConst( IvyData(kwPair.name) ));
 		}
 
 		// For now we expect that directive should return some value on the stack
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
 		if( !stmtRange.empty )
 			compiler.loger.error("Expected end of directive after key-value pair. Maybe ';' is missing");
@@ -211,7 +209,7 @@ class IfCompiler: IDirectiveCompiler
 		else
 		{
 			// It's fake elseBody used to push fake return value onto stack
-			compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
+			compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 		}
 
 		size_t afterEndInstrIndex = compiler.getInstrCount();
@@ -269,7 +267,7 @@ public:
 		size_t loopStartInstrIndex = compiler.addInstr(OpCode.RunLoop);
 
 		// Issue command to store current loop item in local context with specified name
-		compiler.addInstr(OpCode.StoreLocalName, compiler.addConst( TDataNode(varName) ));
+		compiler.addInstr(OpCode.StoreLocalName, compiler.addConst( IvyData(varName) ));
 
 		bodyStmt.accept(compiler);
 
@@ -280,7 +278,7 @@ public:
 		compiler.setInstrArg(loopStartInstrIndex, loopEndInstrIndex);
 
 		// Push fake result to "make all happy" ;)
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
 		compiler.loger.internalAssert(!compiler._jumpTableStack.empty, `Jump table stack is empty!`);
 		JumpTableItem[] jumpTable = compiler._jumpTableStack.back;
@@ -339,7 +337,7 @@ public:
 		compiler.addInstr(OpCode.StoreSubscr);
 
 		// Add fake value to stack as a result
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
 		if( !stmtRange.empty )
 			compiler.loger.error(`Expected end of "setat" directive after index expression. Maybe ';' is missing. `
@@ -385,7 +383,7 @@ public:
 		compiler.addInstr(OpCode.GetDataRange);
 
 		// Creating node for string result on stack
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(TDataNode[].init) ));
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(IvyData[].init) ));
 
 		// RunLoop expects  data node range on the top, but result aggregator
 		// can be left on (TOP - 1), so swap these...
@@ -395,7 +393,7 @@ public:
 		size_t loopStartInstrIndex = compiler.addInstr(OpCode.RunLoop);
 
 		// Issue command to store current loop item in local context with specified name
-		compiler.addInstr(OpCode.StoreLocalName, compiler.addConst( TDataNode(varName) ));
+		compiler.addInstr(OpCode.StoreLocalName, compiler.addConst( IvyData(varName) ));
 
 		// Swap data node range with result, so that we have it on (TOP - 1) when loop body finished
 		compiler.addInstr(OpCode.SwapTwo);
@@ -477,7 +475,7 @@ public:
 
 		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
 
-		size_t modNameConstIndex = compiler.addConst(TDataNode(moduleNameExpr.name));
+		size_t modNameConstIndex = compiler.addConst(IvyData(moduleNameExpr.name));
 		compiler.addInstr(OpCode.LoadConst, modNameConstIndex); // The first is for ImportModule
 
 		compiler.addInstr(OpCode.ImportModule);
@@ -485,7 +483,7 @@ public:
 		//compiler.addInstr(OpCode.PopTop); // Drop return value of module importing, because it is meaningless
 		compiler.addInstr(OpCode.StoreNameWithParents, modNameConstIndex);
 		// OpCode.StoreName  does not put value on the stack so do it there
-		//compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ) );
+		//compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ) );
 	}
 }
 
@@ -515,15 +513,15 @@ public:
 
 		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
 
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(moduleNameExpr.name) ));
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(moduleNameExpr.name) ));
 
 		compiler.addInstr(OpCode.ImportModule);
 		compiler.addInstr(OpCode.SwapTwo); // Swap module return value and imported execution frame
 		//compiler.addInstr(OpCode.PopTop); // Drop return value of module importing, because it is meaningless
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(varNames) )); // Put list of imported names on the stack
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(varNames) )); // Put list of imported names on the stack
 		compiler.addInstr(OpCode.FromImport); // Store names from module exec frame into current frame
 		// OpCode.FromImport  does not put value on the stack so do it there
-		//compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ) );
+		//compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ) );
 	}
 }
 
@@ -630,7 +628,7 @@ class DefCompiler: IDirectiveCompiler
 		compiler.addInstr(OpCode.LoadConst, codeObjIndex);
 
 		// Add instruction to load directive name from consts
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode(defNameExpr.name) ));
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(defNameExpr.name) ));
 
 		// Add instruction to create directive object
 		compiler.addInstr(OpCode.LoadDirective);
@@ -714,7 +712,7 @@ class ReturnCompiler: IDirectiveCompiler
 		else
 		{
 			// Put Undef value on the stack if there is no value
-			compiler.addInstr(OpCode.LoadConst, compiler.addConst( TDataNode() ));
+			compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 		}
 
 		if( !stmtRange.empty ) {

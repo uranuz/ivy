@@ -115,7 +115,7 @@ var Consts = {
 	]
 },
 EnumConsts = [
-	'DataNodeType',
+	'IvyDataType',
 	'OpCode',
 	'FrameSearchMode',
 	'CallableKind',

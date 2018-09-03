@@ -18,16 +18,14 @@ public:
 
 struct FrameSearchResult
 {
-	alias TDataNode = DataNode!string;
 	bool allowUndef;
-	TDataNode node;
-	TDataNode parent;
+	IvyData node;
+	IvyData parent;
 }
 
 class ExecutionFrame
 {
 	alias LogerMethod = void delegate(LogInfo);
-	alias TDataNode = DataNode!string;
 //private:
 	CallableObject _callableObj;
 
@@ -36,7 +34,7 @@ class ExecutionFrame
 		by this ExecutionFrame haven't it's own data scope and uses parent scope for data.
 		In other cases _dataDict should be of AssocArray type for storing local variables
 	*/
-	TDataNode _dataDict;
+	IvyData _dataDict;
 	bool _isNoscope = false;
 
 	ExecutionFrame _moduleFrame;
@@ -45,7 +43,7 @@ class ExecutionFrame
 	LogerMethod _logerMethod;
 
 public:
-	this(CallableObject callableObj, ExecutionFrame modFrame, TDataNode dataDict, LogerMethod logerMethod, bool isNoscope)
+	this(CallableObject callableObj, ExecutionFrame modFrame, IvyData dataDict, LogerMethod logerMethod, bool isNoscope)
 	{
 		_callableObj = callableObj;
 		_moduleFrame = modFrame;
@@ -76,7 +74,7 @@ public:
 		return LogerProxy(func, file, line, this);
 	}
 
-	TDataNode getValue(string varName)
+	IvyData getValue(string varName)
 	{
 		FrameSearchResult result = findValue!(FrameSearchMode.get)(varName);
 		if( result.node.isUndef && !result.allowUndef )
@@ -88,7 +86,7 @@ public:
 		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
 	}
 
-	DataNodeType getDataNodeType(string varName)
+	IvyDataType getDataNodeType(string varName)
 	{
 		FrameSearchResult result = findValue!(FrameSearchMode.get)(varName);
 		if( result.node.isUndef  )
@@ -110,8 +108,8 @@ public:
 		if( varName.empty )
 			loger.error( "Variable name cannot be empty" );
 
-		TDataNode parent;
-		TDataNode node = _dataDict;
+		IvyData parent;
+		IvyData node = _dataDict;
 
 		string[] nameSplitted = varName.split('.');
 		size_t namePartsCount = nameSplitted.length;
@@ -121,14 +119,14 @@ public:
 			// Determines if in get mode we can return undef without error
 			allowUndef = nameSplitted.length == 1 && namePartsCount > 1;
 			parent = node;
-			node = TDataNode.makeUndef();
+			node = IvyData.makeUndef();
 
 			switch( parent.type )
 			{
-				case DataNodeType.AssocArray:
+				case IvyDataType.AssocArray:
 				{
 					loger.write(`Searching for node: `, nameSplitted.front, ` in assoc array`);
-					if( TDataNode* nodePtr = nameSplitted.front in parent.assocArray )
+					if( IvyData* nodePtr = nameSplitted.front in parent.assocArray )
 					{
 						// If node exists in assoc array then push it as next parent node (or as a result if it's the last)
 						loger.write(`Node: `, nameSplitted.front, ` found in assoc array`);
@@ -140,14 +138,14 @@ public:
 						static if( mode == FrameSearchMode.setWithParents ) {
 							// In setWithParents mode we create parent nodes as assoc array if they are not exist
 							loger.write(`Creating node: `, nameSplitted.front, `, because mode is: `, mode);
-							TDataNode parentDict;
+							IvyData parentDict;
 							parentDict["__mentalModuleMagic_0451__"] = 451; // Allocating dict
 							parentDict.assocArray.remove("__mentalModuleMagic_0451__");
 							parent[nameSplitted.front] = parentDict;
 							node = parent[nameSplitted.front];
 						} else static if( mode == FrameSearchMode.set ) {
 							if( nameSplitted.length == 1 ) {
-								return FrameSearchResult(allowUndef, TDataNode.makeUndef(), parent);
+								return FrameSearchResult(allowUndef, IvyData.makeUndef(), parent);
 							} else {
 								// Only parent node should get there. And if it's not exists then issue an error in the set mode
 								//loger.error(`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
@@ -162,7 +160,7 @@ public:
 					}
 					break;
 				}
-				case DataNodeType.ExecutionFrame:
+				case IvyDataType.ExecutionFrame:
 				{
 					loger.write(`Searching for node: `, nameSplitted.front, ` in execution frame`);
 					if( !parent.execFrame )
@@ -174,7 +172,7 @@ public:
 						}
 					}
 
-					if( parent.execFrame._dataDict.type != DataNodeType.AssocArray )
+					if( parent.execFrame._dataDict.type != IvyDataType.AssocArray )
 					{
 						static if( mode == FrameSearchMode.tryGet ) {
 							return FrameSearchResult(allowUndef);
@@ -183,7 +181,7 @@ public:
 						}
 					}
 
-					if( TDataNode* nodePtr = nameSplitted.front in parent.execFrame._dataDict.assocArray ) {
+					if( IvyData* nodePtr = nameSplitted.front in parent.execFrame._dataDict.assocArray ) {
 						loger.write(`Node: `, nameSplitted.front, ` found in execution frame`);
 						node = *nodePtr;
 					} else {
@@ -199,7 +197,7 @@ public:
 					}
 					break;
 				}
-				case DataNodeType.ClassNode:
+				case IvyDataType.ClassNode:
 				{
 					loger.write(`Searching for node: `, nameSplitted.front, ` in class node`);
 					if( !parent.classNode )
@@ -213,7 +211,7 @@ public:
 
 					// If there is class nodes in the path to target path, so it's property this way
 					// No matter if it's set or get mode. The last node setting is handled by code at the start of loop
-					TDataNode tmpNode = parent.classNode.__getAttr__(nameSplitted.front);
+					IvyData tmpNode = parent.classNode.__getAttr__(nameSplitted.front);
 					if( !tmpNode.isUndef )  {
 						node = tmpNode;
 					} else {
@@ -231,7 +229,7 @@ public:
 				default:
 				{
 					loger.write(`Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type`);
-					return FrameSearchResult(false, TDataNode.makeUndef, parent);
+					return FrameSearchResult(false, IvyData.makeUndef, parent);
 				}
 			}
 		}
@@ -264,17 +262,17 @@ public:
 		return result;
 	}
 
-	private void _assignNodeAttribute(ref TDataNode parent, ref TDataNode value, string varName)
+	private void _assignNodeAttribute(ref IvyData parent, ref IvyData value, string varName)
 	{
 		import std.array: split;
 		import std.range: back;
 		string attrName = varName.split.back;
 		switch( parent.type )
 		{
-			case DataNodeType.AssocArray:
+			case IvyDataType.AssocArray:
 				parent.assocArray[attrName] = value;
 				break;
-			case DataNodeType.ClassNode:
+			case IvyDataType.ClassNode:
 				if( !parent.classNode ) {
 					loger.error(`Cannot assign attribute, because class node is null`);
 				}
@@ -285,14 +283,14 @@ public:
 		}
 	}
 
-	void setValue(string varName, TDataNode value)
+	void setValue(string varName, IvyData value)
 	{
 		loger.write(`Attempt to set node with full path: `, varName, ` with value: `, value);
 		FrameSearchResult result = findValue!(FrameSearchMode.set)(varName);
 		_assignNodeAttribute(result.parent, value, varName);
 	}
 
-	void setValueWithParents(string varName, TDataNode value)
+	void setValueWithParents(string varName, IvyData value)
 	{
 		loger.write(`Call ExecutionFrame.setValueWithParents with varName: `, varName, ` and value: `, value);
 		FrameSearchResult result = findValue!(FrameSearchMode.setWithParents)(varName);
