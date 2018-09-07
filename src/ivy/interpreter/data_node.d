@@ -463,17 +463,6 @@ struct TIvyData(S)
 		return key in storage.assocArray;
 	}
 
-	import std.array;
-	import std.conv;
-
-	static string indentText(string text, size_t times = 1)
-	{
-		string ind;
-		foreach( i; 0..1 )
-			ind ~= "  ";
-		return ind ~ text.split("\r\n").join("\r\n" ~ ind);
-	}
-
 	static MIvyData makeUndef() {
 		MIvyData undef;
 		undef.typeTag = IvyDataType.Undef;
