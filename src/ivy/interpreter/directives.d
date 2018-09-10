@@ -49,7 +49,7 @@ class IntCtorDirInterpreter: INativeDirectiveInterpreter
 				interp._stack ~= value;
 				break;
 			case IvyDataType.String:
-				interp._stack ~= IvyData(value.str.to!long);
+				interp._stack ~= IvyData(value.str.to!ptrdiff_t);
 				break;
 			default:
 				interp.loger.error(`Cannot convert value of type: `, value.type, ` to integer`);
@@ -330,10 +330,10 @@ class DateTimeGetDirInterpreter: INativeDirectiveInterpreter
 			case "hour": interp._stack ~= IvyData(dt.hour); break;
 			case "minute": interp._stack ~= IvyData(dt.minute); break;
 			case "second": interp._stack ~= IvyData(dt.second); break;
-			case "millisecond": interp._stack ~= IvyData(dt.fracSecs.split().msecs); break;
-			case "dayOfWeek": interp._stack ~= IvyData(cast(int) dt.dayOfWeek); break;
-			case "dayOfYear": interp._stack ~= IvyData(dt.dayOfYear); break;
-			case "utcMinuteOffset" : interp._stack ~= IvyData(dt.utcOffset.total!("minutes")); break;
+			case "millisecond": interp._stack ~= IvyData(cast(ptrdiff_t) dt.fracSecs.split().msecs); break;
+			case "dayOfWeek": interp._stack ~= IvyData(cast(ptrdiff_t) dt.dayOfWeek); break;
+			case "dayOfYear": interp._stack ~= IvyData(cast(ptrdiff_t) dt.dayOfYear); break;
+			case "utcMinuteOffset" : interp._stack ~= IvyData(cast(ptrdiff_t) dt.utcOffset.total!("minutes")); break;
 			default:
 				interp.loger.error("Unexpected date field specifier: ", field.str);
 		}

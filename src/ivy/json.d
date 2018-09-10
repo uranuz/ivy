@@ -292,9 +292,9 @@ auto toIvyJSON(ref JSONValue src)
 		case JSON_TYPE.FALSE:
 			return IvyData(false);
 		case JSON_TYPE.INTEGER:
-			return IvyData(src.integer);
+			return IvyData(cast(ptrdiff_t) src.integer);
 		case JSON_TYPE.UINTEGER:
-			return IvyData(src.uinteger);
+			return IvyData(cast(ptrdiff_t) src.uinteger);
 		case JSON_TYPE.FLOAT:
 			return IvyData(src.floating);
 		case JSON_TYPE.STRING:

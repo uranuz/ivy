@@ -36,7 +36,6 @@ class CallableObject
 	// If this is natively implemented directive then _codeObj is null, but this must not be null
 	INativeDirectiveInterpreter _dirInterp;
 
-	this() {}
 
 	DirAttrsBlock!(false)[] attrBlocks() @property
 	{
@@ -128,11 +127,11 @@ public:
 class IntegerRange: IvyNodeRange
 {
 private:
-	long _current;
-	long _end;
+	ptrdiff_t _current;
+	ptrdiff_t _end;
 
 public:
-	this( long begin, long end )
+	this( ptrdiff_t begin, ptrdiff_t end )
 	{
 		assert( begin <= end, `Begin cannot be greather than end in integer range` );
 		_current = begin;

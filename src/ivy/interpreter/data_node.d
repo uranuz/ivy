@@ -72,7 +72,7 @@ struct TIvyData(S)
 	struct Storage {
 		union {
 			bool boolean;
-			long integer;
+			ptrdiff_t integer;
 			double floating;
 			SysTime dateTime;
 			// This is workaround of problem that IvyData is value type
@@ -108,13 +108,13 @@ struct TIvyData(S)
 		assign(val);
 	}
 
-	long integer() @property
+	ptrdiff_t integer() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.Integer, "IvyData is not integer");
 		return storage.integer;
 	}
 
-	void integer(long val) @property {
+	void integer(ptrdiff_t val) @property {
 		assign(val);
 	}
 
