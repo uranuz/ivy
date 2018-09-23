@@ -280,8 +280,8 @@ auto parseIvyJSON(S)(S src)
 	return parser.parseValue();
 }
 
-import std.json;
-auto toIvyJSON(ref JSONValue src)
+import std.json: JSON_TYPE, JSONValue;
+IvyData toIvyJSON(ref JSONValue src)
 {
 	final switch( src.type )
 	{
@@ -318,4 +318,44 @@ auto toIvyJSON(ref JSONValue src)
 		}
 	}
 	assert(false, `Shouldn't be reached!`);
+}
+
+import std.exception: enforce;
+JSONValue toStdJSON(ref IvyData src)
+{
+	switch( src.type )
+	{
+		case IvyDataType.Undef: case IvyDataType.Null:
+			return JSONValue(null);
+		case IvyDataType.Boolean:
+			return JSONValue(src.boolean);
+		case IvyDataType.Integer:
+			return JSONValue(src.integer);
+		case IvyDataType.Floating:
+			return JSONValue(src.floating);
+		case IvyDataType.String:
+			return JSONValue(src.str);
+		case IvyDataType.Array:
+		{
+			JSONValue[] nodeArray;
+			nodeArray.length = src.array.length;
+			foreach( size_t i, val; src.array ) {
+				nodeArray[i] = val.toStdJSON;
+			}
+			return JSONValue(nodeArray);
+		}
+		case IvyDataType.AssocArray:
+		{
+			JSONValue[string] nodeAA;
+			foreach( string key, val; src.assocArray ) {
+				if( val.type != IvyDataType.Undef ) {
+					nodeAA[key] = val.toStdJSON;
+				}
+			}
+			return JSONValue(nodeAA);
+		}
+		default: break;
+	}
+	enforce(false, `Conversion is not implemented yet!`);
+	assert(false);
 }

@@ -609,26 +609,6 @@ public:
 							attrRange.popFront();
 						}
 
-						foreach( name, attrDecl; namedAttrsDef.namedAttrs )
-						{
-							if( name !in argsSet )
-							{
-								IExpression defVal = namedAttrsDef.namedAttrs[name].defaultValueExpr;
-
-								if( defVal )
-								{
-									// Add name of named argument into stack
-									addInstr(OpCode.LoadConst, addConst( IvyData(name) ));
-									++stackItemsCount;
-
-									// Generate code to set default values
-									defVal.accept(this);
-									++stackItemsCount;
-									++argCount;
-								}
-							}
-						}
-
 						// Add instruction to load value that consists of number of pairs in block and type of block
 						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
 						addInstr(OpCode.LoadConst, addConst( IvyData(blockHeader) ));
@@ -661,12 +641,10 @@ public:
 						while( !exprAttrDefs.empty )
 						{
 							IExpression defVal = exprAttrDefs.front.defaultValueExpr;
+							// Just for check
 							if( !defVal )
 								loger.error(`Positional attribute is not passed explicitly and has no default value`);
 
-							defVal.accept(this);
-							++stackItemsCount;
-							++argCount;
 							exprAttrDefs.popFront();
 						}
 

@@ -509,12 +509,17 @@ public:
 		dynamicRule( &parseDataBlock, LexemeType.DataBlock, LexemeFlag.Literal ),
 
 		staticRule( exprBlockBegin, LexemeType.ExprBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.ExprBlockEnd ),
-		staticRule( exprBlockEnd, LexemeType.ExprBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.ExprBlockBegin ),
 		staticRule( codeBlockBegin, LexemeType.CodeBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeBlockEnd ),
 		staticRule( codeListBegin, LexemeType.CodeListBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.CodeListEnd ),
 		staticRule( mixedBlockBegin, LexemeType.MixedBlockBegin, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.MixedBlockEnd ),
-		staticRule( mixedBlockEnd, LexemeType.MixedBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.MixedBlockBegin ),
+		staticRule( exprBlockEnd, LexemeType.ExprBlockEnd, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.ExprBlockBegin ),
 
+		staticRule( "{", LexemeType.LBrace, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RBrace ),
+		staticRule( "[", LexemeType.LBracket, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RBracket ),
+		staticRule( "(", LexemeType.LParen, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RParen ),
+		staticRule( "}", LexemeType.RBrace, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.LBrace ),
+		staticRule( "]", LexemeType.RBracket, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.LBracket ),
+		staticRule( ")", LexemeType.RParen, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.LParen ),
 		staticRule( "+", LexemeType.Add, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "==", LexemeType.Equal, LexemeFlag.Operator, LexemeFlag.Compare ),
 		staticRule( ":", LexemeType.Colon, LexemeFlag.Operator ),
@@ -523,18 +528,13 @@ public:
 		staticRule( ".", LexemeType.Dot, LexemeFlag.Operator ),
 		staticRule( ">=", LexemeType.GTEqual, LexemeFlag.Operator, LexemeFlag.Compare ),
 		staticRule( ">", LexemeType.GT, LexemeFlag.Operator, LexemeFlag.Compare ),
-		staticRule( "{", LexemeType.LBrace, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RBrace ),
-		staticRule( "[", LexemeType.LBracket, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RBracket ),
-		staticRule( "(", LexemeType.LParen, LexemeFlag.Paren, LexemeFlag.Left, LexemeType.RParen ),
 		staticRule( "<=", LexemeType.LTEqual, LexemeFlag.Operator, LexemeFlag.Compare ),
 		staticRule( "<", LexemeType.LT, LexemeFlag.Operator, LexemeFlag.Compare ),
 		staticRule( "%", LexemeType.Mod, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "**", LexemeType.Pow, LexemeFlag.Operator, LexemeFlag.Compare ),
 		staticRule( "*", LexemeType.Mul, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "!=", LexemeType.NotEqual, LexemeFlag.Operator, LexemeFlag.Compare ),
-		staticRule( "}", LexemeType.RBrace, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.LBrace ),
-		staticRule( "]", LexemeType.RBracket, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.LBracket ),
-		staticRule( ")", LexemeType.RParen, LexemeFlag.Paren, LexemeFlag.Right, LexemeType.LParen ),
+
 		staticRule( ";", LexemeType.Semicolon, LexemeFlag.Separator),
 		staticRule( "-", LexemeType.Sub, LexemeFlag.Operator, LexemeFlag.Arithmetic ),
 		staticRule( "~", LexemeType.Tilde, LexemeFlag.Operator ),
@@ -774,8 +774,8 @@ public:
 		}
 	}
 
-	bool empty()
-	{	return currentRange.empty || _front.info.isEndOfFile;
+	bool empty() @property {
+		return currentRange.empty || _front.info.isEndOfFile;
 	}
 
 	LexemeT front() @property
@@ -799,58 +799,49 @@ public:
 		return thisCopy;
 	}
 
-	// TODO: Unused method - consider to remove
-	void fail_expectation(LexemeType lexType, size_t line, String value = String.init )
+	void fail_expectation(LexemeType lexType, String value, String msg, string func, string file, int line)
 	{
-		String whatExpected = `lexeme of typeIndex "` ~ lexType.to!String ~ `"`;
+		String whatExpected = (msg.empty? null: msg ~ `. `) ~ `Lexeme of type "` ~ lexType.to!String ~ `"`;
 		if( !value.empty )
 			whatExpected ~= ` with value "` ~ value ~ `"`;
+		loger(func, file, line).error(!this.empty, whatExpected, ` expected, but got end of input!!!`);
 
-		loger.error( !this.empty, `Expected `, whatExpected,` but end of input found!!!` );
-
-		String whatGot = `lexeme of typeIndex "` ~ front.info.typeIndex.to!String ~ `"`;
+		String whatGot = `, but got lexeme of type "` ~ (cast(LexemeType) front.info.typeIndex).to!String ~ `"`;
 		if( !front.getSlice(sourceRange).empty )
 			whatGot ~= ` with value "` ~ front.getSlice(sourceRange).array ~ `"`;
 
-		loger.error(`[`, line.to!String, `] Expected `, whatExpected, ` but got `, whatGot, `!!!` );
+		loger(func, file, line).error(whatExpected, ` expected`, whatGot, `!!!`);
 	}
 
-	// TODO: Unused method - consider to remove
-	LexemeT expect(LexemeType lexType, String value, size_t line = __LINE__)
+	LexemeT expect(LexemeType lexType, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__) {
+		return expectVal(lexType, null, msg, func, file, line);
+	}
+
+	LexemeT expectVal(LexemeType lexType, String value = null, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)
 	{
 		import std.algorithm: equal;
 
 		if( this.empty )
-			fail_expectation(lexType, line, value);
+			fail_expectation(lexType, value, msg, func, file, line);
 
 		LexemeT lex = this.front;
-		if( lex.info.typeIndex == lexType && lex.getSlice(sourceRange).equal(value) )
-		{
-			this.popFront();
+		if( lex.info.typeIndex == lexType && (value.empty || lex.getSlice(sourceRange).equal(value)) ) {
 			return lex;
 		}
 
-		fail_expectation(lexType, line, value);
-		loger.internalAssert(false);
+		fail_expectation(lexType, value, msg, func, file, line);
 		assert(false);
 	}
 
-	// TODO: Unused method - consider to remove
-	LexemeT expect(LexemeType lexType, size_t line = __LINE__)
+	LexemeT consume(LexemeType lexType, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__) {
+		return consumeVal(lexType, null, msg, func, file, line);
+	}
+
+	LexemeT consumeVal(LexemeType lexType, String value = null, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)
 	{
-		if( this.empty )
-			fail_expectation(lexType, line);
-
-		LexemeT lex = this.front;
-		if( lex.info.typeIndex == lexType )
-		{
-			this.popFront();
-			return lex;
-		}
-
-		fail_expectation(lexType, line);
-		loger.internalAssert(false);
-		assert(false);
+		LexemeT lex = expect(lexType, value, func, file, line);
+		this.popFront();
+		return lex;
 	}
 
 	// TODO: Unused method - consider to remove

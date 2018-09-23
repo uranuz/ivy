@@ -19,10 +19,14 @@ struct DirValueAttr(bool isForCompiler = false)
 	}
 	else
 	{
-		this( string name, string typeName )
+		import ivy.interpreter.data_node: IvyData;
+
+		IvyData defaultValue;
+		this( string name, string typeName, IvyData defValue = IvyData() )
 		{
 			this.name = name;
 			this.typeName = typeName;
+			this.defaultValue = defValue;
 		}
 	}
 

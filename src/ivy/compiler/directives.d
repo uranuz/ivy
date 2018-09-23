@@ -525,6 +525,8 @@ public:
 	}
 }
 
+import ivy.directive_stuff: DirAttrKind, _stackBlockHeaderSizeOffset;
+
 debug import std.stdio;
 /// Defines directive using ivy language
 class DefCompiler: IDirectiveCompiler
@@ -590,17 +592,17 @@ class DefCompiler: IDirectiveCompiler
 		// Here should go commands to compile directive body
 		compiler.loger.internalAssert(bodyStatement, `Directive definition body is null`);
 
+		Symbol symb = compiler.symbolLookup(defNameExpr.name);
+		if( symb.kind != SymbolKind.DirectiveDefinition )
+			compiler.loger.error(`Expected directive definition symbol kind`);
+
+		DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
+		assert(dirSymbol, `Directive definition symbol is null`);
+
 		size_t codeObjIndex;
 		{
 			import std.algorithm: map;
 			import std.array: array;
-
-			Symbol symb = compiler.symbolLookup(defNameExpr.name);
-			if( symb.kind != SymbolKind.DirectiveDefinition )
-				compiler.loger.error(`Expected directive definition symbol kind`);
-
-			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-			assert(dirSymbol, `Directive definition symbol is null`);
 
 			if( !isNoscope )
 			{
@@ -615,7 +617,8 @@ class DefCompiler: IDirectiveCompiler
 
 			compiler.currentCodeObject._attrBlocks = dirSymbol.dirAttrBlocks.map!( b => b.toInterpreterBlock() ).array;
 
-			scope(exit) {
+			scope(exit)
+			{
 				compiler.exitCodeObject();
 				if( !isNoscope )
 				{
@@ -630,8 +633,63 @@ class DefCompiler: IDirectiveCompiler
 		// Add instruction to load directive name from consts
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(defNameExpr.name) ));
 
+		size_t stackItemsCount = 2; // CodeObject and it's name counted
+
+		// We shal compute default values for directive attributes at directive load.
+		// Default values wil be stored in DirAttrsBlock!(false) defaultValue field.
+		// For each exact directive invocation we should make deep copy these default values
+		foreach( ref attrBlock; dirSymbol.dirAttrBlocks )
+		{
+			switch( attrBlock.kind )
+			{
+				case DirAttrKind.NamedAttr:
+				{
+					size_t argCount = 0;
+					
+					foreach( string argName, namedAttr; attrBlock.namedAttrs )
+					{
+						if( namedAttr.defaultValueExpr ) {
+							compiler.addInstr( OpCode.LoadConst, compiler.addConst(IvyData(argName)) );
+							++stackItemsCount;
+
+							namedAttr.defaultValueExpr.accept(compiler);
+							++stackItemsCount;
+
+							++argCount; // Increase default value pairs counter
+						}
+					}
+
+					// Add instruction to load value that consists of number of pairs in block and type of block
+					size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
+					compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(blockHeader) ));
+					++stackItemsCount; // We should count args block header
+					break;
+				}
+				case DirAttrKind.ExprAttr:
+				{
+					size_t argCount = 0;
+
+					foreach( exprAttr; attrBlock.exprAttrs )
+					{
+						if( exprAttr.defaultValueExpr ) {
+							exprAttr.defaultValueExpr.accept(compiler);
+							++stackItemsCount;
+							++argCount; // Increase default values counter
+						}
+					}
+
+					// Add instruction to load value that consists of number of positional arguments in block and type of block
+					size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
+					compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(blockHeader) ));
+					++stackItemsCount; // We should count args block header
+					break;
+				}
+				default: break;
+			}
+		}
+
 		// Add instruction to create directive object
-		compiler.addInstr(OpCode.LoadDirective);
+		compiler.addInstr(OpCode.LoadDirective, stackItemsCount);
 	}
 }
 

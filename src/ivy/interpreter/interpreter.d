@@ -48,6 +48,7 @@ public:
 	LogerMethod _logerMethod;
 
 	size_t _pk; // Programme counter
+	Instruction[] _codeRange; // Current code range we executing
 
 	this(ModuleObject[string] moduleObjects, string mainModuleName, IvyData dataDict, LogerMethod logerMethod = null)
 	{
@@ -416,23 +417,31 @@ public:
 		assert(false);
 	}
 
-	IvyData execLoop()
+	IvyData execLoop() 
+	{
+		import std.range: empty, back, popBack;
+
+		loger.internalAssert(!_frameStack.empty, `_frameStack is empty`);
+		loger.internalAssert(_frameStack.back, `_frameStack.back is null`);
+		loger.internalAssert(_frameStack.back._callableObj, `_frameStack.back._callableObj is null`);
+		loger.internalAssert(_frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null`);
+		_pk = 0;
+		_codeRange = _frameStack.back._callableObj._codeObj._instrs[];
+
+		return execLoopImpl();
+	}
+
+	IvyData execLoopImpl(size_t exitFrames = 1)
 	{
 		import std.range: empty, back, popBack;
 		import std.conv: to, text;
 		import std.meta: AliasSeq;
 		import std.typecons: tuple;
 
-		loger.internalAssert(!_frameStack.empty, `_frameStack is empty`);
-		loger.internalAssert(_frameStack.back, `_frameStack.back is null`);
-		loger.internalAssert(_frameStack.back._callableObj, `_frameStack.back._callableObj is null`);
-		loger.internalAssert(_frameStack.back._callableObj._codeObj, `_frameStack.back._callableObj._codeObj is null`);
-
-		auto codeRange = _frameStack.back._callableObj._codeObj._instrs[];
 		execution_loop:
-		for( _pk = 0; _pk <= codeRange.length; )
+		while( _pk <= _codeRange.length )
 		{
-			if( _pk >= codeRange.length ) // Ended with this code object
+			if( _pk >= _codeRange.length ) // Ended with this code object
 			{
 				loger.write("_stack on code object end: ", _stack);
 				loger.write("_frameStack on code object end: ", _frameStack);
@@ -440,7 +449,7 @@ public:
 
 				// Else we expect to have result of directive on the stack
 				loger.internalAssert(_stack.length == 1, "Frame stack should contain 1 item now! But there is: ", _stack);
-				if( this._frameStack.length == 1 ) {
+				if( this._frameStack.length == exitFrames ) {
 					// If there is the last frame it means that it is the last module frame.
 					// We need to leave frame here for case when we want to execute specific function of module
 					return _stack.back();
@@ -453,12 +462,12 @@ public:
 				_stack.popBack(); // Drop return address
 
 				loger.internalAssert(!_frameStack.back._callableObj._codeObj._instrs.empty, "Code object to return is empty!");
-				codeRange = _frameStack.back._callableObj._codeObj._instrs[]; // Set old instruction range back
+				_codeRange = _frameStack.back._callableObj._codeObj._instrs[]; // Set old instruction range back
 				_stack ~= result; // Get result back
 				continue;
 			} // if
 			
-			Instruction instr = codeRange[_pk];
+			Instruction instr = _codeRange[_pk];
 			switch( instr.opcode )
 			{
 				// Base arithmetic operations execution
@@ -908,7 +917,7 @@ public:
 						_stack.addStackBlock(); // Add new stack block for execution frame
 
 						// Preparing to run code object in newly created frame
-						codeRange = codeObject._instrs[];
+						_codeRange = codeObject._instrs[];
 						_pk = 0;
 
 						continue execution_loop; // Skip _pk increment
@@ -1002,7 +1011,7 @@ public:
 					if( dataRange.empty )
 					{
 						loger.write("RunLoop. Data range is exaused, so exit loop. _stack is: ", _stack);
-						loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
+						loger.internalAssert(instr.arg < _codeRange.length, `Cannot jump after the end of code object`);
 						_pk = instr.arg;
 						loger.internalAssert(_stack.back.type == IvyDataType.DataNodeRange, "RunLoop. Expected DataNodeRange to drop");
 						_stack.popBack(); // Drop data range from stack as we no longer need it
@@ -1020,7 +1029,7 @@ public:
 
 				case OpCode.Jump:
 				{
-					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
+					loger.internalAssert(instr.arg < _codeRange.length, `Cannot jump after the end of code object`);
 
 					_pk = instr.arg;
 					continue execution_loop; // Skip _pk increment
@@ -1030,7 +1039,7 @@ public:
 				{
 					import std.algorithm: canFind;
 
-					loger.internalAssert(instr.arg < codeRange.length, `Cannot jump after the end of code object`);
+					loger.internalAssert(instr.arg < _codeRange.length, `Cannot jump after the end of code object`);
 					bool jumpCond = evalAsBoolean(_stack.back); // This is actual condition to test
 					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].canFind(instr.opcode) ) {
 						jumpCond = !jumpCond; // Invert condition if False family is used
@@ -1053,7 +1062,7 @@ public:
 				case OpCode.Return:
 				{
 					// Set instruction index at the end of code object in order to finish 
-					_pk = codeRange.length;
+					_pk = _codeRange.length;
 					IvyData result = _stack.back;
 					// Erase all from the current stack
 					_stack.popBackN(_stack.length);
@@ -1079,15 +1088,86 @@ public:
 
 				case OpCode.LoadDirective:
 				{
-					loger.internalAssert(_stack.back.type == IvyDataType.String, `Expected String as directive name operand`);
-					string varName = _stack.popBack().str;
+					import std.conv: text;
+					
+					size_t stackArgCount = instr.arg;
+					loger.internalAssert(stackArgCount > 1, "Directive load must have at least 2 items in stack!");
+					loger.internalAssert(stackArgCount <= _stack.length, "Not enough arguments in execution stack");
 
-					loger.internalAssert(_stack.back.type == IvyDataType.CodeObject, `Expected CodeObject as callable`);
-					CodeObject codeObj = _stack.popBack().codeObject;
-
+					IvyData codeObjNode = _stack[_stack.length - stackArgCount];
+					IvyData varNameNode = _stack[_stack.length - stackArgCount + 1];
+					loger.internalAssert(codeObjNode.type == IvyDataType.CodeObject, `Expected CodeObject`, codeObjNode, `   `, varNameNode);
+					loger.internalAssert(varNameNode.type == IvyDataType.String, `Expected String as directive name`);
+					CodeObject codeObj = codeObjNode.codeObject;
 					loger.internalAssert(codeObj, `Code object operand for directive loading instruction is null`);
 
-					setLocalValue( varName, IvyData(new CallableObject(varName, codeObj)) ); // Put this directive in context
+					if( stackArgCount > 2 )
+					{
+						size_t stackArgsProcessed = 2;
+						foreach( ref attrBlock; codeObj._attrBlocks )
+						{
+							size_t blockArgCount;
+							DirAttrKind blockType;
+							switch( attrBlock.kind ) {
+								case DirAttrKind.NamedAttr, DirAttrKind.ExprAttr:
+									IvyData blockHeader = _stack.popBack(); // Get block header
+									++stackArgsProcessed;
+									loger.internalAssert(blockHeader.type == IvyDataType.Integer, `Expected integer as arguments block header!`);
+									blockArgCount = blockHeader.integer >> _stackBlockHeaderSizeOffset;
+									blockType = cast(DirAttrKind)(blockHeader.integer & _stackBlockHeaderTypeMask);
+									// Bit between block size part and block type must always be zero
+									loger.internalAssert((blockHeader.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted`);
+									break;
+								default: break;
+							}
+
+							
+							switch( attrBlock.kind )
+							{
+								case DirAttrKind.NamedAttr: {
+									bool[string] passedArgs;
+									
+									foreach( k; 0..blockArgCount )
+									{
+										IvyData attrValueNode = _stack.popBack(); ++stackArgsProcessed;
+
+										IvyData attrNameNode = _stack.popBack(); ++stackArgsProcessed;
+										loger.internalAssert(attrNameNode.type == IvyDataType.String, "Named attribute name must be string!");
+										loger.internalAssert(attrNameNode.str !in passedArgs, "Duplicate named argument detected!");
+										loger.internalAssert(attrNameNode.str in attrBlock.namedAttrs, "Unexpected argument detected!");
+
+										attrBlock.namedAttrs[attrNameNode.str].defaultValue = attrValueNode;
+										passedArgs[attrNameNode.str] = true;
+									}
+									loger.internalAssert(passedArgs.length == blockArgCount, `Processed and required default arguments doesn't match!`);
+									break;
+								}
+								case DirAttrKind.ExprAttr:
+								{
+									foreach( j; 0..blockArgCount )
+									{
+										// Set last items with default values from stack
+										attrBlock.exprAttrs[attrBlock.exprAttrs.length - 1 - j].defaultValue = this._stack.popBack();
+										++stackArgsProcessed;
+									}
+									break;
+								}
+								default: break;
+							}
+						}
+						loger.internalAssert(stackArgsProcessed == stackArgCount, `Processed and required stack arguments doesn't match!`, ` processed`, stackArgsProcessed, ` required: `, stackArgCount);
+					}
+
+					loger.internalAssert(_stack.popBack().type == IvyDataType.String, `Expected String as directive name`);
+					loger.internalAssert(_stack.popBack().type == IvyDataType.CodeObject, `Expected CodeObject`);
+
+					setLocalValue(
+						varNameNode.str,
+						IvyData(new CallableObject(
+							varNameNode.str,
+							codeObjNode.codeObject
+						))
+					); // Put this directive in context
 					_stack ~= IvyData(); // We should return something
 					break;
 				}
@@ -1103,11 +1183,12 @@ public:
 					loger.write("RunCallable stackArgCount: ", stackArgCount );
 					loger.internalAssert(stackArgCount <= _stack.length, "Not enough arguments in execution stack");
 					loger.write("RunCallable _stack: ", _stack);
-					loger.write("RunCallable callable type: ", _stack[_stack.length - stackArgCount].type);
-					loger.internalAssert(_stack[_stack.length - stackArgCount].type == IvyDataType.Callable,
-						`Expected directive object operand in directive call operation`);
 
-					CallableObject callableObj = _stack[_stack.length - stackArgCount].callable;
+					IvyData callableNode = _stack[_stack.length - stackArgCount];
+					loger.write("RunCallable callable type: ", callableNode.type);
+					loger.internalAssert(callableNode.type == IvyDataType.Callable, `Expected Callable operand`);
+
+					CallableObject callableObj = callableNode.callable;
 					loger.internalAssert(callableObj, `Callable object is null!` );
 					loger.write("RunCallable name: ", callableObj._name);
 
@@ -1121,90 +1202,88 @@ public:
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{
-						size_t blockCounter = 0;
-
-						for( size_t i = 0; i < (stackArgCount - 1); )
+						size_t stackArgsProcessed = 0;
+						foreach( attrBlock; callableObj.attrBlocks )
 						{
-							loger.internalAssert(_stack.back.type == IvyDataType.Integer, `Expected integer as arguments block header!`);
-							size_t blockArgCount = _stack.back.integer >> _stackBlockHeaderSizeOffset;
-							loger.write("blockArgCount: ", blockArgCount);
-							DirAttrKind blockType = cast(DirAttrKind)( _stack.back.integer & _stackBlockHeaderTypeMask );
-							// Bit between block size part and block type must always be zero
-							loger.internalAssert( (_stack.back.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
-							loger.write("blockType: ", blockType);
+							// Getting args block metainfo
+							size_t blockArgCount;
+							DirAttrKind blockType;
+							switch( attrBlock.kind ) {
+								case DirAttrKind.NamedAttr, DirAttrKind.ExprAttr:
+									IvyData blockHeader = _stack.popBack(); // Get block header
+									++stackArgsProcessed;
+									loger.internalAssert(blockHeader.type == IvyDataType.Integer, `Expected integer as arguments block header!`);
+									blockArgCount = blockHeader.integer >> _stackBlockHeaderSizeOffset;
+									loger.write("blockArgCount: ", blockArgCount);
+									blockType = cast(DirAttrKind)( blockHeader.integer & _stackBlockHeaderTypeMask );
+									// Bit between block size part and block type must always be zero
+									loger.internalAssert( (blockHeader.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
+									loger.write("blockType: ", blockType);
+									break;
+								default: break;
+							}
 
-							_stack.popBack();
-							++i; // Block header was eaten, so increase counter
-
-							switch( blockType )
+							switch( attrBlock.kind )
 							{
 								case DirAttrKind.NamedAttr:
 								{
-									size_t j = 0;
-									while( j < 2 * blockArgCount )
+									bool[string] passedArgs;
+									
+									foreach( k; 0..blockArgCount )
 									{
-										IvyData attrValue = _stack.back;
-										_stack.popBack(); ++j; // Parallel bookkeeping ;)
-
+										IvyData attrValueNode = _stack.popBack(); ++stackArgsProcessed;
 										loger.write(`RunCallable debug, _stack is: `, _stack);
-										loger.internalAssert(_stack.back.type == IvyDataType.String, "Named attribute name must be string!");
-										string attrName = _stack.back.str;
-										_stack.popBack(); ++j;
 
-										setLocalValue( attrName, attrValue );
+										IvyData attrNameNode = _stack.popBack(); ++stackArgsProcessed;
+										loger.internalAssert(attrNameNode.type == IvyDataType.String, "Named attribute name must be string!");
+										loger.internalAssert(attrNameNode.str !in passedArgs, "Duplicate named argument detected!");
+										loger.internalAssert(attrNameNode.str in attrBlock.namedAttrs, "Unexpected argument detected!");
+
+										setLocalValue(attrNameNode.str, attrValueNode);
+										passedArgs[attrNameNode.str] = true;
 									}
-									i += j; // Increase overall processed stack arguments count (2 items per iteration)
-									loger.write("_stack after parsing named arguments: ", _stack);
+
+									foreach( attrName, namedAttr; attrBlock.namedAttrs )
+									{
+										if( attrName in passedArgs ) {
+											continue; // Attribute already passes to directive
+										}
+										// Do deep copy of default value
+										setLocalValue(attrName, deeperCopy(namedAttr.defaultValue));
+									}
 									break;
 								}
 								case DirAttrKind.ExprAttr:
 								{
-									size_t currBlockIndex = attrBlocks.length - blockCounter - 2; // 2 is: 1, because of length PLUS 1 for body attr in the end
-
-									loger.write(`Interpret pos arg, currBlockIndex: `, currBlockIndex );
-
-									if( currBlockIndex >= attrBlocks.length ) {
-										loger.error(`Current attr block index is out of current bounds of declared blocks!`);
-									}
-
-									DirAttrsBlock!(false) currBlock = attrBlocks[currBlockIndex];
-
-									loger.write(`Interpret pos arg, attrBlocks: `, attrBlocks);
-									loger.write(`Interpret pos arg, currBlock.kind: `, currBlock.kind.to!string);
-									if( currBlock.kind != DirAttrKind.ExprAttr ) {
-										loger.error(`Expected positional arguments block in block metainfo`);
-									}
-
-
-									for( size_t j = 0; j < blockArgCount; ++j, ++i /* Inc overall processed arg count*/ )
+									foreach( j; 0..attrBlock.exprAttrs.length )
 									{
-										IvyData attrValue = _stack.back;
-										_stack.popBack();
-
-										loger.internalAssert(j < currBlock.exprAttrs.length, `Unexpected number of attibutes in positional arguments block`);
-
-										setLocalValue( currBlock.exprAttrs[blockArgCount -j -1].name, attrValue );
+										size_t backIndex = attrBlock.exprAttrs.length - 1 - j;
+										auto exprAttr = attrBlock.exprAttrs[backIndex];
+										if( backIndex < blockArgCount )
+										{
+											IvyData attrValue = this._stack.popBack(); ++stackArgsProcessed;
+											setLocalValue(exprAttr.name, attrValue);
+										}
+										else {
+											setLocalValue(exprAttr.name, exprAttr.defaultValue);
+										}
 									}
-									loger.write("_stack after parsing positional arguments: ", _stack);
 									break;
 								}
-								default:
-									loger.internalAssert(false, "Unexpected arguments block type");
+								default: break;
 							}
-
-							blockCounter += 1;
 						}
 					}
 					loger.write("_stack after parsing all arguments: ", _stack);
 
-					loger.internalAssert(_stack.back.type == IvyDataType.Callable, `Expected callable object operand in call operation`);
+					loger.internalAssert(_stack.back.type == IvyDataType.Callable, `Expected callable object operand in call operation, but got: `, _stack);
 					_stack.popBack(); // Drop callable object from stack
 
 					if( callableObj._codeObj )
 					{
 						_stack ~= IvyData(_pk+1); // Put next instruction index on the stack to return at
 						_stack.addStackBlock();
-						codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
+						_codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
 						_pk = 0;
 						continue execution_loop; // Skip _pk increment
 					}
@@ -1218,7 +1297,7 @@ public:
 						loger.internalAssert(_stack.length, "Stack should contain 1 item empty now!");
 
 						// If frame stack contains last frame - it means that we nave done with programme
-						if( this._frameStack.length == 1 ) {
+						if( this._frameStack.length == exitFrames ) {
 							return _stack.back();
 						}
 						IvyData result = _stack.popBack();
@@ -1291,26 +1370,79 @@ public:
 		return moduleFrame;
 	}
 
-	IvyData runModuleDirective(string name, IvyData[string] args)
+	IvyData runModuleDirective(string name, IvyData args = IvyData())
 	{
-		ExecutionFrame moduleFrame = this.currentFrame;
-		loger.internalAssert(moduleFrame, `Could not get module frame!`);
-		IvyData callableNode = moduleFrame.getValue(name);
+		import std.exception: enforce;
+		import std.algorithm: canFind;
+		enforce([
+			IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray
+		].canFind(args.type), `Expected Undef, Null or AssocArray as list of directive arguments`);
+
+		loger.internalAssert(this.currentFrame, `Could not get module frame!`);
+
+		// Find desired directive by name in current module frame
+		IvyData callableNode = this.currentFrame.getValue(name);
 		loger.internalAssert(callableNode.type == IvyDataType.Callable, `Expected Callable!`);
-		moduleFrame = _getModuleFrame(callableNode.callable); // Rewriting?
 
 		loger.internalAssert(_stack.length < 2, `Expected 0 or 1 items in stack!`);
 		if( _stack.length == 1 ) {
 			_stack.popBack(); // Drop old result from stack
 		}
-		// Set return address for call
-		_stack ~= IvyData(moduleFrame._callableObj._codeObj.getInstrCount());
-		IvyData dataDict = ["__scopeName__": name]; // Allocating scope
-		newFrame(callableNode.callable, moduleFrame, dataDict, callableNode.callable.isNoscope);
-		_stack.addStackBlock(); // Add new stack block for execution frame
-		foreach( string attrName, IvyData attrValue; args ) {
-			setLocalValue(attrName, attrValue);
+
+		_stack ~= callableNode;
+		size_t stackItemsCount = 1; // Pass callable at least
+
+		// Put params into stack
+		foreach( attrBlock; callableNode.callable.attrBlocks )
+		{
+			switch( attrBlock.kind )
+			{
+				case DirAttrKind.ExprAttr:
+				{
+					size_t argCount = 0;
+					if( args.type == IvyDataType.AssocArray )
+					{
+						foreach( exprAttr; attrBlock.exprAttrs )
+						{
+							if( auto valuePtr = exprAttr.name in args.assocArray ) {
+								_stack ~= *valuePtr; ++stackItemsCount; ++argCount;
+							}
+						}
+					}
+
+					// Add instruction to load value that consists of number of positional arguments in block and type of block
+					size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
+					_stack ~= IvyData(blockHeader);
+					++stackItemsCount; // We should count args block header
+					break;
+				}
+				case DirAttrKind.NamedAttr:
+				{
+					size_t argCount = 0;
+					if( args.type == IvyDataType.AssocArray )
+					{
+						foreach( attrName, namedAttr; attrBlock.namedAttrs )
+						{
+							if( auto valuePtr = attrName in args.assocArray )
+							{
+								_stack ~= IvyData(attrName); ++stackItemsCount;
+								_stack ~= *valuePtr; ++stackItemsCount;
+								++argCount;
+							}
+						}
+					}
+
+					// Add instruction to load value that consists of number of positional arguments in block and type of block
+					size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
+					_stack ~= IvyData(blockHeader);
+					++stackItemsCount; // We should count args block header
+					break;
+				}
+				default: break;
+			}
 		}
-		return this.execLoop();
+		_pk = 0;
+		_codeRange = [Instruction(OpCode.RunCallable, stackItemsCount)];
+		return this.execLoopImpl(2);
 	}
 }
