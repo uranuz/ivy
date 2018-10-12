@@ -217,7 +217,7 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 		IvyData value = interp.getValue("value");
 		switch(value.type)
 		{
-			case IvyDataType.Undef, IvyDataType.Null:
+			case IvyDataType.Undef: case IvyDataType.Null:
 				interp._stack ~= IvyData(true);
 				break;
 			case IvyDataType.Integer, IvyDataType.Floating, IvyDataType.DateTime, IvyDataType.Boolean:

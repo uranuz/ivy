@@ -137,10 +137,10 @@ return {
 	}, DirectiveInterpreter), {
 		interpret: function(interp) {
 			var valueType = iu.getDataNodeType(interp.getValue("value"));
-			if( valueType >= Consts.DataNodeTypeItems.length ) {
+			if( valueType >= Consts.IvyDataTypeItems.length ) {
 				interp.rtError('Unable to get type-string for value');
 			}
-			this._stack.push(Consts.DataNodeTypeItems[valueType]);
+			this._stack.push(Consts.IvyDataTypeItems[valueType]);
 		}
 	}),
 
@@ -184,7 +184,7 @@ return {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) )
 			{
-				case IvyDataType.Undef, IvyDataType.Null:
+				case IvyDataType.Undef: case IvyDataType.Null:
 					interp._stack.push(true);
 					break;
 				case IvyDataType.Integer:

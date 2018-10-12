@@ -187,7 +187,7 @@ return __mixinProto(ExecutionFrame, {
 	},
 
 	hasOwnScope: function() {
-		return !!this._isNoscope;
+		return !this._isNoscope;
 	}
 });
 });

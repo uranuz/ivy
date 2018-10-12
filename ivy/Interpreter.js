@@ -56,10 +56,22 @@ function Interpreter(moduleObjs, mainModuleName, dataDict) {
 
 return __mixinProto(Interpreter, {
 	execLoop: function() {
-		var codeObj = this.getCodeObject();
-		if( !codeObj ) {
-			this.rtError('Unable to get CodeObject to execute');
-		}
+		var loger = this;
+		loger.internalAssert(this._frameStack.length, `this._frameStack is empty`);
+		loger.internalAssert(iu.back(this._frameStack), `this._frameStack.back is null`);
+		loger.internalAssert(iu.back(this._frameStack)._callableObj, `this._frameStack.back._callableObj is null`);
+		loger.internalAssert(iu.back(this._frameStack)._callableObj._codeObj, `this._frameStack.back._callableObj._codeObj is null`);
+		this._pk = 0;
+		this._codeRange = iu.back(this._frameStack)._callableObj._codeObj._instrs;
+
+		return this.execLoopImpl();
+	},
+	execLoopImpl: function(exitFrames) {
+		var
+			codeObj = this.getCodeObject(),
+			loger = this;
+		exitFrames = exitFrames || 1;
+		loger.internalAssert(codeObj, 'Unable to get CodeObject to execute');
 		this._codeRange = codeObj._instrs;
 		for( this._pk = 0; this._pk <= this._codeRange.length; ) {
 			if( this._pk >= this._codeRange.length ) {
@@ -71,15 +83,14 @@ return __mixinProto(Interpreter, {
 					return result; // If there is no frames left - then we finished
 				}
 				var returnPk = this._stack.pop();
-				if( iu.getDataNodeType(returnPk) !== IvyDataType.Integer ) {
-					this.rtError('Expected integer as instruction pointer');
-				}
+				loger.internalAssert(
+					iu.getDataNodeType(returnPk) === IvyDataType.Integer,
+					'Expected integer as instruction pointer'
+				);
 				this._pk = returnPk;
 				// Set old instruction range back
 				var oldCodeObj = this.getCodeObject();
-				if( !oldCodeObj ) {
-					this.rtError('Expected code object to return control to');
-				}
+				loger.internalAssert(oldCodeObj, 'Expected code object to return control to');
 				this._codeRange = oldCodeObj._instrs; 
 				this._stack.push(result); // Get result back
 				continue;
@@ -139,9 +150,7 @@ return __mixinProto(Interpreter, {
 				}
 				case Append: {
 					var right = this._stack.pop(), left = this._stack.back(), lType = iu.getDataNodeType(left);
-					if( lType !== IvyDataType.Array ) {
-						this.rtError('Expected Array target operand');
-					}
+					loger.internalAssert(lType === IvyDataType.Array, 'Expected Array target operand');
 					left.push(right);
 					break;
 				}
@@ -165,7 +174,7 @@ return __mixinProto(Interpreter, {
 					break;
 				}
 				case InsertMass: {
-					this.rtError('Not implemented operation');
+					loger.internalAssert(false, 'Not implemented operation');
 					break;
 				}
 
@@ -372,153 +381,271 @@ return __mixinProto(Interpreter, {
 
 				// Preparing and calling directives
 				case LoadDirective: {
+					var stackArgCount = instr[1];
+					loger.internalAssert(
+						stackArgCount > 1,
+						'Directive load must have at least 2 items in stack!'
+					);
+					loger.internalAssert(
+						stackArgCount <= this._stack.getLength(),
+						'Not enough arguments in execution stack'
+					);
+
 					var
-						dirName = this._stack.pop(),
-						codeObj = this._stack.pop();
-					if( iu.getDataNodeType(dirName) !== IvyDataType.String ) {
-						this.rtError('Expected String as directive name');
-					}
-					if( iu.getDataNodeType(codeObj) !== IvyDataType.CodeObject ) {
-						this.rtError('Expected CodeObject to execute');
+						codeObj = this._stack.at(this._stack.getLength() - stackArgCount),
+						varName = this._stack.at(this._stack.getLength() - stackArgCount + 1);
+
+					loger.internalAssert(
+						iu.getDataNodeType(codeObj) === IvyDataType.CodeObject,
+						`Expected CodeObject`
+					);
+					loger.internalAssert(
+						iu.getDataNodeType(varName) === IvyDataType.String,
+						`Expected String as directive name`
+					)
+
+					if( stackArgCount > 2 )
+					{
+						var stackArgsProcessed = 2;
+						for( var i = 0; i < codeObj._attrBlocks.length; ++i )
+						{
+							var
+								attrBlock = codeObj._attrBlocks[i],
+								blockArgCount,
+								blockType;
+							switch( attrBlock.kind ) {
+								case DirAttrKind.NamedAttr: case DirAttrKind.ExprAttr: {
+									var blockHeader = this._stack.pop(); // Get block header
+									++stackArgsProcessed;
+									loger.internalAssert(
+										iu.getDataNodeType(blockHeader) === IvyDataType.Integer,
+										`Expected integer as arguments block header!`
+									);
+									blockArgCount = blockHeader >> Consts.stackBlockHeaderSizeOffset;
+									blockType = blockHeader & Consts.stackBlockHeaderTypeMask;
+									loger.internalAssert(
+										(blockHeader & Consts.stackBlockHeaderCheckMask) === 0,
+										// Bit between block size part and block type must always be zero
+										`Seeems that stack is corrupted`
+									);
+									break;
+								}
+								default: break;
+							}
+
+							switch( attrBlock.kind )
+							{
+								case DirAttrKind.NamedAttr: {
+									var passedArgs = {};
+									
+									for( var k = 0; k < blockArgCount; ++k )
+									{
+										var attrValue = this._stack.pop(); ++stackArgsProcessed;
+
+										var attrName = this._stack.pop(); ++stackArgsProcessed;
+										loger.internalAssert(
+											iu.getDataNodeType(attrName) === IvyDataType.String,
+											'Named attribute name must be string!'
+										);
+										loger.internalAssert(
+											passedArgs[attrName] == null,
+											'Duplicate named argument detected!'
+										);
+										loger.internalAssert(
+											attrBlock.namedAttrs[attrName] != null,
+											'Unexpected argument detected!'
+										);
+
+										attrBlock.namedAttrs[attrName].defaultValue = attrValue;
+										passedArgs[attrName] = true;
+									}
+									loger.internalAssert(
+										Object.keys(passedArgs).length === blockArgCount,
+										"Processed and required default arguments doesn't match!"
+									);
+									break;
+								}
+								case DirAttrKind.ExprAttr:
+								{
+									for( var j = 0; j < blockArgCount; ++j )
+									{
+										// Set last items with default values from stack
+										attrBlock.exprAttrs[attrBlock.exprAttrs.length - 1 - j].defaultValue = this._stack.pop();
+										++stackArgsProcessed;
+									}
+									break;
+								}
+								default: break;
+							}
+						}
+						loger.internalAssert(
+							stackArgsProcessed === stackArgCount,
+							"Processed and required stack arguments doesn't match!"
+						);
 					}
 
-					// Create callable for CodeObject and put it into context
-					this.setLocalValue(dirName, new CallableObject(dirName, codeObj));
-					// We should return something
-					this._stack.push(undefined);
+					loger.internalAssert(
+						iu.getDataNodeType(this._stack.pop()) === IvyDataType.String,
+						`Expected String as directive name`);
+					loger.internalAssert(
+						iu.getDataNodeType(this._stack.pop()) === IvyDataType.CodeObject,
+						`Expected CodeObject`
+					);
+
+					this.setLocalValue(varName, new CallableObject(varName, codeObj)); // Put this directive in context
+					this._stack.push(undefined); // We should return something
 					break;
 				}
 				case RunCallable: {
 					var stackArgCount = instr[1];
-					if( stackArgCount < 1 ) {
-						this.rtError('Call must at least have 1 arguments in stack!');
-					}
-					if( stackArgCount > this._stack.getLength() ) {
-						this.rtError('Not enough arguments in execution stack');
-					}
+					loger.internalAssert(stackArgCount > 0, "Call must at least have 1 arguments in stack!");
+					loger.internalAssert(stackArgCount <= this._stack.getLength(), "Not enough arguments in execution stack");
+
 					var callableObj = this._stack.at(this._stack.getLength() - stackArgCount);
-					if( iu.getDataNodeType(callableObj) !== IvyDataType.Callable ) {
-						this.rtError('Expected Callable object');
-					}
+					loger.internalAssert(
+						iu.getDataNodeType(callableObj) === IvyDataType.Callable,
+						`Expected Callable operand`
+					);
 
 					var
 						attrBlocks = callableObj.attrBlocks(),
-						isNoscope = false;
+						dataDict = {
+							"__scopeName__": callableObj._name
+						}; // Allocating scope
 
-					if( attrBlocks.length > 0 ) {
-						if( iu.back(attrBlocks).kind !== DirAttrKind.BodyAttr ) {
-							this.rtError('Last attr block definition expected to be BodyAttr');
-						}
-						isNoscope = iu.back(attrBlocks).bodyAttr.isNoscope;
-					}
+					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
 
-					var
-						moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__",
-						moduleFrame = this._moduleFrames[moduleName];
-
-					if( !moduleFrame ) {
-						this.rtError('Module frame "' + moduleFrame + `" of callable "` + callableObj._name + `" does not exist!`);
-					}
-					var dataDict = {
-						"__scopeName__": callableObj._name
-					};
-					this.newFrame(callableObj, moduleFrame, dataDict, isNoscope);
-
-					// If args count is 1 - it mean that there is no arguments
-					if( stackArgCount > 1 )
+					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{
-						var blockCounter = 0;
-
-						for( var i = 0; i < (stackArgCount - 1); ) {
-							var blockHeader = this._stack.pop();
-							++i; // Block header was eaten, so increase counter
-							if( iu.getDataNodeType(blockHeader) !== IvyDataType.Integer ) {
-								this.rtError('Expected integer as arguments block header!');
-							}
-							// Bit between block size part and block type must always be zero
-							if( (blockHeader & Consts.stackBlockHeaderCheckMask) !== 0 ) {
-								this.rtError('Seeems that stack is corrupted');
-							}
+						var stackArgsProcessed = 0;
+						for( var i = 0; i < attrBlocks.length; ++i )
+						{
 							var
-								blockArgCount = blockHeader >> Consts.stackBlockHeaderSizeOffset,
-								blockType = blockHeader & Consts.stackBlockHeaderTypeMask;
-
-							switch( blockType ) {
-								case DirAttrKind.NamedAttr: {
-									var j = 0;
-									while( j < 2 * blockArgCount ) {
-										var
-											attrValue = this._stack.pop(),
-											attrName = this._stack.pop();
-										j += 2; // Parallel bookkeeping ;)
-										if( iu.getDataNodeType(attrName) !== IvyDataType.String ) {
-											this.rtError('Named attribute name must be String!');
-										}
-										this.setLocalValue(attrName, attrValue);
-									}
-									i += j; // Increase overall processed stack arguments count (2 items per iteration)
+								attrBlock = attrBlocks[i],
+								// Getting args block metainfo
+								blockArgCount,
+								blockType;
+							switch( attrBlock.kind ) {
+								case DirAttrKind.NamedAttr: case DirAttrKind.ExprAttr: {
+									var blockHeader = this._stack.pop(); // Get block header
+									++stackArgsProcessed;
+									loger.internalAssert(
+										iu.getDataNodeType(blockHeader) === IvyDataType.Integer,
+										`Expected integer as arguments block header!`
+									);
+									blockArgCount = blockHeader >> Consts.stackBlockHeaderSizeOffset;
+									blockType = blockHeader & Consts.stackBlockHeaderTypeMask;
+									// Bit between block size part and block type must always be zero
+									loger.internalAssert(
+										(blockHeader & Consts.stackBlockHeaderCheckMask) == 0,
+										`Seeems that stack is corrupted`
+									);
 									break;
 								}
-								case DirAttrKind.ExprAttr: {
-									// 2 is: 1, because of length PLUS 1 for body attr in the end
-									var currBlockIndex = attrBlocks.length - blockCounter - 2;
-									if( currBlockIndex >= attrBlocks.length ) {
-										this.rtError('Current attr block index is out of current bounds of declared blocks!');
-									}
-
-									var currBlock = attrBlocks[currBlockIndex];
-
-									if( currBlock.kind !== DirAttrKind.ExprAttr ) {
-										this.rtError('Expected positional arguments block in block metainfo');
-									}
-
-
-									for( var j = 0; j < blockArgCount; ++j, ++i ) {
-										var attrValue = this._stack.pop();
-										if( j >= currBlock.exprAttrs.length ) {
-											this.rtError('Unexpected number of attibutes in positional arguments block');
-										}
-
-										this.setLocalValue( currBlock.exprAttrs[blockArgCount -j -1].name, attrValue );
-									}
-									break;
-								}
-								default:
-									loger.internalAssert(false, "Unexpected arguments block type");
+								default: break;
 							}
 
-							blockCounter += 1;
+							switch( attrBlock.kind )
+							{
+								case DirAttrKind.NamedAttr:
+								{
+									var passedArgs = {};
+									
+									for( var k = 0; k < blockArgCount; ++k )
+									{
+										var attrValue = this._stack.pop(); ++stackArgsProcessed;
+
+										var attrName = this._stack.pop(); ++stackArgsProcessed;
+										loger.internalAssert(
+											iu.getDataNodeType(attrName) === IvyDataType.String,
+											"Named attribute name must be string!"
+										);
+										loger.internalAssert(
+											!passedArgs.hasOwnProperty(attrName),
+											"Duplicate named argument detected!"
+										);
+										loger.internalAssert(
+											attrBlock.namedAttrs.hasOwnProperty(attrName),
+											"Unexpected argument detected!"
+										);
+
+										this.setLocalValue(attrName, attrValue);
+										passedArgs[attrName] = true;
+									}
+
+									for( var attrName in attrBlock.namedAttrs )
+									{
+										if( !attrBlock.namedAttrs.hasOwnProperty(attrName) ) {
+											continue;
+										}
+										var namedAttr = attrBlock.namedAttrs[attrName];
+										if( passedArgs.hasOwnProperty(attrName) ) {
+											continue; // Attribute already passes to directive
+										}
+										// Do deep copy of default value
+										this.setLocalValue(attrName, iu.deeperCopy(namedAttr.defaultValue));
+									}
+									break;
+								}
+								case DirAttrKind.ExprAttr:
+								{
+									for( var j = 0; j < attrBlock.exprAttrs.length; ++j )
+									{
+										var
+											backIndex = attrBlock.exprAttrs.length - 1 - j,
+											exprAttr = attrBlock.exprAttrs[backIndex];
+										if( backIndex < blockArgCount )
+										{
+											var attrValue = this._stack.pop(); ++stackArgsProcessed;
+											this.setLocalValue(exprAttr.name, attrValue);
+										} else {
+											this.setLocalValue(exprAttr.name, exprAttr.defaultValue);
+										}
+									}
+									break;
+								}
+								default: break;
+							}
 						}
 					}
 
-					if( iu.getDataNodeType(this._stack.pop()) !== IvyDataType.Callable ) {
-						this.rtError('Expected callable object operand in call operation');
-					}
+					loger.internalAssert(
+						iu.getDataNodeType(this._stack.pop()) === IvyDataType.Callable,
+						`Expected callable object operand in call operation`
+					); // Drop callable object from stack
 
-					if( callableObj._codeObj ) {
+					if( callableObj._codeObj )
+					{
 						this._stack.push(this._pk+1); // Put next instruction index on the stack to return at
 						this._stack.addStackBlock();
 						this._codeRange = callableObj._codeObj._instrs; // Set new instruction range to execute
 						this._pk = 0;
 						continue; // Skip _pk increment
-					} else if( callableObj._dirInterp ) {
+					}
+					else
+					{
+						loger.internalAssert(
+							callableObj._dirInterp,
+							`Callable object expected to have non null code object or native directive interpreter object!`
+						);
 						this._stack.addStackBlock();
 						callableObj._dirInterp.interpret(this); // Run native directive interpreter
-						var result = this._stack.pop();
-						if( !this._stack.empty() ) {
-							this.rtError('Frame stack should be empty');
-						}
+
+						// Else we expect to have result of directive on the stack
+						loger.internalAssert(
+							this._stack.getLength(),
+							"Stack should contain 1 item empty now!"
+						);
 
 						// If frame stack contains last frame - it means that we nave done with programme
-						// Else we expect to have result of directive on the stack
-						this.removeFrame(); // Drop frame from stack after end of execution
-						if( this._frameStack.length === 0 ) {
-							return result;
+						if( this._frameStack.length == exitFrames ) {
+							return this._stack.back();
 						}
+						var result = this._stack.pop();
+						this.removeFrame(); // Drop frame from stack after end of execution
 						this._stack.push(result); // Get result back
-					} else {
-						this.rtError('Callable object expected to contain code object or directive interpreter object!');
 					}
+
 					break;
 				}
 
@@ -622,8 +749,13 @@ return __mixinProto(Interpreter, {
 					continue; // Skip _pk increment
 				}
 				case Return: {
-					this.rtError('Unimplemented OpCode');
-					break;
+					// Set instruction index at the end of code object in order to finish 
+					this._pk = this._codeRange.length;
+					var result = this._stack.back();
+					// Erase all from the current stack
+					this._stack.popN(this._stack.getLength());
+					this._stack.push(result); // Put result on the stack
+					continue; // Skip _pk increment
 				}
 
 				// Stack operations
@@ -719,10 +851,10 @@ return __mixinProto(Interpreter, {
 				}
 
 				case MarkForEscape: {
-					if( instr.arg >= Consts.NodeEscapeStateItems.length ) {
+					if( instr[1] >= Consts.NodeEscapeStateItems.length ) {
 						this.rtError('Incorrect escape state provided');
 					}
-					this._stack.back().escapeState = instr.arg;
+					this._stack.back().escapeState = instr[1];
 					break;
 				}
 				default: this.rtError(`Unexpected opcode!!!`);
@@ -916,6 +1048,104 @@ return __mixinProto(Interpreter, {
 		for( var name in dirInterps ) {
 			this._addNativeDirInterp(name, dirInterps[name]);
 		}
+	},
+
+	internalAssert: function(cond, msg) {
+		if( !cond ) {
+			this.rtError(msg)
+		}
+	},
+
+	_getModuleFrame: function(callableObj) {
+		var
+			moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__",
+			moduleFrame = this._moduleFrames[moduleName];
+		this.internalAssert(moduleFrame, "Module frame doesn't exist");
+		return moduleFrame;
+	},
+
+	runModuleDirective: function(name, args)
+	{
+		var loger = this;
+		enforce(
+			[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].canFind(iu.getDataNodeType(args)),
+			`Expected Undef, Null or AssocArray as list of directive arguments`
+		);
+
+		loger.internalAssert(this.currentFrame, `Could not get module frame!`);
+
+		// Find desired directive by name in current module frame
+		var callableNode = this.currentFrame.getValue(name);
+		loger.internalAssert(iu.getDataNodeType(callableNode) === IvyDataType.Callable, `Expected Callable!`);
+
+		loger.internalAssert(this._stack.getLength() < 2, `Expected 0 or 1 items in stack!`);
+		if( this._stack.getLength() === 1 ) {
+			this._stack.pop(); // Drop old result from stack
+		}
+
+		this._stack.push(callableNode);
+		var
+			stackItemsCount = 1, // Pass callable at least
+			attrBlocks = callableNode.callable.attrBlocks();
+
+		// Put params into stack
+		for( var i = 0; i < attrBlocks.length; ++i )
+		{
+			var attrBlock = attrBlocks[i];
+			switch( attrBlock.kind )
+			{
+				case DirAttrKind.ExprAttr:
+				{
+					var argCount = 0;
+					if( iu.getDataNodeType(args) === IvyDataType.AssocArray )
+					{
+						for( var j = 0; j < attrBlock.exprAttrs; ++j )
+						{
+							var exprAttr = attrBlock.exprAttrs[j];
+							if( args.hasOwnProperty(exprAttr.name) ) {
+								this._stack.push(args[exprAttr.name]); ++stackItemsCount; ++argCount;
+							}
+						}
+					}
+
+					// Add instruction to load value that consists of number of positional arguments in block and type of block
+					var blockHeader = ( argCount << Consts.stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
+					this._stack.push(blockHeader);
+					++stackItemsCount; // We should count args block header
+					break;
+				}
+				case DirAttrKind.NamedAttr:
+				{
+					var argCount = 0;
+					if( iu.getDataNodeType(args) == IvyDataType.AssocArray )
+					{
+						for( var attrName in attrBlock.namedAttrs )
+						{
+							if( !attrBlock.namedAttrs.hasOwnProperty(attrName) ) {
+								continue;
+							}
+							var namedAttr = attrBlock.namedAttrs[attrName];
+							if( args.hasOwnProperty(attrName) )
+							{
+								this._stack.push(attrName); ++stackItemsCount;
+								this._stack.push(args[attrName]); ++stackItemsCount;
+								++argCount;
+							}
+						}
+					}
+
+					// Add instruction to load value that consists of number of positional arguments in block and type of block
+					var blockHeader = ( argCount << Consts.stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
+					this._stack.push(blockHeader);
+					++stackItemsCount; // We should count args block header
+					break;
+				}
+				default: break;
+			}
+		}
+		this._pk = 0;
+		this._codeRange = [Instruction(OpCode.RunCallable, stackItemsCount)];
+		return this.execLoopImpl(2);
 	}
 });
 }); // define

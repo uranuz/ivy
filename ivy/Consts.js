@@ -1,6 +1,6 @@
 define('ivy/Consts', [], function() {
 var Consts = {
-	DataNodeTypeItems: [
+	IvyDataTypeItems: [
 		'Undef',
 		'Null',
 		'Boolean',

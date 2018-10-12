@@ -239,6 +239,19 @@ struct TIvyData(S)
 		return type == IvyDataType.Null || (type == IvyDataType.ClassNode && storage.classNode is null);
 	}
 
+	size_t length() @property
+	{
+		switch( this.type ) with(IvyDataType)
+		{
+			case Undef, Null: return 0; // Return 0, but not error for convenience
+			case String: return this.str.length;
+			case Array: return this.array.length;
+			case AssocArray: return this.assocArray.length;
+			case CodeObject: return this.codeObject.getInstrCount();
+			default: throw new Exception(`Getting length property not yet implemeted for type: ` ~ this.type.text);
+		}
+	}
+
 	private void assign(T)(auto ref T arg)
 	{
 		static if( is(T : typeof(null)) )
@@ -346,7 +359,7 @@ struct TIvyData(S)
 			typeTag = arg.type;
 			final switch(typeTag)
 			{
-				case IvyDataType.Undef, IvyDataType.Null:  break;
+				case IvyDataType.Undef: case IvyDataType.Null:  break;
 				case IvyDataType.Boolean: storage.boolean = arg.boolean; break;
 				case IvyDataType.Integer: storage.integer = arg.integer; break;
 				case IvyDataType.Floating: storage.floating = arg.floating; break;
