@@ -52,9 +52,8 @@ return __mixinProto(RemoteCodeLoader, {
 			return undefined;
 		} else if(
 			con === null
-			|| con === true
-			|| con === false
-			|| typeof(con) === 'number'
+			|| con === true || con === false || con instanceof Boolean
+			|| typeof(con) === 'number' || con instanceof Number
 			|| typeof(con) === 'string' || con instanceof String
 			|| con instanceof Array
 		) {

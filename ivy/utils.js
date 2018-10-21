@@ -30,16 +30,12 @@ iu = {
 			return IvyDataType.Undef;
 		} else if( con === null) {
 			return IvyDataType.Null;
-		} else if( con === true || con === false ) {
+		} else if( con === true || con === false || con instanceof Boolean ) {
 			return IvyDataType.Boolean;
 		} else if( typeof(con) === 'string' || con instanceof String ) {
 			return IvyDataType.String;
-		} else if( typeof(con) === 'number' ) {
-			if( (''+con).indexOf('.') < 0 ) {
-				return IvyDataType.Integer;
-			} else {
-				return IvyDataType.Floating;
-			}
+		} else if( typeof(con) === 'number' || con instanceof Number ) {
+			return Number.isInteger(con)? IvyDataType.Integer: IvyDataType.Floating;
 		} else if( con instanceof Array ) {
 			return IvyDataType.Array;
 		} else if( con instanceof CodeObject ) {
