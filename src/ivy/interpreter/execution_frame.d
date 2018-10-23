@@ -18,9 +18,8 @@ public:
 
 struct FrameSearchResult
 {
-	bool allowUndef;
-	IvyData node;
 	IvyData parent;
+	IvyData node;
 }
 
 class ExecutionFrame
@@ -76,22 +75,19 @@ public:
 
 	IvyData getValue(string varName)
 	{
-		FrameSearchResult result = findValue!(FrameSearchMode.get)(varName);
-		if( result.node.isUndef && !result.allowUndef )
+		FrameSearchResult res = this.findValue!(FrameSearchMode.get)(varName);
+		if( res.node.isUndef && !res.parent.isUndef ) {
 			loger.error("Cannot find variable with name: " ~ varName );
-		return result.node;
+		}
+		return res.node;
 	}
 
 	bool canFindValue(string varName) {
-		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
+		return !this.findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
 	}
 
-	IvyDataType getDataNodeType(string varName)
-	{
-		FrameSearchResult result = findValue!(FrameSearchMode.get)(varName);
-		if( result.node.isUndef  )
-			loger.error("Cannot find variable with name: " ~ varName);
-		return result.node.type;
+	IvyDataType getDataNodeType(string varName) {
+		return this.getValue(varName).type;
 	}
 
 	// Basic method used to search symbols in context
@@ -108,102 +104,82 @@ public:
 		if( varName.empty )
 			loger.error( "Variable name cannot be empty" );
 
-		IvyData parent;
-		IvyData node = _dataDict;
-
 		string[] nameSplitted = varName.split('.');
-		size_t namePartsCount = nameSplitted.length;
-		bool allowUndef = false;
-		for( ; !nameSplitted.empty; nameSplitted.popFront() )
+		FrameSearchResult res;
+		res.node = this._dataDict;
+		size_t partIdx = 0;
+		for( ; partIdx < nameSplitted.length && !res.node.isUndef(); ++partIdx )
 		{
-			// Determines if in get mode we can return undef without error
-			allowUndef = nameSplitted.length == 1 && namePartsCount > 1;
-			parent = node;
-			node = IvyData.makeUndef();
+			string namePart = nameSplitted[partIdx];
+			res = FrameSearchResult(res.node);
 
-			switch( parent.type )
+			switch( res.parent.type )
 			{
 				case IvyDataType.AssocArray:
 				{
-					loger.write(`Searching for node: `, nameSplitted.front, ` in assoc array`);
-					if( IvyData* nodePtr = nameSplitted.front in parent.assocArray )
+					loger.write(`Searching for node: `, namePart, ` in assoc array`);
+					if( IvyData* nodePtr = namePart in res.parent )
 					{
 						// If node exists in assoc array then push it as next parent node (or as a result if it's the last)
-						loger.write(`Node: `, nameSplitted.front, ` found in assoc array`);
-						node = *nodePtr;
+						loger.write(`Node: `, namePart, ` found in assoc array`);
+						res.node = *nodePtr;
 					}
 					else
 					{
-						loger.write(`Node: `, nameSplitted.front, ` is NOT found in assoc array`);
+						loger.write(`Node: `, namePart, ` is NOT found in assoc array`);
 						static if( mode == FrameSearchMode.setWithParents ) {
 							// In setWithParents mode we create parent nodes as assoc array if they are not exist
-							loger.write(`Creating node: `, nameSplitted.front, `, because mode is: `, mode);
-							IvyData parentDict;
-							parentDict["__mentalModuleMagic_0451__"] = 451; // Allocating dict
+							loger.write(`Creating node: `, namePart, `, because mode is: `, mode);
+							IvyData parentDict = ["__mentalModuleMagic_0451__": 451]; // Allocating dict
 							parentDict.assocArray.remove("__mentalModuleMagic_0451__");
-							parent[nameSplitted.front] = parentDict;
-							node = parent[nameSplitted.front];
-						} else static if( mode == FrameSearchMode.set ) {
-							if( nameSplitted.length == 1 ) {
-								return FrameSearchResult(allowUndef, IvyData.makeUndef(), parent);
-							} else {
-								// Only parent node should get there. And if it's not exists then issue an error in the set mode
-								//loger.error(`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text ~ ` not exist!`);
-								// Upd: In case when we using `set` in noscope directive we go into module scope of noscope directive
-								// and failing to find parent object to place variable in it. In that case we should just say that
-								// nothing is found instead if error and then go and find in parent scope of noscope directive
-								return FrameSearchResult(false);
-							}
-						} else {
-							return FrameSearchResult(allowUndef);
+							res.parent[namePart] = parentDict;
+							res.node = res.parent[namePart];
 						}
 					}
 					break;
 				}
 				case IvyDataType.ExecutionFrame:
 				{
-					loger.write(`Searching for node: `, nameSplitted.front, ` in execution frame`);
-					if( !parent.execFrame )
+					loger.write(`Searching for node: `, namePart, ` in execution frame`);
+					if( !res.parent.execFrame )
 					{
 						static if( mode == FrameSearchMode.tryGet ) {
-							return FrameSearchResult(allowUndef);
+							break;
 						} else {
 							loger.error(`Cannot find node, because execution frame is null!!!`);
 						}
 					}
 
-					if( parent.execFrame._dataDict.type != IvyDataType.AssocArray )
+					if( res.parent.execFrame._dataDict.type != IvyDataType.AssocArray )
 					{
 						static if( mode == FrameSearchMode.tryGet ) {
-							return FrameSearchResult(allowUndef);
+							break;
 						} else {
 							loger.error(`Cannot find node, because execution frame data dict is not of assoc array type!!!`);
 						}
 					}
 
-					if( IvyData* nodePtr = nameSplitted.front in parent.execFrame._dataDict.assocArray ) {
-						loger.write(`Node: `, nameSplitted.front, ` found in execution frame`);
-						node = *nodePtr;
+					if( IvyData* nodePtr = namePart in res.parent.execFrame._dataDict ) {
+						loger.write(`Node: `, namePart, ` found in execution frame`);
+						res.node = *nodePtr;
 					} else {
-						loger.write(`Node: `, nameSplitted.front, ` is NOT found in execution frame`);
-						static if( mode == FrameSearchMode.setWithParents || mode == FrameSearchMode.set ) {
+						loger.write(`Node: `, namePart, ` is NOT found in execution frame`);
+						static if( [FrameSearchMode.setWithParents, FrameSearchMode.set].canFind(mode) ) {
 							loger.error(
-								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text
+								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ namePart
 								~ ` not exists or cannot set value in foreign execution frame!`
 							);
-						} else {
-							return FrameSearchResult(allowUndef);
 						}
 					}
 					break;
 				}
 				case IvyDataType.ClassNode:
 				{
-					loger.write(`Searching for node: `, nameSplitted.front, ` in class node`);
-					if( !parent.classNode )
+					loger.write(`Searching for node: `, namePart, ` in class node`);
+					if( !res.parent.classNode )
 					{
 						static if( mode == FrameSearchMode.tryGet ) {
-							return FrameSearchResult(allowUndef);
+							break;
 						} else {
 							loger.error(`Cannot find node, because class node is null!!!`);
 						}
@@ -211,30 +187,31 @@ public:
 
 					// If there is class nodes in the path to target path, so it's property this way
 					// No matter if it's set or get mode. The last node setting is handled by code at the start of loop
-					IvyData tmpNode = parent.classNode.__getAttr__(nameSplitted.front);
-					if( !tmpNode.isUndef )  {
-						node = tmpNode;
+					IvyData tmpNode = res.parent.classNode.__getAttr__(namePart);
+					if( !tmpNode.isUndef ) {
+						res.node = tmpNode;
 					} else {
-						static if( mode == FrameSearchMode.setWithParents || mode == FrameSearchMode.set ) {
+						static if( [FrameSearchMode.setWithParents, FrameSearchMode.set].canFind(mode) ) {
 							loger.error(
-								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ nameSplitted.front.text
+								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ namePart
 								~ `not exist or cannot add new attribute to class node!`
 							);
-						} else {
-							return FrameSearchResult(allowUndef);
 						}
 					}
 					break;
 				}
 				default:
 				{
-					loger.write(`Attempt to search: `, nameSplitted.front, `, but current node is not of dict-like type`);
-					return FrameSearchResult(false, IvyData.makeUndef, parent);
+					loger.write(`Attempt to search: `, namePart, `, but current node is not of dict-like type`);
+					break;
 				}
 			}
 		}
+		if( (nameSplitted.length - partIdx) < 2 ) {
+			return res;
+		}
 
-		return FrameSearchResult(allowUndef || node.isUndef, node, parent);
+		return FrameSearchResult();
 	}
 
 	FrameSearchResult findValue(FrameSearchMode mode)(string varName)
@@ -243,23 +220,26 @@ public:
 
 		// If current frame has it's own scope then try to find in it.
 		// If it is noscope then search into it's _moduleFrame, because we could still have some symbols there
-		FrameSearchResult result = findLocalValue!(mode)(varName);
+		FrameSearchResult res = this.findLocalValue!(mode)(varName);
 		loger.write(`Current level exec frame is noscope. So search only in connected _moduleFrame`);
 
-		if( !result.node.isUndef )
-			return result;
+		if( !res.node.isUndef ) {
+			return res;
+		}
 
-		loger.write(`Node: `, varName, ` NOT foind in exec frame. Try to find in module frame`);
+		loger.write(`Node: `, varName, ` NOT found in exec frame. Try to find in module frame`);
 
 		FrameSearchResult modResult;
-		if( _moduleFrame )
+		if( _moduleFrame ) {
 			modResult = _moduleFrame.findLocalValue!(mode)(varName);
-		else
+		} else {
 			loger.write(`Cannot find: `, varName, ` in module exec frame. Module frame is null!`);
+		}
 
-		if( !modResult.node.isUndef || modResult.allowUndef )
+		if( !modResult.node.isUndef ) {
 			return modResult;
-		return result;
+		}
+		return res;
 	}
 
 	private void _assignNodeAttribute(ref IvyData parent, ref IvyData value, string varName)
@@ -286,15 +266,15 @@ public:
 	void setValue(string varName, IvyData value)
 	{
 		loger.write(`Attempt to set node with full path: `, varName, ` with value: `, value);
-		FrameSearchResult result = findValue!(FrameSearchMode.set)(varName);
-		_assignNodeAttribute(result.parent, value, varName);
+		FrameSearchResult res = findValue!(FrameSearchMode.set)(varName);
+		_assignNodeAttribute(res.parent, value, varName);
 	}
 
 	void setValueWithParents(string varName, IvyData value)
 	{
 		loger.write(`Call ExecutionFrame.setValueWithParents with varName: `, varName, ` and value: `, value);
-		FrameSearchResult result = findValue!(FrameSearchMode.setWithParents)(varName);
-		_assignNodeAttribute(result.parent, value, varName);
+		FrameSearchResult res = findValue!(FrameSearchMode.setWithParents)(varName);
+		_assignNodeAttribute(res.parent, value, varName);
 	}
 
 	bool hasOwnScope() @property

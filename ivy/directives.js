@@ -243,7 +243,7 @@ return {
 			'exprAttrs': [{ 'name': 'value', 'typeName': 'any' }]
 		}, {
 			'kind': DirAttrKind.BodyAttr,
-			'bodyAttr': {}
+			'bodyAttr': {'isNoscope': true}
 		}]
 	}, DirectiveInterpreter), {
 		interpret: function(interp) {

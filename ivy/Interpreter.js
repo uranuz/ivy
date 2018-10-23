@@ -513,7 +513,7 @@ return __mixinProto(Interpreter, {
 							"__scopeName__": callableObj._name
 						}; // Allocating scope
 
-					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
+					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
 					{
@@ -961,45 +961,50 @@ return __mixinProto(Interpreter, {
 		return this.findValue(varName, FrameSearchMode.tryGet).node !== undefined;
 	},
 
-	findValue: function(varName, mode) {
-		var result;
-		for( var i = this._frameStack.length; i > 0; --i ) {
+	findValue: function(varName, mode, findLocal) {
+
+		var
+			res = {}, // Current result
+			firstParentRes = {}; // First result where parent is set
+		for( var i = this._frameStack.length; i > 0; --i )
+		{
 			var frame = this._frameStack[i-1];
 
-			result = frame.findValue(varName, mode);
-
-			if( !frame.hasOwnScope() && result.node === undefined ) {
-				continue; // Let's try to find in parent
+			if( findLocal ) {
+				res = frame.findLocalValue(varName, mode);
+			} else {
+				res = frame.findValue(varName, mode);
+			}
+			
+			if( firstParentRes.parent === undefined && res.parent !== undefined ) {
+				firstParentRes = res;
 			}
 
-			if( result.node !== undefined || (result.node === undefined && result.allowUndef) ) {
-				return result;
+			if( res.node !== undefined ) {
+				return res;
+			} else if( !frame.hasOwnScope() ) {
+				continue;
+			}
+			break;
+		}
+
+		if( !findLocal && [FrameSearchMode.get, FrameSearchMode.tryGet].indexOf(mode) >= 0 )
+		{
+			var globalRes = this._globalFrame.findValue(varName, mode);
+			if( globalRes.node !== undefined ) {
+				return globalRes;
 			}
 		}
 
-		if( mode == FrameSearchMode.get || mode == FrameSearchMode.tryGet ) {
-			result = this._globalFrame.findValue(varName, mode);
-			if( result.node !== undefined ) {
-				return result;
-			}
-		}
-
-		return result;
+		return res.node !== undefined? res: firstParentRes;
 	},
 
-	findValueLocal: function(varName, mode) {
-		var result;
-		for( var i = this._frameStack.length; i > 0; --i ) {
-			var frame = this._frameStack[i-1];
-			result = frame.findLocalValue(varName, mode);
-			if( result.node !== undefined ) {
-				return result;
-			}
-		}
-		return iu.back(this._frameStack).findLocalValue(varName, mode);
-	},
 	getValue: function(varName) {
-		return this.findValue(varName, FrameSearchMode.get).node;
+		var res = this.findValue(varName, FrameSearchMode.get);
+		if( res.node === undefined && res.parent === undefined ) {
+			this.rtError("Undefined variable with name '" + varName + "'")
+		}
+		return res.node;
 	},
 
 	_assignNodeAttribute: function(parent, value, varName) {
@@ -1028,12 +1033,12 @@ return __mixinProto(Interpreter, {
 	},
 
 	setLocalValue: function(varName, value) {
-		var result = this.findValueLocal(varName, FrameSearchMode.set);
+		var result = this.findValue(varName, FrameSearchMode.set, true);
 		this._assignNodeAttribute(result.parent, value, varName);
 	},
 
 	setLocalValueWithParents: function(varName, value) {
-		var result = findValueLocal(varName, FrameSearchMode.setWithParents);
+		var result = findValue(varName, FrameSearchMode.setWithParents, true);
 		this._assignNodeAttribute(result.parent, value, varName);
 	},
 

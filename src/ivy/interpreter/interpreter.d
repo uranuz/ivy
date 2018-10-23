@@ -228,82 +228,56 @@ public:
 		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
 	}
 
-	FrameSearchResult findValue(FrameSearchMode mode)(string varName)
+	FrameSearchResult findValue(FrameSearchMode mode, bool findLocal = false)(string varName)
 	{
 		import std.range: empty, back, popBack;
+		import std.algorithm: canFind;
 
 		loger.write(`Starting to search for varName: `, varName);
-		ExecutionFrame[] frameStackSlice = this._frameStack[];
-		loger.internalAssert( !frameStackSlice.empty, `frameStackSlice is empty` );
+		loger.internalAssert( !this._frameStack.empty(), `frameStackSlice is empty` );
 
-		FrameSearchResult result;
-		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
+		FrameSearchResult res; // Current result
+		FrameSearchResult firstParentRes; // First result where parent is set
+		for( size_t i = this._frameStack.length; i > 0; --i )
 		{
-			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!` );
+			ExecutionFrame frame = this._frameStack[i-1];
+			loger.internalAssert(frame, `Couldn't find variable value, because execution frame is null!`);
 
-			loger.write(`Trying to search in current execution frame for varName: `, varName);
-			result = frameStackSlice.back.findValue!(mode)(varName);
-
-			if( !frameStackSlice.back.hasOwnScope && result.node.isUndef ) {
-				loger.write(`Current level exec frame is noscope. Try find: `, varName, ` in parent`);
-				continue; // Let's try to find in parent
+			static if( findLocal ) {
+				res = frame.findLocalValue!(mode)(varName);
+			} else {
+				res = frame.findValue!(mode)(varName);
+			}
+			
+			if( firstParentRes.parent.isUndef && !res.parent.isUndef ) {
+				firstParentRes = res;
 			}
 
-			if( !result.node.isUndef || (result.node.isUndef && result.allowUndef) ) {
-				loger.write(`varName: `, varName, ` found in current execution frame`);
-				return result;
+			if( !res.node.isUndef ) {
+				return res;
+			} else if( !frame.hasOwnScope() ) {
+				continue;
 			}
-
-			loger.write(`varName: `, varName, ` NOT found in current execution frame`);
 			break;
 		}
 
-		loger.internalAssert(_globalFrame, `Couldn't find variable: `, varName, ` value in global frame, because it is null!` );
-		loger.internalAssert(_globalFrame.hasOwnScope, `Couldn't find variable: `, varName, ` value in global frame, because global frame doesn't have it's own scope!` );
-
-		static if( mode == FrameSearchMode.get || mode == FrameSearchMode.tryGet ) {
-			loger.write(`Trying to search in global frame for varName: `, varName);
-			result = _globalFrame.findValue!(mode)(varName);
-			if( !result.node.isUndef ) {
-				loger.write(`varName: `, varName, ` found in global execution frame`);
-				return result;
-			}
-
-			loger.write(`varName: `, varName, ` NOT found in global execution frame`);
-		}
-
-		return result;
-	}
-
-	FrameSearchResult findValueLocal(FrameSearchMode mode)(string varName)
-	{
-		import std.range: empty, back, popBack;
-
-		loger.write(`Call findValueLocal for: ` ~ varName);
-
-		ExecutionFrame[] frameStackSlice = this._frameStack[];
-		FrameSearchResult result;
-		for( ; !frameStackSlice.empty; frameStackSlice.popBack() )
+		static if( !findLocal && [FrameSearchMode.get, FrameSearchMode.tryGet].canFind(mode) )
 		{
-			loger.internalAssert(frameStackSlice.back, `Couldn't find variable value, because execution frame is null!`);
-
-			result = frameStackSlice.back.findLocalValue!(mode)(varName);
-			if( !result.node.isUndef ) {
-				loger.write(`varName: `, varName, ` found in current execution frame`);
-				return result;
+			loger.internalAssert(_globalFrame, `Couldn't find variable: `, varName, ` value in global frame, because it is null!`);
+			loger.internalAssert(_globalFrame.hasOwnScope, `Couldn't find variable: `, varName, ` value in global frame, because global frame doesn't have it's own scope!` );
+			auto globalRes = _globalFrame.findValue!(mode)(varName);
+			if( !globalRes.node.isUndef ) {
+				return globalRes;
 			}
-
-			loger.write(`varName: `, varName, ` NOT found in current execution frame`);
-			break;
 		}
 
-		return result;
+		return !res.node.isUndef? res: firstParentRes;
 	}
 
 	IvyData getValue(string varName)
 	{
 		FrameSearchResult result = findValue!(FrameSearchMode.get)(varName);
-		if( result.node.isUndef && !result.allowUndef )
+		if( result.node.isUndef && result.parent.isUndef )
 		{
 			debug {
 				foreach( i, frame; this._frameStack[] )
@@ -347,29 +321,29 @@ public:
 	void setValue(string varName, IvyData value)
 	{
 		loger.write(`Call for: ` ~ varName);
-		FrameSearchResult result = findValue!(FrameSearchMode.set)(varName);
-		_assignNodeAttribute(result.parent, value, varName);
+		FrameSearchResult res = findValue!(FrameSearchMode.set)(varName);
+		_assignNodeAttribute(res.parent, value, varName);
 	}
 
 	void setValueWithParents(string varName, IvyData value)
 	{
 		loger.write(`Call for: ` ~ varName);
-		FrameSearchResult result = findValue!(FrameSearchMode.setWithParents)(varName);
-		_assignNodeAttribute(result.parent, value, varName);
+		FrameSearchResult res = findValue!(FrameSearchMode.setWithParents)(varName);
+		_assignNodeAttribute(res.parent, value, varName);
 	}
 
 	void setLocalValue(string varName, IvyData value)
 	{
 		loger.write(`Call for: ` ~ varName);
-		FrameSearchResult result = findValueLocal!(FrameSearchMode.set)(varName);
-		_assignNodeAttribute(result.parent, value, varName);
+		FrameSearchResult res = findValue!(FrameSearchMode.set, /*findLocal=*/true)(varName);
+		_assignNodeAttribute(res.parent, value, varName);
 	}
 
 	void setLocalValueWithParents(string varName, IvyData value)
 	{
 		loger.write(`Call for: ` ~ varName);
-		FrameSearchResult result = findValueLocal!(FrameSearchMode.setWithParents)(varName);
-		_assignNodeAttribute(result.parent, value, varName);
+		FrameSearchResult res = findValue!(FrameSearchMode.setWithParents, /*findLocal=*/true)(varName);
+		_assignNodeAttribute(res.parent, value, varName);
 	}
 
 	IvyData getModuleConst( size_t index )
