@@ -123,8 +123,10 @@ return __mixinProto(Interpreter, {
 					break;
 				}
 				case Div: {
-					var args =  this._getNumberArgs();
-					this._stack.push(args[0] / args[1]);
+					var
+						args =  this._getNumberArgs(),
+						res = args[0] / args[1];
+					this._stack.push( args[2] === IvyDataType.Integer? Math.trunc(res): res );
 					break;
 				}
 				case Mod: {
@@ -872,12 +874,12 @@ return __mixinProto(Interpreter, {
 	},
 	_getNumberArgs: function() {
 		var
-			right = this._stack.pop(),
-			left = this._stack.pop();
-		if( typeof(right) !== 'number' || typeof(left) !== 'number' ) {
-			this.rtError('Expected number operands');
+			right = this._stack.pop(), rType = iu.getDataNodeType(right),
+			left = this._stack.pop(), lType = iu.getDataNodeType(left);
+		if( [IvyDataType.Integer, IvyDataType.Floating].indexOf(lType) < 0 || lType !== rType ) {
+			this.rtError('Left and right values of arithmetic operation must have the same integer or floating type');
 		}
-		return [left, right];
+		return [left, right, lType];
 	},
 	getCurrentFrame: function() {
 		if( this._frameStack.length === 0 ) {
