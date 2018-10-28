@@ -960,7 +960,7 @@ return __mixinProto(Interpreter, {
 		this._frameStack.pop();
 	},
 	canFindValue: function(varName) {
-		return this.findValue(varName, FrameSearchMode.tryGet).node !== undefined;
+		return this.findValue(varName, FrameSearchMode.tryGet).parent !== undefined;
 	},
 
 	findValue: function(varName, mode, findLocal) {
@@ -982,7 +982,7 @@ return __mixinProto(Interpreter, {
 				firstParentRes = res;
 			}
 
-			if( res.node !== undefined ) {
+			if( res.parent !== undefined ) {
 				return res;
 			} else if( !frame.hasOwnScope() ) {
 				continue;
@@ -993,17 +993,17 @@ return __mixinProto(Interpreter, {
 		if( !findLocal && [FrameSearchMode.get, FrameSearchMode.tryGet].indexOf(mode) >= 0 )
 		{
 			var globalRes = this._globalFrame.findValue(varName, mode);
-			if( globalRes.node !== undefined ) {
+			if( globalRes.parent !== undefined ) {
 				return globalRes;
 			}
 		}
 
-		return res.node !== undefined? res: firstParentRes;
+		return res.parent !== undefined? res: firstParentRes;
 	},
 
 	getValue: function(varName) {
 		var res = this.findValue(varName, FrameSearchMode.get);
-		if( res.node === undefined && res.parent === undefined ) {
+		if( res.parent === undefined ) {
 			this.rtError("Undefined variable with name '" + varName + "'")
 		}
 		return res.node;

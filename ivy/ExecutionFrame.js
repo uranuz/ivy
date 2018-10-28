@@ -17,19 +17,19 @@ function ExecutionFrame(callableObj, modFrame, dataDict, isNoscope) {
 return __mixinProto(ExecutionFrame, {
 	getValue: function(varName) {
 		var res = this.findValue(varName, FrameSearchMode.get);
-		if( res.node === undefined && res.parent !== undefined ) {
+		if( res.parent === undefined ) {
 			throw new errors.IvyError('Cannot find variable with name: ' + varName);
 		}
 		return res.node;
 	},
 
 	canFindValue: function(varName) {
-		return this.findValue(varName, FrameSearchMode.tryGet).node !== undefined;
+		return this.findValue(varName, FrameSearchMode.tryGet).parent !== undefined;
 	},
 
 	getDataNodeType(varName) {
 		var res = this.findValue(varName, FrameSearchMode.get);
-		if( res.node === undefined ) {
+		if( res.parent === undefined ) {
 			throw new errors.IvyError('Cannot find variable with name: ' + varName);
 		}
 		return iu.getDataNodeType(res.node);
@@ -44,31 +44,35 @@ return __mixinProto(ExecutionFrame, {
 			nameSplitted = varName.split('.'),
 			res = {node: this._dataDict},
 			partIdx = 0,
-			namePart;
+			namePart,
+			parent;
 
-		for( ; partIdx < nameSplitted.length && res.node !== undefined; ++partIdx )
+		for( ; partIdx < nameSplitted.length; ++partIdx )
 		{
 			namePart = nameSplitted[partIdx];
-			res = {parent: res.node};
+			parent = res.node;
+			res = {};
 
-			switch( iu.getDataNodeType(res.parent) ) {
+			switch( iu.getDataNodeType(parent) ) {
 				case IvyDataType.AssocArray: {
-					if( res.parent.hasOwnProperty(namePart) ) {
+					if( parent.hasOwnProperty(namePart) ) {
 						// If node exists in assoc array then push it as next parent node (or as a result if it's the last)
-						res.node = res.parent[namePart];
+						res = {parent: parent, node: parent[namePart]};
 					}
 					else
 					{
-						if( mode == FrameSearchMode.setWithParents ) {
+						if( mode === FrameSearchMode.setWithParents ) {
 							// In setWithParents mode we create parent nodes as assoc array if they are not exist
-							res.parent[namePart] = {}; // Allocating dict
-							res.node = res.parent[namePart];
+							parent[namePart] = {}; // Allocating dict
+							res = {parent: parent, node: parent[namePart]};
+						} else if( mode === FrameSearchMode.set ) {
+							res = {parent: parent};
 						}
 					}
 					break;
 				}
 				case IvyDataType.ExecutionFrame: {
-					if( iu.getDataNodeType(res.parent._dataDict) !== IvyDataType.AssocArray )
+					if( iu.getDataNodeType(parent._dataDict) !== IvyDataType.AssocArray )
 					{
 						if( mode === FrameSearchMode.tryGet ) {
 							break;
@@ -78,8 +82,8 @@ return __mixinProto(ExecutionFrame, {
 						}
 					}
 
-					if( res.parent._dataDict.hasOwnProperty(namePart) ) {
-						res.node = res.parent._dataDict[namePart];
+					if( parent._dataDict.hasOwnProperty(namePart) ) {
+						res = {parent: parent, node: parent._dataDict[namePart]};
 					} else {
 						if( [FrameSearchMode.setWithParents, FrameSearchMode.set].indexOf(mode) >= 0 ) {
 							throw new errors.IvyError(
@@ -93,9 +97,9 @@ return __mixinProto(ExecutionFrame, {
 				case IvyDataType.ClassNode: {
 					// If there is class nodes in the path to target path, so it's property this way
 					// No matter if it's set or get mode. The last node setting is handled by code at the start of loop
-					var tmpNode = res.parent.getAttr(namePart);
+					var tmpNode = parent.getAttr(namePart);
 					if( tmpNode !== undefined ) {
-						res.node = tmpNode;
+						res = {parent: parent, node: tmpNode};
 					} else {
 						if( [FrameSearchMode.setWithParents, FrameSearchMode.set].indexOf(mode) >= 0 ) {
 							throw new errors.IvyError(
@@ -106,15 +110,17 @@ return __mixinProto(ExecutionFrame, {
 					}
 					break;
 				}
-				default:
-					break;
+				default: break;
+			}
+			if( mode === FrameSearchMode.get ) {
+				if( nameSplitted.length > 1 && (nameSplitted.length - partIdx) === 1 && res.parent === undefined ) {
+					// If this name part is a property of object (not a stand alone var) then return that we found "undefined" value
+					// For this we should put parent on it's place
+					res.parent = parent;
+				}
 			}
 		}
-		if( (nameSplitted.length - partIdx) < 2 ) {
-			return res;
-		}
-
-		return {};
+		return res;
 	},
 
 	findValue: function(varName, mode)
@@ -122,7 +128,7 @@ return __mixinProto(ExecutionFrame, {
 		// If current frame has it's own scope then try to find in it.
 		// If it is noscope then search into it's _moduleFrame, because we could still have some symbols there
 		var res = this.findLocalValue(varName, mode);
-		if( res.node !== undefined ) {
+		if( res.parent !== undefined ) {
 			return res;
 		}
 
@@ -131,7 +137,7 @@ return __mixinProto(ExecutionFrame, {
 			modResult = this._moduleFrame.findLocalValue(varName, mode);
 		}
 
-		if( modResult.node !== undefined ) {
+		if( modResult.parent !== undefined ) {
 			return modResult;
 		}
 		return res;
@@ -152,13 +158,13 @@ return __mixinProto(ExecutionFrame, {
 	},
 
 	setValue: function(varName, value) {
-		var result = this.findValue(varName, FrameSearchMode.set);
-		this._assignNodeAttribute(result.parent, value, varName);
+		var res = this.findValue(varName, FrameSearchMode.set);
+		this._assignNodeAttribute(res.parent, value, varName);
 	},
 
 	setValueWithParents(varName, value) {
-		var result = this.findValue(varName, FrameSearchMode.setWithParents);
-		this._assignNodeAttribute(result.parent, value, varName);
+		var res = this.findValue(varName, FrameSearchMode.setWithParents);
+		this._assignNodeAttribute(res.parent, value, varName);
 	},
 
 	hasOwnScope: function() {

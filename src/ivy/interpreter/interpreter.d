@@ -225,7 +225,7 @@ public:
 	}
 
 	bool canFindValue(string varName) {
-		return !findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
+		return !findValue!(FrameSearchMode.tryGet)(varName).parent.isUndef;
 	}
 
 	FrameSearchResult findValue(FrameSearchMode mode, bool findLocal = false)(string varName)
@@ -253,7 +253,7 @@ public:
 				firstParentRes = res;
 			}
 
-			if( !res.node.isUndef ) {
+			if( !res.parent.isUndef ) {
 				return res;
 			} else if( !frame.hasOwnScope() ) {
 				continue;
@@ -266,35 +266,23 @@ public:
 			loger.internalAssert(_globalFrame, `Couldn't find variable: `, varName, ` value in global frame, because it is null!`);
 			loger.internalAssert(_globalFrame.hasOwnScope, `Couldn't find variable: `, varName, ` value in global frame, because global frame doesn't have it's own scope!` );
 			auto globalRes = _globalFrame.findValue!(mode)(varName);
-			if( !globalRes.node.isUndef ) {
+			if( !globalRes.parent.isUndef ) {
 				return globalRes;
 			}
 		}
 
-		return !res.node.isUndef? res: firstParentRes;
+		return !res.parent.isUndef? res: firstParentRes;
 	}
 
 	IvyData getValue(string varName)
 	{
-		FrameSearchResult result = findValue!(FrameSearchMode.get)(varName);
-		if( result.node.isUndef && result.parent.isUndef )
-		{
-			debug {
-				foreach( i, frame; this._frameStack[] )
-				{
-					loger.write(`Scope frame lvl `, i, `, _dataDict: `, frame._dataDict);
-					if( frame._moduleFrame ) {
-						loger.write(`Scope frame lvl `, i, `, _moduleFrame._dataDict: `, frame._moduleFrame._dataDict);
-					} else {
-						loger.write(`Scope frame lvl `, i, `, _moduleFrame is null`);
-					}
-				}
-			}
-
+		import std.algorithm: canFind;
+		FrameSearchResult res = findValue!(FrameSearchMode.get)(varName);
+		if( res.parent.isUndef ) {
 			loger.error("Undefined variable with name '", varName, "'");
 		}
 
-		return result.node;
+		return res.node;
 	}
 
 	private void _assignNodeAttribute(ref IvyData parent, ref IvyData value, string varName)

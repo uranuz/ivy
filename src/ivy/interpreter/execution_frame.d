@@ -75,15 +75,16 @@ public:
 
 	IvyData getValue(string varName)
 	{
+		import std.algorithm: canFind;
 		FrameSearchResult res = this.findValue!(FrameSearchMode.get)(varName);
-		if( res.node.isUndef && !res.parent.isUndef ) {
+		if( res.parent.isUndef ) {
 			loger.error("Cannot find variable with name: " ~ varName );
 		}
 		return res.node;
 	}
 
 	bool canFindValue(string varName) {
-		return !this.findValue!(FrameSearchMode.tryGet)(varName).node.isUndef;
+		return !this.findValue!(FrameSearchMode.tryGet)(varName).parent.isUndef;
 	}
 
 	IvyDataType getDataNodeType(string varName) {
@@ -108,32 +109,31 @@ public:
 		FrameSearchResult res;
 		res.node = this._dataDict;
 		size_t partIdx = 0;
-		for( ; partIdx < nameSplitted.length && !res.node.isUndef(); ++partIdx )
+		for( ; partIdx < nameSplitted.length; ++partIdx )
 		{
-			string namePart = nameSplitted[partIdx];
-			res = FrameSearchResult(res.node);
+			string namePart = nameSplitted[partIdx]; // Get current part of var name
+			IvyData parent = res.node; // Extract new parent
+			res = FrameSearchResult(); // Erase result at the start
 
-			switch( res.parent.type )
+			switch( parent.type )
 			{
 				case IvyDataType.AssocArray:
 				{
-					loger.write(`Searching for node: `, namePart, ` in assoc array`);
-					if( IvyData* nodePtr = namePart in res.parent )
-					{
+					if( IvyData* nodePtr = namePart in parent ) {
 						// If node exists in assoc array then push it as next parent node (or as a result if it's the last)
-						loger.write(`Node: `, namePart, ` found in assoc array`);
-						res.node = *nodePtr;
+						res = FrameSearchResult(parent, *nodePtr);
 					}
 					else
 					{
-						loger.write(`Node: `, namePart, ` is NOT found in assoc array`);
 						static if( mode == FrameSearchMode.setWithParents ) {
 							// In setWithParents mode we create parent nodes as assoc array if they are not exist
-							loger.write(`Creating node: `, namePart, `, because mode is: `, mode);
-							IvyData parentDict = ["__mentalModuleMagic_0451__": 451]; // Allocating dict
-							parentDict.assocArray.remove("__mentalModuleMagic_0451__");
-							res.parent[namePart] = parentDict;
-							res.node = res.parent[namePart];
+							IvyData newDict = ["__mentalModuleMagic_0451__": 451]; // Allocating dict
+							newDict.assocArray.remove("__mentalModuleMagic_0451__");
+							parent[namePart] = newDict;
+							res = FrameSearchResult(parent, newDict);
+						} else static if( mode == FrameSearchMode.set ) {
+							// To be able to set new property (that not exist for now) of object we must return it's parent
+							res = FrameSearchResult(parent);
 						}
 					}
 					break;
@@ -141,29 +141,16 @@ public:
 				case IvyDataType.ExecutionFrame:
 				{
 					loger.write(`Searching for node: `, namePart, ` in execution frame`);
-					if( !res.parent.execFrame )
-					{
-						static if( mode == FrameSearchMode.tryGet ) {
-							break;
-						} else {
-							loger.error(`Cannot find node, because execution frame is null!!!`);
-						}
-					}
+					loger.internalAssert(
+						parent.execFrame !is null,
+						`Cannot find node, because execution frame is null!!!`);
+					loger.internalAssert(
+						parent.execFrame._dataDict.type != IvyDataType.AssocArray,
+						`Cannot find node, because execution frame is null!!!`);
 
-					if( res.parent.execFrame._dataDict.type != IvyDataType.AssocArray )
-					{
-						static if( mode == FrameSearchMode.tryGet ) {
-							break;
-						} else {
-							loger.error(`Cannot find node, because execution frame data dict is not of assoc array type!!!`);
-						}
-					}
-
-					if( IvyData* nodePtr = namePart in res.parent.execFrame._dataDict ) {
-						loger.write(`Node: `, namePart, ` found in execution frame`);
-						res.node = *nodePtr;
+					if( IvyData* nodePtr = namePart in parent.execFrame._dataDict ) {
+						res = FrameSearchResult(parent, *nodePtr);
 					} else {
-						loger.write(`Node: `, namePart, ` is NOT found in execution frame`);
 						static if( [FrameSearchMode.setWithParents, FrameSearchMode.set].canFind(mode) ) {
 							loger.error(
 								`Cannot set node with name: ` ~ varName ~ `, because parent node: ` ~ namePart
@@ -175,8 +162,7 @@ public:
 				}
 				case IvyDataType.ClassNode:
 				{
-					loger.write(`Searching for node: `, namePart, ` in class node`);
-					if( !res.parent.classNode )
+					if( !parent.classNode )
 					{
 						static if( mode == FrameSearchMode.tryGet ) {
 							break;
@@ -187,9 +173,9 @@ public:
 
 					// If there is class nodes in the path to target path, so it's property this way
 					// No matter if it's set or get mode. The last node setting is handled by code at the start of loop
-					IvyData tmpNode = res.parent.classNode.__getAttr__(namePart);
+					IvyData tmpNode = parent.classNode.__getAttr__(namePart);
 					if( !tmpNode.isUndef ) {
-						res.node = tmpNode;
+						res = FrameSearchResult(parent, tmpNode);
 					} else {
 						static if( [FrameSearchMode.setWithParents, FrameSearchMode.set].canFind(mode) ) {
 							loger.error(
@@ -200,18 +186,18 @@ public:
 					}
 					break;
 				}
-				default:
-				{
-					loger.write(`Attempt to search: `, namePart, `, but current node is not of dict-like type`);
-					break;
+				default: break;
+			}
+			static if( mode == FrameSearchMode.get )
+			{
+				if( nameSplitted.length > 1 && (nameSplitted.length - partIdx) == 1 && res.parent.isUndef ) {
+					// If this name part is a property of object (not a stand alone var) then return that we found "undefined" value
+					// For this we should put parent on it's place
+					res.parent = parent;
 				}
 			}
 		}
-		if( (nameSplitted.length - partIdx) < 2 ) {
-			return res;
-		}
-
-		return FrameSearchResult();
+		return res;
 	}
 
 	FrameSearchResult findValue(FrameSearchMode mode)(string varName)
@@ -223,7 +209,7 @@ public:
 		FrameSearchResult res = this.findLocalValue!(mode)(varName);
 		loger.write(`Current level exec frame is noscope. So search only in connected _moduleFrame`);
 
-		if( !res.node.isUndef ) {
+		if( !res.parent.isUndef ) {
 			return res;
 		}
 
@@ -236,7 +222,7 @@ public:
 			loger.write(`Cannot find: `, varName, ` in module exec frame. Module frame is null!`);
 		}
 
-		if( !modResult.node.isUndef ) {
+		if( !modResult.parent.isUndef ) {
 			return modResult;
 		}
 		return res;
