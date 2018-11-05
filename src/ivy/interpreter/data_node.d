@@ -50,7 +50,7 @@ enum IvyDataType: ubyte {
 	Callable,
 	ExecutionFrame,
 	DataNodeRange
-};
+}
 
 enum NodeEscapeState: ubyte {
 	Init, Safe, Unsafe
@@ -410,9 +410,10 @@ struct TIvyData(S)
 	void opOpAssign(string op : "~", T)(auto ref T arg)
 	{
 		import std.algorithm: canFind;
+		import std.conv: text, to;
 		enforce!DataNodeException(
-			[IvyDataType.Array, IvyDataType.Undef, IvyDataType.Null].canFind(type),
-			"IvyData is not an array");
+			[IvyDataType.Array, IvyDataType.String].canFind(type),
+			"Cannot append to IvyData that is not array or string, got: " ~ this.type.text ~ ", value is: " ~ (type == IvyDataType.Callable?  (this.callable is null? `null callable`: `some callable`): `not really cakkable` ) );
 
 		if( type != IvyDataType.Array )
 			this = (MIvyData[]).init;

@@ -117,26 +117,15 @@ public:
 			import std.array: join;
 			import std.conv: text;
 
-			string modFileName;
-			size_t modLineIndex;
-			if( ModuleObject modObj = interp.currentModule ) {
-				modFileName = modObj.fileName;
-			}
-
-			if( CodeObject codeObj = interp.currentCodeObject ) {
-				modLineIndex = codeObj.getInstrLine(interp._pk);
-			}
-
 			// Put name of module and line where event occured
-			msg = "Ivy module: " ~ modFileName ~ ":" ~ modLineIndex.text ~ "\n" ~ msg;
+			msg = "Ivy module: " ~ interp.currentModuleName() ~ ":" ~ interp.currentInstrLine().text ~ ", OpCode: " ~ interp.currentOpCode().text ~ "\n" ~ msg;
 
 			debug {
 				if( [LogInfoType.error, LogInfoType.internalError].canFind(logInfoType) )
 				{
 					// Give additional debug data if error occured
-					string execFrameList = interp._frameStack.map!( (frame) => frame._callableObj._name ).join("\n");
 					string dataStack = interp._stack._stack.map!( (it) => it.toDebugString() ).join("\n");
-					msg ~= "Exec stack:\n" ~ execFrameList ~ "\n\nData stack:\n" ~ dataStack;
+					msg ~= "\n\nCall stack (most recent call last):\n" ~ interp.callStackInfo.join("\n") ~ "\n\nData stack:\n" ~ dataStack;
 				}
 			}
 
@@ -147,8 +136,8 @@ public:
 					getShortFuncName(func),
 					file,
 					line,
-					modFileName,
-					modLineIndex
+					interp.currentModuleName(),
+					interp.currentInstrLine()
 				));
 			}
 			return msg;
@@ -175,6 +164,55 @@ public:
 		}
 		return this._frameStack.back._callableObj._codeObj;
 	}
+
+	CallableObject[] callableStack() {
+		import std.algorithm: map;
+		import std.array: array;
+		return this._frameStack.map!( (frame) => frame._callableObj )().array();
+	}
+
+	string[] callStackInfo() {
+		string[] res;
+		foreach( callable; this.callableStack() ) {
+			if( callable is null ) {
+				res ~= `<null callable>`;
+			} else if( callable._codeObj ) {
+				res ~= `Module: ` ~ callable._codeObj._moduleObj.fileName ~ `, Directive: ` ~ callable._name;
+			} else if( callable._dirInterp ) {
+				res ~= `Directive interp: ` ~ callable._name;
+			} else {
+				res ~= `Broken Callable`;
+			}
+		}
+		return res;
+	}
+
+	size_t currentInstrLine()
+	{
+		if( CodeObject codeObj = this.currentCodeObject ) {
+			return codeObj.getInstrLine(this._pk);
+		}
+		return 0;
+	}
+
+	string currentModuleName()
+	{
+		if( ModuleObject modObj = this.currentModule ) {
+			return modObj.fileName;
+		}
+		return null;
+	}
+
+	OpCode currentOpCode()
+	{
+		if( CodeObject codeObj = this.currentCodeObject ) {
+			if( this._pk < codeObj._instrs.length ) {
+				return cast(OpCode) codeObj._instrs[this._pk].opcode;
+			}
+		}
+		return OpCode.InvalidCode;
+	}
+
 
 	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this);
@@ -394,6 +432,16 @@ public:
 	}
 
 	IvyData execLoopImpl(size_t exitFrames = 1)
+	{
+		try {
+			return execLoopInnerImpl(exitFrames);
+		} catch(Exception exc) {
+			loger.error(exc.msg);
+		}
+		assert(false, `This should never happen`);
+	}
+
+	IvyData execLoopInnerImpl(size_t exitFrames)
 	{
 		import std.range: empty, back, popBack;
 		import std.conv: to, text;
@@ -1120,8 +1168,15 @@ public:
 						loger.internalAssert(stackArgsProcessed == stackArgCount, `Processed and required stack arguments doesn't match!`, ` processed`, stackArgsProcessed, ` required: `, stackArgCount);
 					}
 
-					loger.internalAssert(this._stack.popBack().type == IvyDataType.String, `Expected String as directive name`);
-					loger.internalAssert(this._stack.popBack().type == IvyDataType.CodeObject, `Expected CodeObject`);
+					loger.write("LoadDirective. Before params and CodeObject consumed. this._stack is: ", this._stack);
+
+					// Not written in single line because compiler optimizes this in release
+					IvyData rejectedName = this._stack.popBack();
+					loger.internalAssert(rejectedName.type == IvyDataType.String, `Expected String as directive name`);
+					IvyData rejectedCodeObj = this._stack.popBack();
+					loger.internalAssert(rejectedCodeObj.type == IvyDataType.CodeObject, `Expected CodeObject`);
+
+					loger.write("LoadDirective. After params and CodeObject consumed. this._stack is: ", this._stack);
 
 					this.setLocalValue(
 						varNameNode.str,
@@ -1238,8 +1293,9 @@ public:
 					}
 					loger.write("this._stack after parsing all arguments: ", this._stack);
 
-					loger.internalAssert(
-						this._stack.popBack().type == IvyDataType.Callable,
+					// Not written in single line because compiler optimizes this in release
+					IvyData rejectedCodeObj = this._stack.popBack();
+					loger.internalAssert(rejectedCodeObj.type == IvyDataType.Callable,
 						`Expected callable object operand in call operation, but got: `, this._stack
 					);
 

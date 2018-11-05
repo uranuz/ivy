@@ -527,7 +527,6 @@ public:
 
 import ivy.directive_stuff: DirAttrKind, _stackBlockHeaderSizeOffset;
 
-debug import std.stdio;
 /// Defines directive using ivy language
 class DefCompiler: IDirectiveCompiler
 {

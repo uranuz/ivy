@@ -152,8 +152,17 @@ return __mixinProto(Interpreter, {
 				}
 				case Append: {
 					var right = this._stack.pop(), left = this._stack.back(), lType = iu.getDataNodeType(left);
-					loger.internalAssert(lType === IvyDataType.Array, 'Expected Array target operand');
-					left.push(right);
+					switch( lType ) {
+						case IvyDataType.Array:
+							left.push(right);
+							break;
+						case IvyDataType.String:
+							loger.internalAssert(lType === IvyDataType.String, 'Expected String source operand');
+							left += right;
+							break;
+						default:
+							loger.internalAssert(false, 'Expected String source operand');
+					}
 					break;
 				}
 				case Insert: {
