@@ -37,7 +37,7 @@ class CallableObject
 	INativeDirectiveInterpreter _dirInterp;
 
 
-	DirAttrsBlock!(false)[] attrBlocks() @property
+	DirAttrsBlock[] attrBlocks() @property
 	{
 		if( _codeObj ) {
 			return _codeObj._attrBlocks;

@@ -1,7 +1,7 @@
 module ivy.interpreter.execution_frame;
 
 import ivy.common;
-import ivy.interpreter.data_node;
+import ivy.interpreter.data_node: IvyData, IvyDataType;
 import ivy.interpreter.data_node_types;
 
 enum FrameSearchMode { get, tryGet, set, setWithParents }

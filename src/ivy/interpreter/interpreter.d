@@ -18,7 +18,7 @@ interface INativeDirectiveInterpreter
 	import ivy.compiler.symbol_table: Symbol;
 	void interpret(Interpreter interp);
 
-	DirAttrsBlock!(false)[] attrBlocks() @property;
+	DirAttrsBlock[] attrBlocks() @property;
 
 	Symbol compilerSymbol() @property;
 }
@@ -1104,10 +1104,12 @@ public:
 					loger.internalAssert(stackArgCount > 1, "Directive load must have at least 2 items in stack!");
 					loger.internalAssert(stackArgCount <= this._stack.length, "Not enough arguments in execution stack");
 
-					IvyData codeObjNode = this._stack[this._stack.length - stackArgCount];
-					IvyData varNameNode = this._stack[this._stack.length - stackArgCount + 1];
-					loger.internalAssert(codeObjNode.type == IvyDataType.CodeObject, `Expected CodeObject`, codeObjNode, `   `, varNameNode);
+					IvyData varNameNode = this._stack.popBack();
+					IvyData codeObjNode = this._stack.popBack();
+
 					loger.internalAssert(varNameNode.type == IvyDataType.String, `Expected String as directive name`);
+					loger.internalAssert(codeObjNode.type == IvyDataType.CodeObject, `Expected CodeObject`, codeObjNode, `   `, varNameNode);
+					
 					CodeObject codeObj = codeObjNode.codeObject;
 					loger.internalAssert(codeObj, `Code object operand for directive loading instruction is null`);
 
@@ -1168,16 +1170,6 @@ public:
 						loger.internalAssert(stackArgsProcessed == stackArgCount, `Processed and required stack arguments doesn't match!`, ` processed`, stackArgsProcessed, ` required: `, stackArgCount);
 					}
 
-					loger.write("LoadDirective. Before params and CodeObject consumed. this._stack is: ", this._stack);
-
-					// Not written in single line because compiler optimizes this in release
-					IvyData rejectedName = this._stack.popBack();
-					loger.internalAssert(rejectedName.type == IvyDataType.String, `Expected String as directive name`);
-					IvyData rejectedCodeObj = this._stack.popBack();
-					loger.internalAssert(rejectedCodeObj.type == IvyDataType.CodeObject, `Expected CodeObject`);
-
-					loger.write("LoadDirective. After params and CodeObject consumed. this._stack is: ", this._stack);
-
 					this.setLocalValue(
 						varNameNode.str,
 						IvyData(new CallableObject(
@@ -1201,15 +1193,15 @@ public:
 					loger.internalAssert(stackArgCount <= this._stack.length, "Not enough arguments in execution stack");
 					loger.write("RunCallable this._stack: ", this._stack);
 
-					IvyData callableNode = this._stack[this._stack.length - stackArgCount];
+					IvyData callableNode = this._stack.popBack();
 					loger.write("RunCallable callable type: ", callableNode.type);
 					loger.internalAssert(callableNode.type == IvyDataType.Callable, `Expected Callable operand`);
 
 					CallableObject callableObj = callableNode.callable;
-					loger.internalAssert(callableObj, `Callable object is null!` );
+					loger.internalAssert(callableObj, `Callable object is null!`);
 					loger.write("RunCallable name: ", callableObj._name);
 
-					DirAttrsBlock!(false)[] attrBlocks = callableObj.attrBlocks;
+					DirAttrsBlock[] attrBlocks = callableObj.attrBlocks;
 					loger.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
 
 					loger.write("RunCallable creating execution frame...");
@@ -1281,7 +1273,8 @@ public:
 											IvyData attrValue = this._stack.popBack(); ++stackArgsProcessed;
 											this.setLocalValue(exprAttr.name, attrValue);
 										}
-										else {
+										else
+										{
 											this.setLocalValue(exprAttr.name, exprAttr.defaultValue);
 										}
 									}
@@ -1292,12 +1285,6 @@ public:
 						}
 					}
 					loger.write("this._stack after parsing all arguments: ", this._stack);
-
-					// Not written in single line because compiler optimizes this in release
-					IvyData rejectedCodeObj = this._stack.popBack();
-					loger.internalAssert(rejectedCodeObj.type == IvyDataType.Callable,
-						`Expected callable object operand in call operation, but got: `, this._stack
-					);
 
 					if( callableObj._codeObj )
 					{

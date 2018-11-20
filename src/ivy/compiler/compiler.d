@@ -12,6 +12,7 @@ import ivy.compiler.symbol_table: Symbol, SymbolTableFrame, DirectiveDefinitionS
 import ivy.compiler.module_repository: CompilerModuleRepository;
 import ivy.compiler.directives;
 import ivy.interpreter.data_node;
+import ivy.compiler.def_analyze_mixin: DefAnalyzeMixin;
 
 // If IvyTotalDebug is defined then enable compiler debug
 version(IvyTotalDebug) version = IvyCompilerDebug;
@@ -72,6 +73,9 @@ public:
 	import std.typecons: Tuple;
 	alias LogerMethod = void delegate(LogInfo);
 	alias JumpTableItem = Tuple!(JumpKind, "jumpKind", size_t, "instrIndex");
+
+	mixin DefAnalyzeMixin;
+
 private:
 
 	// Dictionary of native compilers for directives
@@ -563,10 +567,7 @@ public:
 			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
 			loger.internalAssert(dirSymbol, `Directive definition symbol is null`);
 
-			DirAttrsBlock!(true)[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
-
-			// Add instruction to load directive object from context by name
-			addInstr(OpCode.LoadName, addConst( IvyData(node.name) ));
+			DirAttrsBlock[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
 
 			// Keeps count of stack arguments actualy used by this call. First is directive object
 			size_t stackItemsCount = 1;
@@ -582,7 +583,7 @@ public:
 						size_t argCount = 0;
 						bool[string] argsSet;
 
-						DirAttrsBlock!(true) namedAttrsDef = dirAttrBlocks.front;
+						DirAttrsBlock namedAttrsDef = dirAttrBlocks.front;
 						while( !attrRange.empty )
 						{
 							IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
@@ -640,11 +641,7 @@ public:
 
 						while( !exprAttrDefs.empty )
 						{
-							IExpression defVal = exprAttrDefs.front.defaultValueExpr;
-							// Just for check
-							if( !defVal )
-								loger.error(`Positional attribute is not passed explicitly and has no default value`);
-
+							// TODO: Just skip positional args that has no default value - fix it in the future!
 							exprAttrDefs.popFront();
 						}
 
@@ -672,7 +669,7 @@ public:
 					case DirAttrKind.KwdAttr:
 					{
 						loger.internalAssert( false );
-						DirAttrsBlock!(true) kwdDef = dirAttrBlocks.front;
+						DirAttrsBlock kwdDef = dirAttrBlocks.front;
 						INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression(`Expected keyword attribute`);
 						if( kwdDef.keyword != kwdAttr.name )
 							loger.error(`Expected "` ~ kwdDef.keyword ~ `" keyword attribute`);
@@ -689,6 +686,9 @@ public:
 			if( !attrRange.empty ) {
 				loger.error(`Not all directive attributes processed correctly. Seems that there are unexpected attributes or missing ;`);
 			}
+
+			// Add instruction to load directive object from context by name
+			addInstr(OpCode.LoadName, addConst( IvyData(node.name) ));
 
 			// After all preparations add instruction to call directive
 			addInstr(OpCode.RunCallable, stackItemsCount);

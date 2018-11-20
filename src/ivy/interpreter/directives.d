@@ -11,22 +11,16 @@ mixin template BaseNativeDirInterpreterImpl(string symbolName)
 {
 	import ivy.compiler.symbol_table: DirectiveDefinitionSymbol, Symbol;
 
-	private __gshared DirAttrsBlock!(false)[] _interpAttrBlocks;
 	private __gshared DirectiveDefinitionSymbol _symbol;
 
 	shared static this()
 	{
-		import std.algorithm: map;
-		import std.array: array;
-
-		// Get directive description for interpreter
-		_interpAttrBlocks = _compilerAttrBlocks.map!( a => a.toInterpreterBlock() ).array;
 		// Create symbol for compiler
-		_symbol = new DirectiveDefinitionSymbol(symbolName, _compilerAttrBlocks);
+		_symbol = new DirectiveDefinitionSymbol(symbolName, _attrBlocks);
 	}
 
-	override DirAttrsBlock!(false)[] attrBlocks() @property {
-		return _interpAttrBlocks;
+	override DirAttrsBlock[] attrBlocks() @property {
+		return _attrBlocks;
 	}
 
 	override Symbol compilerSymbol() @property {
@@ -57,11 +51,11 @@ class IntCtorDirInterpreter: INativeDirectiveInterpreter
 		}
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true( DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock( DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("int");
@@ -93,11 +87,11 @@ class FloatCtorDirInterpreter: INativeDirectiveInterpreter
 		}
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("float");
@@ -109,11 +103,11 @@ class StrCtorDirInterpreter: INativeDirectiveInterpreter
 		interp._stack ~= IvyData(interp.getValue("value").toString());
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("str");
@@ -144,12 +138,12 @@ class HasDirInterpreter: INativeDirectiveInterpreter
 		}
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("collection", "any"),
-			DirValueAttr!(true)("key", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("collection", "any"),
+			DirValueAttr("key", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("has");
@@ -164,11 +158,11 @@ class TypeStrDirInterpreter: INativeDirectiveInterpreter
 		interp._stack ~= IvyData(value.type.text);
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("typestr");
@@ -200,11 +194,11 @@ class LenDirInterpreter: INativeDirectiveInterpreter
 		}
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("len");
@@ -249,11 +243,11 @@ class EmptyDirInterpreter: INativeDirectiveInterpreter
 		}
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("empty");
@@ -270,11 +264,11 @@ class ToJSONBase64DirInterpreter: INativeDirectiveInterpreter
 		interp._stack ~= IvyData(cast(string) Base64.encode(jsonStr));
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("toJSONBase64");
@@ -290,9 +284,9 @@ class ScopeDirInterpreter: INativeDirectiveInterpreter
 		interp._stack ~= interp.independentFrame._dataDict;
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.BodyAttr,
-			Tuple!(ICompoundStatement, "ast", bool, "isNoscope", bool, "isNoescape")(null, true, false)
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.BodyAttr,
+			Tuple!(bool, "isNoscope", bool, "isNoescape")(true, false)
 		)
 	];
 
@@ -339,12 +333,12 @@ class DateTimeGetDirInterpreter: INativeDirectiveInterpreter
 		}
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any"),
-			DirValueAttr!(true)("field", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any"),
+			DirValueAttr("field", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("dtGet");
@@ -369,12 +363,12 @@ class RangeDirInterpreter: INativeDirectiveInterpreter
 		interp._stack ~= IvyData(new IntegerRange(begin.integer, end.integer));
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("begin", "any"),
-			DirValueAttr!(true)("end", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("begin", "any"),
+			DirValueAttr("end", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("range");
@@ -398,11 +392,11 @@ class EscapeDirInterpreter: INativeDirectiveInterpreter
 		interp._stack ~= IvyData(new IntegerRange(begin.integer, end.integer));
 	}
 
-	private __gshared DirAttrsBlock!(true)[] _compilerAttrBlocks = [
-		DirAttrsBlock!true(DirAttrKind.ExprAttr, [
-			DirValueAttr!(true)("value", "any")
+	private __gshared DirAttrsBlock[] _attrBlocks = [
+		DirAttrsBlock(DirAttrKind.ExprAttr, [
+			DirValueAttr("value", "any")
 		]),
-		DirAttrsBlock!true(DirAttrKind.BodyAttr)
+		DirAttrsBlock(DirAttrKind.BodyAttr)
 	];
 
 	mixin BaseNativeDirInterpreterImpl!("escape");

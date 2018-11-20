@@ -76,7 +76,7 @@ class CodeObject
 
 	string _name;
 	Instruction[] _instrs; // Plain list of instructions
-	DirAttrsBlock!(false)[] _attrBlocks;
+	DirAttrsBlock[] _attrBlocks;
 	ModuleObject _moduleObj; // Module object which contains this code object
 
 	SourceMapItem[] _sourceMap; // Debugging info (source map sorted by line)

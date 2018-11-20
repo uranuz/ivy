@@ -14,10 +14,10 @@ class Symbol
 
 class DirectiveDefinitionSymbol: Symbol
 {
-	DirAttrsBlock!(true)[] dirAttrBlocks;
+	DirAttrsBlock[] dirAttrBlocks;
 
 public:
-	this( string name, DirAttrsBlock!(true)[] dirAttrBlocks )
+	this( string name, DirAttrsBlock[] dirAttrBlocks )
 	{
 		this.name = name;
 		this.kind = SymbolKind.DirectiveDefinition;

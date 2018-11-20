@@ -536,7 +536,7 @@ class DefCompiler: IDirectiveCompiler
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
 
 		ICompoundStatement bodyStatement;
-		bool isNoscope = false;
+		size_t stackItemsCount = 2; // CodeObject and it's name counted
 
 		while( !stmtRange.empty )
 		{
@@ -545,37 +545,113 @@ class DefCompiler: IDirectiveCompiler
 				break; // Expected to see some attribute declaration
 			}
 
-			IDirectiveStatementRange attrDefStmtRange = attrsDefBlockStmt[];
+			IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
 
-			while( !attrDefStmtRange.empty )
+			while( !attrsDefStmtRange.empty )
 			{
-				IDirectiveStatement attrDefStmt = attrDefStmtRange.front;
+				IDirectiveStatement attrDefStmt = attrsDefStmtRange.front;
 				IAttributeRange attrsDefStmtAttrRange = attrDefStmt[];
 
 				switch( attrDefStmt.name )
 				{
-					case "def.kv", "def.pos", "def.names", "def.kwd": break;
+					case "def.kv": {
+						size_t argCount = 0;
+						while( !attrsDefStmtAttrRange.empty )
+						{
+							auto res = compiler.analyzeValueAttr(attrsDefStmtAttrRange);
+							compiler.loger.internalAssert(res.isSet, `Check 3`);
+
+							if( res.defaultValueExpr )
+							{
+								compiler.addInstr( OpCode.LoadConst, compiler.addConst(IvyData(res.attr.name)) );
+								++stackItemsCount;
+
+								res.defaultValueExpr.accept(compiler);
+								++stackItemsCount;
+
+								++argCount; // Increase default value pairs counter
+							}
+						}
+
+						// Add instruction to load value that consists of number of pairs in block and type of block
+						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
+						compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(blockHeader) ));
+						++stackItemsCount; // We should count args block header
+						break;
+					}
+					case "def.pos": {
+						size_t argCount = 0;
+						while( !attrsDefStmtAttrRange.empty )
+						{
+							auto res = compiler.analyzeValueAttr(attrsDefStmtAttrRange);
+							compiler.loger.internalAssert(res.isSet, `Check 4`);
+
+							if( res.defaultValueExpr ) {
+								res.defaultValueExpr.accept(compiler);
+								++stackItemsCount;
+								++argCount; // Increase default values counter
+							}
+						}
+
+						// Add instruction to load value that consists of number of positional arguments in block and type of block
+						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
+						compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(blockHeader) ));
+						++stackItemsCount; // We should count args block header
+						break;
+					}
+					case "def.names": case "def.kwd": {
+						compiler.loger.error(`Not implemented yet!`);
+						break;
+					}
 					case "def.body": {
 						if( bodyStatement )
 							compiler.loger.error("Multiple body statements are not allowed!!!");
 
-						if( attrsDefStmtAttrRange.empty )
-							compiler.loger.error("Unexpected end of def.body directive!");
+						auto res = compiler.analyzeDirBody(attrsDefStmtAttrRange);
+						bodyStatement = res.statement;
 
-						// Try to parse noscope flag
-						INameExpression noscopeExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
-						if( noscopeExpr && noscopeExpr.name == "noscope" )
+						Symbol symb = compiler.symbolLookup(defNameExpr.name);
+						if( symb.kind != SymbolKind.DirectiveDefinition )
+							compiler.loger.error(`Expected directive definition symbol kind`);
+
+						DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
+						compiler.loger.internalAssert(dirSymbol, `Directive definition symbol is null`);
+
+						size_t codeObjIndex;
+						// Compilation of CodeObject itself
 						{
-							isNoscope = true;
-							if( attrsDefStmtAttrRange.empty )
-								compiler.loger.error("Expected directive body, but end of def.body directive found!");
-							attrsDefStmtAttrRange.popFront();
+							if( !res.attr.isNoscope )
+							{
+								// Compiler should enter frame of directive body, identified by index in source code
+								compiler.enterScope(bodyStatement.location.index);
+							}
+
+							scope(exit)
+							{
+								if( !res.attr.isNoscope ) {
+									compiler.exitScope();
+								}
+							}
+
+
+							codeObjIndex = compiler.enterNewCodeObject(defNameExpr.name); // Creating code object
+							scope(exit) compiler.exitCodeObject();
+
+							// Generating code for def.body
+							bodyStatement.accept(compiler);
+
+							// Add directive metainfo
+							compiler.currentCodeObject._attrBlocks = dirSymbol.dirAttrBlocks;
 						}
 
-						bodyStatement = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
-						if( !bodyStatement )
-							compiler.loger.error(`Expected compound statement as directive body statement`);
+						// Add instruction to load code object from module constants
+						compiler.addInstr(OpCode.LoadConst, codeObjIndex);
 
+						// Add instruction to load directive name from consts
+						compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(defNameExpr.name) ));
+
+						// Add instruction to create directive object
+						compiler.addInstr(OpCode.LoadDirective, stackItemsCount);
 						break;
 					}
 					default: {
@@ -583,112 +659,13 @@ class DefCompiler: IDirectiveCompiler
 						break;
 					}
 				}
-				attrDefStmtRange.popFront(); // Going to the next directive statement in code block
+				attrsDefStmtRange.popFront(); // Going to the next directive statement in code block
 			}
 			stmtRange.popFront(); // Go to next attr definition directive
 		}
 
-		// Here should go commands to compile directive body
+		// Check wheter dir body was found at all
 		compiler.loger.internalAssert(bodyStatement, `Directive definition body is null`);
-
-		Symbol symb = compiler.symbolLookup(defNameExpr.name);
-		if( symb.kind != SymbolKind.DirectiveDefinition )
-			compiler.loger.error(`Expected directive definition symbol kind`);
-
-		DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-		assert(dirSymbol, `Directive definition symbol is null`);
-
-		size_t codeObjIndex;
-		{
-			import std.algorithm: map;
-			import std.array: array;
-
-			if( !isNoscope )
-			{
-				// Compiler should enter frame of directive body, identified by index in source code
-				compiler.enterScope(bodyStatement.location.index);
-			}
-
-			codeObjIndex = compiler.enterNewCodeObject(defNameExpr.name); // Creating code object
-
-			// Generating code for def.body
-			bodyStatement.accept(compiler);
-
-			compiler.currentCodeObject._attrBlocks = dirSymbol.dirAttrBlocks.map!( b => b.toInterpreterBlock() ).array;
-
-			scope(exit)
-			{
-				compiler.exitCodeObject();
-				if( !isNoscope )
-				{
-					compiler.exitScope();
-				}
-			}
-		}
-
-		// Add instruction to load code object from module constants
-		compiler.addInstr(OpCode.LoadConst, codeObjIndex);
-
-		// Add instruction to load directive name from consts
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(defNameExpr.name) ));
-
-		size_t stackItemsCount = 2; // CodeObject and it's name counted
-
-		// We shal compute default values for directive attributes at directive load.
-		// Default values wil be stored in DirAttrsBlock!(false) defaultValue field.
-		// For each exact directive invocation we should make deep copy these default values
-		foreach( ref attrBlock; dirSymbol.dirAttrBlocks )
-		{
-			switch( attrBlock.kind )
-			{
-				case DirAttrKind.NamedAttr:
-				{
-					size_t argCount = 0;
-					
-					foreach( string argName, namedAttr; attrBlock.namedAttrs )
-					{
-						if( namedAttr.defaultValueExpr ) {
-							compiler.addInstr( OpCode.LoadConst, compiler.addConst(IvyData(argName)) );
-							++stackItemsCount;
-
-							namedAttr.defaultValueExpr.accept(compiler);
-							++stackItemsCount;
-
-							++argCount; // Increase default value pairs counter
-						}
-					}
-
-					// Add instruction to load value that consists of number of pairs in block and type of block
-					size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
-					compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(blockHeader) ));
-					++stackItemsCount; // We should count args block header
-					break;
-				}
-				case DirAttrKind.ExprAttr:
-				{
-					size_t argCount = 0;
-
-					foreach( exprAttr; attrBlock.exprAttrs )
-					{
-						if( exprAttr.defaultValueExpr ) {
-							exprAttr.defaultValueExpr.accept(compiler);
-							++stackItemsCount;
-							++argCount; // Increase default values counter
-						}
-					}
-
-					// Add instruction to load value that consists of number of positional arguments in block and type of block
-					size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
-					compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(blockHeader) ));
-					++stackItemsCount; // We should count args block header
-					break;
-				}
-				default: break;
-			}
-		}
-
-		// Add instruction to create directive object
-		compiler.addInstr(OpCode.LoadDirective, stackItemsCount);
 	}
 }
 

@@ -8,10 +8,12 @@ import ivy.compiler.common;
 import ivy.compiler.compiler: takeFrontAs;
 import ivy.compiler.module_repository;
 import ivy.compiler.symbol_table;
+import ivy.compiler.def_analyze_mixin: DefAnalyzeMixin;
 
 
 class CompilerSymbolsCollector: AbstractNodeVisitor
 {
+	mixin DefAnalyzeMixin;
 	alias LogerMethod = void delegate(LogInfo);
 private:
 	CompilerModuleRepository _moduleRepo;
@@ -90,18 +92,12 @@ public:
 
 				INameExpression dirNameExpr = defAttrsRange.takeFrontAs!INameExpression("Expected directive name");
 				ICodeBlockStatement attrsDefBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
-
 				IDirectiveStatementRange attrsDefStmtRange = attrsDefBlockStmt[];
 
-				bool isNoscope = false;
-				bool isNoescape = false;
 				ICompoundStatement bodyStmt;
 
-				DirAttrsBlock!(true)[] attrBlocks;
+				DirAttrsBlock[] attrBlocks;
 
-				alias TValueAttr = DirValueAttr!(true);
-
-				attr_def_stmts_loop:
 				while( !attrsDefStmtRange.empty )
 				{
 					IDirectiveStatement attrsDefStmt = attrsDefStmtRange.front; // Current attributes definition statement
@@ -111,120 +107,81 @@ public:
 					{
 						case "def.kv":
 						{
-							TValueAttr[string] namedAttrs;
+							DirValueAttr[string] namedAttrs;
 							while( !attrsDefStmtAttrRange.empty )
 							{
-								auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
-								if( parsed.empty )
-								{
-									attrsDefStmtRange.popFront();
-									continue attr_def_stmts_loop;
-								}
+								auto res = analyzeValueAttr(attrsDefStmtAttrRange);
+								loger.internalAssert(res.isSet, `Check 1`);
 
-								TValueAttr attrDecl = parsed.attr;
+								if( res.attr.name in namedAttrs )
+									loger.error(`Named attribute "`, res.attr.name, `" already defined in directive definition`);
 
-								if( attrDecl.name in namedAttrs )
-									loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
-
-								namedAttrs[attrDecl.name] = attrDecl;
+								namedAttrs[res.attr.name] = res.attr;
 							}
 
-							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.NamedAttr, namedAttrs );
+							attrBlocks ~= DirAttrsBlock(DirAttrKind.NamedAttr, namedAttrs);
 							break;
 						}
 						case "def.pos":
 						{
-							TValueAttr[] exprAttrs;
+							DirValueAttr[] exprAttrs;
 							while( !attrsDefStmtAttrRange.empty )
 							{
-								auto parsed = analyzeValueAttr(attrsDefStmtAttrRange);
-								if( parsed.empty )
-								{
-									attrsDefStmtRange.popFront();
-									continue attr_def_stmts_loop;
-								}
+								auto res = analyzeValueAttr(attrsDefStmtAttrRange);
+								loger.internalAssert(res.isSet, `Check 2`);
 
-								TValueAttr attrDecl = parsed.attr;
+								if( exprAttrs.canFind!( (it, needle) => it.name == needle )(res.attr.name) )
+									loger.error(`Named attribute "`, res.attr.name, `" already defined in directive definition`);
 
-								if( exprAttrs.canFind!( (it, needle) => it.name == needle )(attrDecl.name) )
-									loger.error(`Named attribute "`, attrDecl.name, `" already defined in directive definition`);
-
-								exprAttrs ~= attrDecl;
+								exprAttrs ~= res.attr;
 							}
 
-							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.ExprAttr, exprAttrs );
+							attrBlocks ~= DirAttrsBlock(DirAttrKind.ExprAttr, exprAttrs);
 							break;
 						}
-						case "def.names", "def.kwd": assert( false, `Not implemented yet!` );
+						case "def.names", "def.kwd": loger.internalAssert(false, `Not implemented yet!`);
 						case "def.body":
+						{
 							if( bodyStmt )
 								loger.error(`Multiple body statements are not allowed!`);
 
-							if( attrsDefStmtAttrRange.empty )
-								loger.error("Unexpected end of def.body directive!");
+							auto res = analyzeDirBody(attrsDefStmtAttrRange);
+							bodyStmt = res.statement;
 
-							// Try to parse noscope and noescape flags
-							body_flags_loop:
-							while( !attrsDefStmtAttrRange.empty )
+							attrBlocks ~= DirAttrsBlock(DirAttrKind.BodyAttr, res.attr);
+
+							if( _frameStack.empty )
+								loger.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
+							if( !_frameStack.back )
+								loger.error(`Cannot store symbol, because symbol table frame is null`);
+							// Add directive definition into existing frame
+							_frameStack.back.add(new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks));
+
+							if( bodyStmt && !res.attr.isNoscope )
 							{
-								INameExpression flagExpr = cast(INameExpression) attrsDefStmtAttrRange.front;
-								if( !flagExpr ) {
-									break;
-								}
-								switch( flagExpr.name )
-								{
-									case "noscope":
-										isNoscope = true;
-										break;
-									case "noescape":
-										isNoescape = true;
-										break;
-									default: break body_flags_loop;
-								}
-								attrsDefStmtAttrRange.popFront();
+								// Create new frame for body if not forbidden
+								_frameStack ~= _frameStack.back.newChildFrame(bodyStmt.location.index);
 							}
 
-							if( attrsDefStmtAttrRange.empty )
-								loger.error("Expected directive body, but end of def.body directive found!");
+							scope(exit)
+							{
+								if( bodyStmt && !res.attr.isNoscope ) {
+									_frameStack.popBack();
+								}
+							}
 
-							bodyStmt = cast(ICompoundStatement) attrsDefStmtAttrRange.front; // Getting body AST for statement
-							if( !bodyStmt )
-								loger.error("Expected compound statement as directive body statement");
-
-							attrBlocks ~= DirAttrsBlock!(true)( DirAttrKind.BodyAttr, DirAttrsBlock!(true).TBodyTuple(bodyStmt, isNoscope, isNoescape) );
-
+							if( bodyStmt )
+							{
+								// Analyse nested tree
+								bodyStmt.accept(this);
+							}
 							break;
+						}
 						default:
 							break;
 					}
 
 					attrsDefStmtRange.popFront();
-				}
-
-				if( _frameStack.empty )
-					loger.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
-				if( !_frameStack.back )
-					loger.error(`Cannot store symbol, because symbol table frame is null`);
-				// Add directive definition into existing frame
-				_frameStack.back.add(new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks));
-
-				if( bodyStmt && !isNoscope )
-				{
-					// Create new frame for body if not forbidden
-					_frameStack ~= _frameStack.back.newChildFrame(bodyStmt.location.index);
-				}
-
-				scope(exit)
-				{
-					if( bodyStmt && !isNoscope ) {
-						_frameStack.popBack();
-					}
-				}
-
-				if( bodyStmt )
-				{
-					// Analyse nested tree
-					bodyStmt.accept(this);
 				}
 
 				if( !defAttrsRange.empty )
@@ -328,63 +285,6 @@ public:
 			moduleTree.accept(this);
 			return moduleTable;
 		}
-	}
-
-	auto analyzeValueAttr(IAttributeRange attrRange)
-	{
-		import std.typecons: Tuple;
-		alias Result = Tuple!( DirValueAttr!(true), `attr`, bool, `empty` );
-
-		string attrName;
-		string attrType;
-		IExpression defaultValueExpr;
-
-		if( auto kwPair = cast(IKeyValueAttribute) attrRange.front )
-		{
-			attrName = kwPair.name;
-			defaultValueExpr = cast(IExpression) kwPair.value;
-			if( !defaultValueExpr )
-				loger.error(`Expected attribute default value expression!`);
-
-			attrRange.popFront(); // Skip named attribute
-		}
-		else if( auto nameExpr = cast(INameExpression) attrRange.front )
-		{
-			attrName = nameExpr.name;
-			attrRange.popFront(); // Skip variable name
-		}
-		else
-		{
-			// Just get out of there if nothing matched
-			return Result( DirValueAttr!(true).init, true );
-		}
-
-		if( !attrRange.empty )
-		{
-			// Try to parse optional type definition
-			if( auto asKwdExpr = cast(INameExpression) attrRange.front )
-			{
-				if( asKwdExpr.name == "as" )
-				{
-					// TODO: Try to find out type of attribute after `as` keyword
-					// Assuming that there will be no named attribute with name `as` in programme
-					attrRange.popFront(); // Skip `as` keyword
-
-					if( attrRange.empty )
-						loger.error(`Expected attr type definition, but got end of attrs range!`);
-
-					auto attrTypeExpr = cast(INameExpression) attrRange.front;
-					if( !attrTypeExpr )
-						loger.error(`Expected attr type definition!`);
-
-					attrType = attrTypeExpr.name; // Getting type of attribute as string (for now)
-
-					attrRange.popFront(); // Skip type expression
-				}
-			}
-		}
-
-		return Result( DirValueAttr!(true)(attrName, attrType, defaultValueExpr), false );
 	}
 
 	SymbolTableFrame[string] getModuleSymbols() @property {
