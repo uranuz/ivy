@@ -403,8 +403,8 @@ return __mixinProto(Interpreter, {
 					);
 
 					var
-						codeObj = this._stack.at(this._stack.getLength() - stackArgCount),
-						varName = this._stack.at(this._stack.getLength() - stackArgCount + 1);
+						varName = this._stack.pop(),
+						codeObj = this._stack.pop();
 
 					loger.internalAssert(
 						iu.getDataNodeType(codeObj) === IvyDataType.CodeObject,
@@ -495,14 +495,6 @@ return __mixinProto(Interpreter, {
 						);
 					}
 
-					loger.internalAssert(
-						iu.getDataNodeType(this._stack.pop()) === IvyDataType.String,
-						`Expected String as directive name`);
-					loger.internalAssert(
-						iu.getDataNodeType(this._stack.pop()) === IvyDataType.CodeObject,
-						`Expected CodeObject`
-					);
-
 					this.setLocalValue(varName, new CallableObject(varName, codeObj)); // Put this directive in context
 					this._stack.push(undefined); // We should return something
 					break;
@@ -512,7 +504,7 @@ return __mixinProto(Interpreter, {
 					loger.internalAssert(stackArgCount > 0, "Call must at least have 1 arguments in stack!");
 					loger.internalAssert(stackArgCount <= this._stack.getLength(), "Not enough arguments in execution stack");
 
-					var callableObj = this._stack.at(this._stack.getLength() - stackArgCount);
+					var callableObj = this._stack.pop();
 					loger.internalAssert(
 						iu.getDataNodeType(callableObj) === IvyDataType.Callable,
 						`Expected Callable operand`
@@ -619,11 +611,6 @@ return __mixinProto(Interpreter, {
 							}
 						}
 					}
-
-					loger.internalAssert(
-						iu.getDataNodeType(this._stack.pop()) === IvyDataType.Callable,
-						`Expected callable object operand in call operation`
-					); // Drop callable object from stack
 
 					if( callableObj._codeObj )
 					{
