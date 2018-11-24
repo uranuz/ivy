@@ -5,6 +5,8 @@ import ivy.code_object: ModuleObject;
 import ivy.compiler.compiler;
 import ivy.compiler.symbol_collector;
 import ivy.compiler.module_repository;
+import ivy.compiler.iface: IDirectiveCompiler;
+import ivy.compiler.directive.factory: makeStandartDirCompilerFactory;
 import ivy.interpreter.data_node;
 import ivy.interpreter.interpreter;
 import ivy.interpreter.directives;
@@ -213,8 +215,8 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	auto moduleRepo = new CompilerModuleRepository(config.importPaths, config.fileExtension, config.parserLoger);
 
 	// Preliminary compiler phase that analyse imported modules and stores neccessary info about directives
-	auto symbolsCollector = new CompilerSymbolsCollector(moduleRepo, mainModuleName, config.compilerLoger);
-	symbolsCollector.run(); // Run analyse
+	auto symbolsCollector = new CompilerSymbolsCollector(moduleRepo, config.compilerLoger);
+	symbolsCollector.analyzeModuleSymbols(mainModuleName); // Run analyse
 
 	auto dirInterps = config.dirInterpreters.dup;
 	// Add native directive interpreters to global scope
@@ -231,10 +233,14 @@ ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
 	dirInterps["range"] = new RangeDirInterpreter();
 
 	// Main compiler phase that generates bytecode for modules
-	auto compiler = new ByteCodeCompiler(moduleRepo, symbolsCollector.getModuleSymbols(), mainModuleName, config.compilerLoger);
-	compiler.addDirCompilers(config.dirCompilers);
+	auto compiler = new ByteCodeCompiler(
+		moduleRepo,
+		symbolsCollector.getModuleSymbols(),
+		makeStandartDirCompilerFactory(),
+		config.compilerLoger
+	);
 	compiler.addGlobalSymbols( dirInterps.values.map!(it => it.compilerSymbol).array );
-	compiler.run(); // Run compilation itself
+	compiler.run(mainModuleName); // Run compilation itself
 
 	if( config.compilerLoger ) {
 		debug config.compilerLoger(LogInfo(

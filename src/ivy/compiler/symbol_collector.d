@@ -4,11 +4,12 @@ import ivy.common;
 import ivy.directive_stuff;
 import ivy.parser.node;
 import ivy.parser.node_visitor: AbstractNodeVisitor;
-import ivy.compiler.common;
-import ivy.compiler.compiler: takeFrontAs;
+import ivy.compiler.common: takeFrontAs;
 import ivy.compiler.module_repository;
 import ivy.compiler.symbol_table;
 import ivy.compiler.def_analyze_mixin: DefAnalyzeMixin;
+import ivy.compiler.errors: IvyCompilerException;
+import ivy.compiler.node_visit_mixin: NodeVisitMixin;
 
 
 class CompilerSymbolsCollector: AbstractNodeVisitor
@@ -18,17 +19,15 @@ class CompilerSymbolsCollector: AbstractNodeVisitor
 private:
 	CompilerModuleRepository _moduleRepo;
 	SymbolTableFrame[string] _moduleSymbols;
-	string _mainModuleName;
 	SymbolTableFrame[] _frameStack;
 	LogerMethod _logerMethod;
 
 public:
-	this(CompilerModuleRepository moduleRepo, string mainModuleName, LogerMethod logerMethod = null)
+	this(CompilerModuleRepository moduleRepo, LogerMethod logerMethod = null)
 	{
 		import std.range: back;
 		_moduleRepo = moduleRepo;
 		_logerMethod = logerMethod;
-		_mainModuleName = mainModuleName;
 	}
 
 	version(IvyCompilerDebug)
@@ -62,7 +61,7 @@ public:
 		return LogerProxy(func, file, line, this);
 	}
 
-	mixin NodeVisitWrapperImpl!();
+	mixin NodeVisitMixin!();
 
 	// Most of these stuff is just empty implementation except directive statements parsing
 	void _visit(IvyNode node) { assert(0); }
@@ -293,9 +292,5 @@ public:
 
 	CompilerModuleRepository getModuleRepository() @property {
 		return _moduleRepo;
-	}
-
-	void run() {
-		analyzeModuleSymbols(_mainModuleName);
 	}
 }

@@ -4,6 +4,7 @@ import ivy.common;
 import ivy.compiler.common;
 import ivy.parser.parser;
 import ivy.parser.node: IvyNode;
+import ivy.compiler.errors: IvyCompilerException;
 
 class CompilerModuleRepository
 {

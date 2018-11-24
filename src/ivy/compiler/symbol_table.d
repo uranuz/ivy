@@ -3,6 +3,7 @@ module ivy.compiler.symbol_table;
 import ivy.common;
 import ivy.compiler.common;
 import ivy.directive_stuff;
+import ivy.compiler.errors: IvyCompilerException;
 
 enum SymbolKind { DirectiveDefinition, Module };
 

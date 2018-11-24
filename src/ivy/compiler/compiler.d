@@ -10,57 +10,14 @@ import ivy.parser.node_visitor;
 import ivy.compiler.common;
 import ivy.compiler.symbol_table: Symbol, SymbolTableFrame, DirectiveDefinitionSymbol, SymbolKind;
 import ivy.compiler.module_repository: CompilerModuleRepository;
-import ivy.compiler.directives;
 import ivy.interpreter.data_node;
 import ivy.compiler.def_analyze_mixin: DefAnalyzeMixin;
+import ivy.compiler.directive.factory: DirectiveCompilerFactory;
+import ivy.compiler.node_visit_mixin;
+import ivy.compiler.errors: IvyCompilerException;
 
 // If IvyTotalDebug is defined then enable compiler debug
 version(IvyTotalDebug) version = IvyCompilerDebug;
-
-interface IDirectiveCompiler
-{
-	void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler);
-}
-
-T expectNode(T)( IvyNode node, string msg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
-{
-	import std.algorithm: splitter;
-	import std.range: retro, take, join;
-	import std.array: array;
-	import std.conv: to;
-
-	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
-	enum shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
-
-	T typedNode = cast(T) node;
-	if( !typedNode )
-		throw new ASTNodeTypeException(shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ msg, file, line);
-
-	return typedNode;
-}
-
-T takeFrontAs(T)( IAttributeRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__ )
-{
-	import std.algorithm: splitter;
-	import std.range: retro, take, join;
-	import std.array: array;
-	import std.conv: to;
-
-	static immutable shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
-	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
-	string longMsg = shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ errorMsg;
-
-	if( range.empty )
-		throw new ASTNodeTypeException(longMsg, file, line);
-
-	T typedAttr = cast(T) range.front;
-	if( !typedAttr )
-		throw new ASTNodeTypeException(longMsg, file, line);
-
-	range.popFront();
-
-	return typedAttr;
-}
 
 enum JumpKind {
 	Break = 1,
@@ -77,9 +34,7 @@ public:
 	mixin DefAnalyzeMixin;
 
 private:
-
-	// Dictionary of native compilers for directives
-	IDirectiveCompiler[string] _dirCompilers;
+	DirectiveCompilerFactory _compilerFactory;
 
 	// Dictionary maps module name to it's root symbol table frame
 	SymbolTableFrame[string] _modulesSymbolTables;
@@ -101,8 +56,6 @@ private:
 	// Current stack of code objects that compiler produces
 	CodeObject[] _codeObjStack;
 
-	string _mainModuleName;
-
 	LogerMethod _logerMethod;
 
 	// Stack of jump tables used to set.
@@ -111,37 +64,20 @@ private:
 
 
 public:
-	this(CompilerModuleRepository moduleRepo, SymbolTableFrame[string] symbolTables, string mainModuleName, LogerMethod logerMethod = null)
-	{
+	this(
+		CompilerModuleRepository moduleRepo,
+		SymbolTableFrame[string] symbolTables,
+		DirectiveCompilerFactory compilerFactory,
+		LogerMethod logerMethod = null
+	) {
+		_compilerFactory = compilerFactory;
 		_logerMethod = logerMethod;
 		_moduleRepo = moduleRepo;
 		_modulesSymbolTables = symbolTables;
 		_globalSymbolTable = new SymbolTableFrame(null, _logerMethod);
-
-		// Add core directives set:
-		_dirCompilers["var"] = new VarCompiler();
-		_dirCompilers["set"] = new SetCompiler();
-		_dirCompilers["expr"] = new ExprCompiler();
-		_dirCompilers["if"] = new IfCompiler();
-		_dirCompilers["for"] = new ForCompiler();
-		_dirCompilers["repeat"] = new RepeatCompiler();
-		_dirCompilers["def"] = new DefCompiler();
-		_dirCompilers["import"] = new ImportCompiler();
-		_dirCompilers["from"] = new FromImportCompiler();
-		_dirCompilers["at"] = new AtCompiler();
-		_dirCompilers["setat"] = new SetAtCompiler();
-		_dirCompilers["insert"] = new InsertCompiler();
-		_dirCompilers["slice"] = new SliceCompiler();
-		_dirCompilers["return"] = new ReturnCompiler();
-		_dirCompilers["continue"] = new ContinueCompiler();
-		_dirCompilers["break"] = new BreakCompiler();
-
-		_mainModuleName = mainModuleName;
-		enterModuleScope(mainModuleName);
-		enterNewCodeObject(null, newModuleObject(mainModuleName));
 	}
 
-	mixin NodeVisitWrapperImpl!();
+	mixin NodeVisitMixin!();
 
 	version(IvyCompilerDebug)
 		enum isDebugMode = true;
@@ -174,13 +110,6 @@ public:
 		return LogerProxy(func, file, line, this);
 	}
 
-	void addDirCompilers(IDirectiveCompiler[string] dirCompilers)
-	{
-		foreach( name, dirCompiler; dirCompilers ) {
-			_dirCompilers[name] = dirCompiler;
-		}
-	}
-
 	void addGlobalSymbols(Symbol[] symbols)
 	{
 		foreach(symb; symbols) {
@@ -188,7 +117,7 @@ public:
 		}
 	}
 
-	void enterModuleScope( string moduleName )
+	void enterModuleScope(string moduleName)
 	{
 		loger.write(`Enter method`);
 		loger.write(`_modulesSymbolTables: `, _modulesSymbolTables);
@@ -204,7 +133,7 @@ public:
 		loger.write(`Exit method`);
 	}
 
-	void enterScope( size_t sourceIndex )
+	void enterScope(size_t sourceIndex)
 	{
 		import std.range: empty, back;
 		loger.internalAssert(!_symbolTableStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty`);
@@ -365,12 +294,6 @@ public:
 		}
 
 		return symb;
-	}
-
-	ModuleObject mainModule() @property
-	{
-		loger.internalAssert( _mainModuleName in _moduleObjects, `Cannot get main module object` );
-		return _moduleObjects[_mainModuleName];
 	}
 
 	ModuleObject getOrCompileModule(string moduleName)
@@ -553,7 +476,8 @@ public:
 	{
 		import std.range: empty, front, popFront;
 
-		if( auto comp = node.name in _dirCompilers ) {
+		auto comp = _compilerFactory.get(node.name);
+		if( comp !is null ) {
 			comp.compile(node, this);
 		}
 		else
@@ -756,8 +680,12 @@ public:
 	}
 
 	// Runs main compiler phase starting from main module
-	void run() {
-		_moduleRepo.getModuleTree(_mainModuleName).accept(this);
+	void run(string mainModuleName)
+	{
+		// Add core directives set:
+		enterModuleScope(mainModuleName);
+		enterNewCodeObject(null, newModuleObject(mainModuleName));
+		_moduleRepo.getModuleTree(mainModuleName).accept(this);
 	}
 
 	string toPrettyStr()

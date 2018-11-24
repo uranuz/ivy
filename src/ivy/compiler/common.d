@@ -1,61 +1,44 @@
 module ivy.compiler.common;
 
-import ivy.common: IvyException;
+import ivy.parser.node: IAttributeRange;
+import ivy.compiler.errors: ASTNodeTypeException;
 
-class ASTNodeTypeException: IvyException
+T expectNode(T)(IvyNode node, string msg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__)
 {
-public:
-	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
-	{
-		super(msg, file, line, next);
-	}
+	import std.algorithm: splitter;
+	import std.range: retro, take, join;
+	import std.array: array;
+	import std.conv: to;
+
+	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+	enum shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
+
+	T typedNode = cast(T) node;
+	if( !typedNode )
+		throw new ASTNodeTypeException(shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ msg, file, line);
+
+	return typedNode;
 }
 
-class IvyCompilerException: IvyException
+T takeFrontAs(T)(IAttributeRange range, string errorMsg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__)
 {
-public:
-	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
-	{
-		super(msg, file, line, next);
-	}
-}
+	import std.algorithm: splitter;
+	import std.range: retro, take, join;
+	import std.array: array;
+	import std.conv: to;
 
-// Mixin used to get approximate current position of compiler
-mixin template NodeVisitWrapperImpl()
-{
-	import ivy.common: ExtendedLocation;
-	import std.algorithm: map;
-	import std.string: join;
+	static immutable shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
+	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+	string longMsg = shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ errorMsg;
 
-	alias CustLocation = ExtendedLocation;
+	if( range.empty )
+		throw new ASTNodeTypeException(longMsg, file, line);
 
-	private CustLocation _currentLocation;
+	T typedAttr = cast(T) range.front;
+	if( !typedAttr )
+		throw new ASTNodeTypeException(longMsg, file, line);
 
-	mixin(
-		[
-			`IvyNode`,
-			`IExpression`,
-			`ILiteralExpression`,
-			`INameExpression`,
-			`IOperatorExpression`,
-			`IUnaryExpression`,
-			`IBinaryExpression`,
-			`IAssocArrayPair`,
+	range.popFront();
 
-			`IStatement`,
-			`IKeyValueAttribute`,
-			`IDirectiveStatement`,
-			`IDataFragmentStatement`,
-			`ICompoundStatement`,
-			`ICodeBlockStatement`,
-			`IMixedBlockStatement`
-		].map!(function(string typeStr) {
-			return `override void visit(` ~ typeStr ~ ` node) {
-				this.loger.internalAssert(node, "node is null!");
-				this._currentLocation = node.extLocation;
-				this._visit(node);
-			}
-			`;
-		}).join()
-	);
+	return typedAttr;
 }
