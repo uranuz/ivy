@@ -10,47 +10,34 @@ import ivy.compiler.directive.factory: makeStandartDirCompilerFactory;
 import ivy.interpreter.data_node;
 import ivy.interpreter.interpreter;
 import ivy.interpreter.directives;
-
-// Structure for configuring Ivy
-struct IvyConfig
-{
-	string[] importPaths; // Paths where to search for templates
-	string fileExtension = `.ivy`; // Extension of files that are templates
-
-	// Signature for loging methods, so logs can be forwarded to stdout, file or anywhere else...
-	// If you wish debug output you must build with one of these -version specifiers:
-	// IvyTotalDebug - maximum debug verbosity
-	// IvyCompilerDebug - enable compiler debug output
-	// IvyInterpreterDebug - enable interpreter debug output
-	// IvyParserDebug - enable parser debug output
-	// But errors and warnings will be sent to logs in any case. But you can ignore them...
-	alias LogerMethod = void delegate(LogInfo);
-	LogerMethod interpreterLoger;
-	LogerMethod compilerLoger;
-	LogerMethod parserLoger;
-
-	IDirectiveCompiler[string] dirCompilers; // Dictionary of custom directive compilers
-	INativeDirectiveInterpreter[string] dirInterpreters; // Dictionary of custom directive interpreters
-	// Key difference between IDirectiveCompiler and INativeDirectiveInterpreter is that
-	// compiler generates bytecode to execute some operation, etc...
-	// But INativeDirectiveInterpreter runs in execution of Ivy programme and do these operation itself
-	// Using compilers is preferable, but in some cases interpreters may be needed
-}
+import ivy.interpreter.iface: INativeDirectiveInterpreter;
+import ivy.interpreter.directive_factory: InterpreterDirectiveFactory;
+import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
+import ivy.engine: IvyEngine;
 
 // Representation of programme ready for execution
 class ExecutableProgramme
 {
 	alias LogerMethod = void delegate(LogInfo);
 private:
-	ModuleObject[string] _moduleObjects;
+	ModuleObjectsCache _moduleObjCache;
+	InterpreterDirectiveFactory _directiveFactory;
 	string _mainModuleName;
 	LogerMethod _logerMethod;
-	INativeDirectiveInterpreter[string] _dirInterpreters;
 
 public:
-	this(ModuleObject[string] moduleObjects, string mainModuleName, LogerMethod logerMethod = null)
-	{
-		_moduleObjects = moduleObjects;
+	this(
+		ModuleObjectsCache moduleObjCache,
+		InterpreterDirectiveFactory directiveFactory,
+		string mainModuleName,
+		LogerMethod logerMethod = null
+	) {
+		assert(moduleObjCache, `Expected module objects cache`);
+		assert(directiveFactory, `Expected directive factory`);
+		assert(mainModuleName.length, `Expected programme main module name`);
+
+		_moduleObjCache = moduleObjCache;
+		_directiveFactory = directiveFactory;
 		_mainModuleName = mainModuleName;
 		_logerMethod = logerMethod;
 	}
@@ -63,8 +50,13 @@ public:
 	Interpreter runSaveState(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null)
 	{
 		import ivy.interpreter.interpreter: Interpreter;
-		Interpreter interp = new Interpreter(_moduleObjects, _mainModuleName, mainModuleScope, _logerMethod);
-		interp.addDirInterpreters(_dirInterpreters);
+		Interpreter interp = new Interpreter(
+			_moduleObjCache,
+			_directiveFactory,
+			_mainModuleName,
+			mainModuleScope,
+			_logerMethod
+		);
 		interp.addExtraGlobals(extraGlobals);
 		interp.execLoop();
 		return interp;
@@ -74,16 +66,12 @@ public:
 		_logerMethod = method;
 	}
 
-	void dirInterpreters(INativeDirectiveInterpreter[string] dirInterps) @property {
-		_dirInterpreters = dirInterps;
-	}
-
 	import std.json: JSONValue;
 	JSONValue toStdJSON()
 	{
 		JSONValue jProg = ["mainModuleName": _mainModuleName];
 		JSONValue[string] moduleObjects;
-		foreach( string modName, ModuleObject modObj; _moduleObjects )
+		foreach( string modName, ModuleObject modObj; _moduleObjCache.moduleObjects )
 		{
 			JSONValue[] jConsts;
 			foreach( ref IvyData con; modObj._consts ) {
@@ -204,59 +192,7 @@ JSONValue _valueAttrToStdJSON(VA)(auto ref VA va) {
 	]);
 }
 
-ExecutableProgramme compileModule(string mainModuleName, IvyConfig config)
-{
-	import std.range: empty;
-	import std.algorithm: map;
-	import std.array: array;
-
-	assert(!config.importPaths.empty, `List of compiler import paths must not be empty!`);
-	// Creating object that manages reading source files, parse and store them as AST
-	auto moduleRepo = new CompilerModuleRepository(config.importPaths, config.fileExtension, config.parserLoger);
-
-	// Preliminary compiler phase that analyse imported modules and stores neccessary info about directives
-	auto symbolsCollector = new CompilerSymbolsCollector(moduleRepo, config.compilerLoger);
-	symbolsCollector.analyzeModuleSymbols(mainModuleName); // Run analyse
-
-	auto dirInterps = config.dirInterpreters.dup;
-	// Add native directive interpreters to global scope
-	dirInterps["int"] = new IntCtorDirInterpreter();
-	dirInterps["float"] = new FloatCtorDirInterpreter();
-	dirInterps["str"] = new StrCtorDirInterpreter();
-	dirInterps["has"] = new HasDirInterpreter();
-	dirInterps["typestr"] = new TypeStrDirInterpreter();
-	dirInterps["len"] = new LenDirInterpreter();
-	dirInterps["empty"] = new EmptyDirInterpreter();
-	dirInterps["scope"] = new ScopeDirInterpreter();
-	dirInterps["toJSONBase64"] = new ToJSONBase64DirInterpreter();
-	dirInterps["dtGet"] = new DateTimeGetDirInterpreter();
-	dirInterps["range"] = new RangeDirInterpreter();
-
-	// Main compiler phase that generates bytecode for modules
-	auto compiler = new ByteCodeCompiler(
-		moduleRepo,
-		symbolsCollector.getModuleSymbols(),
-		makeStandartDirCompilerFactory(),
-		config.compilerLoger
-	);
-	compiler.addGlobalSymbols( dirInterps.values.map!(it => it.compilerSymbol).array );
-	compiler.run(mainModuleName); // Run compilation itself
-
-	if( config.compilerLoger ) {
-		debug config.compilerLoger(LogInfo(
-			"compileModule:\r\n" ~ compiler.toPrettyStr(),
-			LogInfoType.info,
-			__FUNCTION__, __FILE__, __LINE__
-		));
-	}
-
-	// Creating additional object that stores all neccessary info for simple usage
-	auto prog = new ExecutableProgramme(compiler.moduleObjects, mainModuleName, config.interpreterLoger);
-	prog.dirInterpreters = dirInterps;
-
-	return prog;
-}
-
+/++
 /// Simple method that can be used to compile source file and get executable
 ExecutableProgramme compileFile(string sourceFileName, IvyConfig config)
 {
@@ -270,50 +206,5 @@ ExecutableProgramme compileFile(string sourceFileName, IvyConfig config)
 
 	return compileModule(mainModuleName, config);
 }
++/
 
-/// Dump-simple in-memory cache for compiled programmes
-class ProgrammeCache(bool useCache = true)
-{
-private:
-	IvyConfig _config;
-
-	static if(useCache)
-	{
-		ExecutableProgramme[string] _progs;
-
-		import core.sync.mutex: Mutex;
-		Mutex _mutex;
-	}
-
-public:
-	this(IvyConfig config)
-	{
-		_config = config;
-		static if(useCache)
-		{
-			_mutex = new Mutex();
-		}
-	}
-
-	/// Generate programme object or get existing from cache (if cache enabled)
-	ExecutableProgramme getByModuleName(string moduleName)
-	{
-		static if(useCache)
-		{
-			if( moduleName !in _progs )
-			{
-				synchronized(_mutex)
-				{
-					if( moduleName !in _progs ) {
-						_progs[moduleName] = compileModule(moduleName, _config);
-					}
-				}
-			}
-			return _progs[moduleName];
-		}
-		else
-		{
-			return compileModule(moduleName, _config);
-		}
-	}
-}

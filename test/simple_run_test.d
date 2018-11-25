@@ -4,6 +4,7 @@ import std.stdio;
 import ivy;
 import ivy.common;
 
+/++
 void main()
 {
 	import std.path: getcwd, buildNormalizedPath;
@@ -27,3 +28,4 @@ void main()
 
 	writeln(result.toString());
 }
++/

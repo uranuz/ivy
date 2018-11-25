@@ -201,7 +201,7 @@ public:
 				// Add imported module symbol table as local symbol
 				_frameStack.back.add(new ModuleSymbol(
 					moduleNameExpr.name,
-					analyzeModuleSymbols(moduleNameExpr.name)
+					getModuleSymbols(moduleNameExpr.name)
 				));
 				break;
 			}
@@ -223,7 +223,7 @@ public:
 					symbolNames ~= symbolNameExpr.name;
 				}
 
-				SymbolTableFrame moduleTable = analyzeModuleSymbols(moduleNameExpr.name);
+				SymbolTableFrame moduleTable = getModuleSymbols(moduleNameExpr.name);
 
 				foreach( symbolName; symbolNames )
 				{
@@ -259,7 +259,7 @@ public:
 	void _visit(ICodeBlockStatement node) { _visit(cast(ICompoundStatement) node); }
 	void _visit(IMixedBlockStatement node) { _visit(cast(ICompoundStatement) node); }
 
-	SymbolTableFrame analyzeModuleSymbols(string moduleName)
+	private SymbolTableFrame _analyzeModuleSymbols(string moduleName)
 	{
 		import std.range: popBack, empty, back;
 		if( auto modFramePtr = moduleName in _moduleSymbols ) {
@@ -286,11 +286,70 @@ public:
 		}
 	}
 
-	SymbolTableFrame[string] getModuleSymbols() @property {
-		return _moduleSymbols;
+	SymbolTableFrame getModuleSymbols(string moduleName)
+	{
+		if( auto modPtr = moduleName in _moduleSymbols ) {
+			return *modPtr;
+		} else {
+			return _analyzeModuleSymbols(moduleName);
+		}
 	}
 
-	CompilerModuleRepository getModuleRepository() @property {
-		return _moduleRepo;
+	void enterModuleScope(string moduleName)
+	{
+		loger.write(`Enter method`);
+		if( SymbolTableFrame table = getModuleSymbols(moduleName) ) {
+			_frameStack ~= table;
+		} else {
+			loger.error(`Cannot enter module symbol table, because module "` ~ moduleName ~ `" not found!`);
+		}
+		loger.write(`Exit method`);
+	}
+
+	void enterScope(size_t sourceIndex)
+	{
+		import std.range: empty, back;
+		loger.internalAssert(!_frameStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty`);
+
+		SymbolTableFrame childFrame = _frameStack.back.getChildFrame(sourceIndex);
+		loger.internalAssert(childFrame, `Cannot enter child symbol table frame, because it's null`);
+
+		_frameStack ~= childFrame;
+	}
+
+	void exitScope()
+	{
+		import std.range: empty, popBack;
+		loger.internalAssert(!_frameStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!");
+
+		_frameStack.popBack();
+	}
+
+	Symbol symbolLookup(string name)
+	{
+		import std.range: empty, back;
+		loger.internalAssert(!_frameStack.empty, `Cannot look for symbol, because symbol table stack is empty`);
+		loger.internalAssert(_frameStack.back, `Cannot look for symbol, current symbol table frame is null`);
+
+		Symbol symb = _frameStack.back.lookup(name);
+		debug {
+			loger.write(`symbolLookup, _frameStack symbols:`);
+			foreach( lvl, table; _frameStack[] ) {
+				loger.write(`	symbols lvl`, lvl, `: `, table._symbols);
+				if( table._moduleFrame ) {
+					loger.write(`	module symbols lvl`, lvl, `: `, table._moduleFrame._symbols);
+				} else {
+					loger.write(`	module frame lvl`, lvl, ` is null`);
+				}
+			}
+		}
+
+		return symb;
+	}
+
+	void clearCache()
+	{
+		_moduleSymbols.clear();
+		_frameStack.length = 0;
 	}
 }

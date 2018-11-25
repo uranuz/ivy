@@ -8,20 +8,12 @@ import ivy.interpreter.data_node_types;
 import ivy.interpreter.execution_frame;
 import ivy.interpreter.exec_stack;
 import ivy.interpreter.common;
+import ivy.interpreter.iface: INativeDirectiveInterpreter;
+import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
+import ivy.interpreter.directive_factory: InterpreterDirectiveFactory;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyInterpreterDebug;
-
-interface INativeDirectiveInterpreter
-{
-	import ivy.interpreter.interpreter: Interpreter;
-	import ivy.compiler.symbol_table: Symbol;
-	void interpret(Interpreter interp);
-
-	DirAttrsBlock[] attrBlocks() @property;
-
-	Symbol compilerSymbol() @property;
-}
 
 import ivy.bytecode;
 
@@ -40,7 +32,9 @@ public:
 	ExecutionFrame[string] _moduleFrames;
 
 	// Storage for bytecode code and initial constant data for modules
-	ModuleObject[string] _moduleObjects;
+	ModuleObjectsCache _moduleObjCache;
+
+	InterpreterDirectiveFactory _directiveFactory;
 
 	ExecStack _stack;
 
@@ -50,18 +44,24 @@ public:
 	size_t _pk; // Programme counter
 	Instruction[] _codeRange; // Current code range we executing
 
-	this(ModuleObject[string] moduleObjects, string mainModuleName, IvyData dataDict, LogerMethod logerMethod = null)
-	{
+	this(
+		ModuleObjectsCache moduleObjCache,
+		InterpreterDirectiveFactory directiveFactory,
+		string mainModuleName,
+		IvyData dataDict,
+		LogerMethod logerMethod = null
+	) {
 		import std.range: back;
 
 		_logerMethod = logerMethod;
-		_moduleObjects = moduleObjects;
-		loger.internalAssert(mainModuleName in _moduleObjects, `Cannot get main module from module objects!`);
+		_moduleObjCache = moduleObjCache;
+		_directiveFactory = directiveFactory;
+		loger.internalAssert(moduleObjCache.get(mainModuleName), `Cannot get main module from module objects!`);
 
 		loger.write(`Passed dataDict: `, dataDict);
 
 		CallableObject rootCallableObj = new CallableObject(
-			"__main__", _moduleObjects[mainModuleName].mainCodeObject, CallableKind.Module
+			"__main__", moduleObjCache.get(mainModuleName).mainCodeObject, CallableKind.Module
 		);
 
 		IvyData globalDataDict;
@@ -74,6 +74,8 @@ public:
 		newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
 		this._stack.addStackBlock();
 		_moduleFrames[mainModuleName] = this._frameStack.back; // We need to add entry point module frame to storage manually
+
+		_addDirInterpreters(directiveFactory.interps);
 	}
 
 	private void _addNativeDirInterp(string name, INativeDirectiveInterpreter dirInterp)
@@ -85,7 +87,7 @@ public:
 	}
 
 	// Method used to set custom global directive interpreters
-	void addDirInterpreters(INativeDirectiveInterpreter[string] dirInterps)
+	void _addDirInterpreters(INativeDirectiveInterpreter[string] dirInterps)
 	{
 		foreach( name, dirInterp; dirInterps ) {
 			_addNativeDirInterp(name, dirInterp);
@@ -902,13 +904,12 @@ public:
 					string moduleName = this._stack.back.str;
 					this._stack.popBack();
 
-					loger.write(`ImportModule _moduleObjects: `, _moduleObjects);
-					loger.internalAssert(moduleName in _moduleObjects, "Cannot execute ImportModule instruction. No such module object: ", moduleName);
+					loger.internalAssert(_moduleObjCache.get(moduleName), "Cannot execute ImportModule instruction. No such module object: ", moduleName);
 
 					if( moduleName !in _moduleFrames )
 					{
 						// Run module here
-						ModuleObject modObject = _moduleObjects[moduleName];
+						ModuleObject modObject = _moduleObjCache.get(moduleName);
 						loger.internalAssert(modObject, `Cannot execute ImportModule instruction, because module object "`, moduleName,`" is null!` );
 						CodeObject codeObject = modObject.mainCodeObject;
 						loger.internalAssert(codeObject, `Cannot execute ImportModule instruction, because main code object for module "`, moduleName, `" is null!` );

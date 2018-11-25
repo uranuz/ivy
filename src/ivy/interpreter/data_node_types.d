@@ -3,7 +3,7 @@ module ivy.interpreter.data_node_types;
 import ivy.code_object: CodeObject;
 import ivy.directive_stuff: DirAttrsBlock, DirAttrKind;
 import ivy.interpreter.data_node: IvyNodeRange, IvyData, IvyDataType;
-import ivy.interpreter.interpreter: INativeDirectiveInterpreter;
+import ivy.interpreter.iface: INativeDirectiveInterpreter;
 
 enum CallableKind { ScopedDirective, NoscopeDirective, Module, Package }
 

@@ -13,8 +13,11 @@ import ivy.compiler.module_repository: CompilerModuleRepository;
 import ivy.interpreter.data_node;
 import ivy.compiler.def_analyze_mixin: DefAnalyzeMixin;
 import ivy.compiler.directive.factory: DirectiveCompilerFactory;
-import ivy.compiler.node_visit_mixin;
+import ivy.compiler.node_visit_mixin: NodeVisitMixin;
 import ivy.compiler.errors: IvyCompilerException;
+import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
+import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
+import ivy.interpreter.directive_factory: InterpreterDirectiveFactory;
 
 // If IvyTotalDebug is defined then enable compiler debug
 version(IvyTotalDebug) version = IvyCompilerDebug;
@@ -34,10 +37,13 @@ public:
 	mixin DefAnalyzeMixin;
 
 private:
+	// Storage or factory containing compilers for certain directives
 	DirectiveCompilerFactory _compilerFactory;
 
+	InterpreterDirectiveFactory _directiveFactory;
+
 	// Dictionary maps module name to it's root symbol table frame
-	SymbolTableFrame[string] _modulesSymbolTables;
+	public CompilerSymbolsCollector _symbolsCollector;
 
 	// Storage for global compiler's symbols (INativeDirectiveInterpreter's info for now)
 	SymbolTableFrame _globalSymbolTable;
@@ -45,13 +51,10 @@ private:
 	// Compiler's storage for parsed module ASTs
 	CompilerModuleRepository _moduleRepo;
 
-	// Dictionary with module objects that compiler produces
-	ModuleObject[string] _moduleObjects;
+	// Object implementing storage of compiled ModuleObject's
+	ModuleObjectsCache _moduleObjCache;
 
 	size_t[][ ubyte[16] ][string] _moduleConstHashes; // Mapping moduleName -> constHash -> constIndex (list)
-
-	// Current stack of symbol table frames
-	SymbolTableFrame[] _symbolTableStack;
 
 	// Current stack of code objects that compiler produces
 	CodeObject[] _codeObjStack;
@@ -66,15 +69,29 @@ private:
 public:
 	this(
 		CompilerModuleRepository moduleRepo,
-		SymbolTableFrame[string] symbolTables,
+		CompilerSymbolsCollector symbolsCollector,
 		DirectiveCompilerFactory compilerFactory,
+		InterpreterDirectiveFactory directiveFactory,
+		ModuleObjectsCache moduleObjCache,
 		LogerMethod logerMethod = null
 	) {
-		_compilerFactory = compilerFactory;
-		_logerMethod = logerMethod;
+		_logerMethod = logerMethod; // First of all set loger method in order to not miss any log messages
+
+		// Some internal checks goes here...
+		this.loger.internalAssert(moduleRepo, `Expected module repository`);
+		this.loger.internalAssert(symbolsCollector, `Expected symbols collector`);
+		this.loger.internalAssert(compilerFactory, `Expected compiler factory`);
+		this.loger.internalAssert(directiveFactory, `Expected directive factory`);
+		this.loger.internalAssert(moduleObjCache, `Expected module objects cache`);
+
 		_moduleRepo = moduleRepo;
-		_modulesSymbolTables = symbolTables;
+		_symbolsCollector = symbolsCollector;
+		_compilerFactory = compilerFactory;
+		_directiveFactory = directiveFactory;
+		_moduleObjCache = moduleObjCache;
+
 		_globalSymbolTable = new SymbolTableFrame(null, _logerMethod);
+		_addGlobalSymbols();
 	}
 
 	mixin NodeVisitMixin!();
@@ -110,55 +127,20 @@ public:
 		return LogerProxy(func, file, line, this);
 	}
 
-	void addGlobalSymbols(Symbol[] symbols)
+	private void _addGlobalSymbols()
 	{
-		foreach(symb; symbols) {
+		foreach(symb; _directiveFactory.symbols) {
 			_globalSymbolTable.add(symb);
 		}
 	}
 
-	void enterModuleScope(string moduleName)
-	{
-		loger.write(`Enter method`);
-		loger.write(`_modulesSymbolTables: `, _modulesSymbolTables);
-		if( auto table = moduleName in _modulesSymbolTables )
-		{
-			loger.internalAssert(*table, `Cannot enter module sybol table frame, because it is null`);
-			_symbolTableStack ~= *table;
-		}
-		else
-		{
-			loger.error(`Cannot enter module symbol table, because module "` ~ moduleName ~ `" not found!`);
-		}
-		loger.write(`Exit method`);
-	}
-
-	void enterScope(size_t sourceIndex)
-	{
-		import std.range: empty, back;
-		loger.internalAssert(!_symbolTableStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty`);
-
-		SymbolTableFrame childFrame = _symbolTableStack.back.getChildFrame(sourceIndex);
-		loger.internalAssert(childFrame, `Cannot enter child symbol table frame, because it's null`);
-
-		_symbolTableStack ~= childFrame;
-	}
-
-	void exitScope()
-	{
-		import std.range: empty, popBack;
-		loger.internalAssert(!_symbolTableStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!");
-
-		_symbolTableStack.popBack();
-	}
-
 	ModuleObject newModuleObject(string moduleName)
 	{
-		if( moduleName in _moduleObjects )
+		if( ModuleObject moduleObj = _moduleObjCache.get(moduleName) )
 			loger.error(`Cannot create new module object "` ~ moduleName ~ `", because it already exists!`);
 
 		ModuleObject newModObj = new ModuleObject(moduleName, moduleName);
-		_moduleObjects[moduleName] = newModObj;
+		_moduleObjCache.add(newModObj);
 		return newModObj;
 	}
 
@@ -244,8 +226,6 @@ public:
 		return newIndex;
 	}
 
-
-
 	ModuleObject currentModule() @property
 	{
 		import std.range: empty, back;
@@ -265,22 +245,7 @@ public:
 
 	Symbol symbolLookup(string name)
 	{
-		import std.range: empty, back;
-		loger.internalAssert(!_symbolTableStack.empty, `Cannot look for symbol, because symbol table stack is empty`);
-		loger.internalAssert(_symbolTableStack.back, `Cannot look for symbol, current symbol table frame is null`);
-
-		Symbol symb = _symbolTableStack.back.lookup(name);
-		debug {
-			loger.write(`symbolLookup, _symbolTableStack symbols:`);
-			foreach( lvl, table; _symbolTableStack[] ) {
-				loger.write(`	symbols lvl`, lvl, `: `, table._symbols);
-				if( table._moduleFrame ) {
-					loger.write(`	module symbols lvl`, lvl, `: `, table._moduleFrame._symbols);
-				} else {
-					loger.write(`	module frame lvl`, lvl, ` is null`);
-				}
-			}
-		}
+		Symbol symb = _symbolsCollector.symbolLookup(name);
 
 		if( symb ) {
 			return symb;
@@ -298,7 +263,10 @@ public:
 
 	ModuleObject getOrCompileModule(string moduleName)
 	{
-		if( moduleName !in _moduleObjects )
+		if( ModuleObject moduleObj = _moduleObjCache.get(moduleName) ) {
+			return moduleObj;
+		}
+		else
 		{
 			// Initiate module object compilation on demand
 			IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
@@ -307,7 +275,7 @@ public:
 			loger.write(`Entering new code object`);
 			enterNewCodeObject(null, newModuleObject(moduleName));
 			loger.write(`Entering module scope`);
-			enterModuleScope(moduleName);
+			_symbolsCollector.enterModuleScope(moduleName);
 			loger.write(`Starting compiling module AST`);
 			moduleNode.accept(this);
 			loger.write(`Finished compiling module AST`);
@@ -315,14 +283,12 @@ public:
 			scope(exit)
 			{
 				loger.write(`Exiting compiler scopes`);
-				this.exitScope();
+				_symbolsCollector.exitScope();
 				this.exitCodeObject();
 				loger.write(`Compiler scopes exited`);
 			}
 		}
-
-		loger.write(`Exiting method`);
-		return _moduleObjects[moduleName];
+		return _moduleObjCache.get(moduleName);
 	}
 
 
@@ -675,83 +641,30 @@ public:
 		}
 	}
 
-	ModuleObject[string] moduleObjects() @property {
-		return _moduleObjects;
-	}
-
 	// Runs main compiler phase starting from main module
-	void run(string mainModuleName)
+	void run(string moduleName)
 	{
 		// Add core directives set:
-		enterModuleScope(mainModuleName);
-		enterNewCodeObject(null, newModuleObject(mainModuleName));
-		_moduleRepo.getModuleTree(mainModuleName).accept(this);
+		_symbolsCollector.enterModuleScope(moduleName);
+		enterNewCodeObject(null, newModuleObject(moduleName));
+		_moduleRepo.getModuleTree(moduleName).accept(this);
+		_clearTemporaries();
 	}
 
-	string toPrettyStr()
+	void clearCache()
 	{
-		import std.conv;
-		import std.range: empty, back, take;
-		import std.algorithm: canFind;
+		// Clear dependency objects
+		_symbolsCollector.clearCache();
+		_moduleObjCache.clearCache();
 
-		string result;
-		static immutable OpCode[] instrsWhereArgRefsConst = [
-			OpCode.LoadConst,
-			OpCode.StoreName,
-			OpCode.StoreLocalName,
-			OpCode.StoreNameWithParents,
-			OpCode.LoadName
-		];
+		_clearTemporaries();
+	}
 
-		foreach( modName, modObj; _moduleObjects )
-		{
-			result ~= "\r\nMODULE " ~ modName ~ "\r\n";
-			result ~= "\r\nCONSTANTS\r\n";
-			foreach( i, con; modObj._consts ) {
-				result ~= i.text ~ "  " ~ con.toDebugString() ~ "\r\n";
-			}
-
-			result ~= "\r\nCODE\r\n";
-			foreach( i, con; modObj._consts )
-			{
-				if( con.type == IvyDataType.CodeObject )
-				{
-					if( !con.codeObject ) {
-						result ~= "\r\nCode object " ~ i.text ~ " is null\r\n";
-					}
-					else
-					{
-						result ~= "\r\nCode object " ~ i.text ~ "\r\n";
-						foreach( k, instr; con.codeObject._instrs )
-						{
-							string val;
-							if(
-								instr.arg < modObj._consts.length 
-								&& instrsWhereArgRefsConst.canFind(instr.opcode)
-							) {
-								enum limit = 50;
-								val = modObj._consts[instr.arg].toDebugString();
-								if( val.length >= limit ) {
-									val = val.take(limit).text ~ "...";
-								}
-								val = " (" ~ val ~ ")";
-							}
-							result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.arg.text ~ val ~ "\r\n";
-
-						}
-						result ~= "\r\nCode object source map(line, startAddr)\r\n";
-						foreach( mapItem; con.codeObject._sourceMap )
-						{
-							result ~= mapItem.line.text ~ "\t\t" ~ mapItem.startInstr.text ~ "\r\n";
-						}
-					}
-				}
-			}
-
-
-			result ~= "\r\nEND OF MODULE " ~ modName ~ "\r\n";
-		}
-
-		return result;
+	void _clearTemporaries()
+	{
+		_moduleRepo.clearCache();
+		_moduleConstHashes.clear();
+		_jumpTableStack.length = 0;
+		_codeObjStack.length = 0;
 	}
 }

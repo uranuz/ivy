@@ -6,6 +6,7 @@ import ivy.interpreter.interpreter;
 import ivy.interpreter.data_node;
 import ivy.interpreter.data_node_render: renderDataNode, DataRenderType;
 import ivy.interpreter.data_node_types: IntegerRange;
+import ivy.interpreter.iface: INativeDirectiveInterpreter;
 
 mixin template BaseNativeDirInterpreterImpl(string symbolName)
 {
@@ -23,7 +24,7 @@ mixin template BaseNativeDirInterpreterImpl(string symbolName)
 		return _attrBlocks;
 	}
 
-	override Symbol compilerSymbol() @property {
+	override Symbol symbol() @property {
 		return _symbol;
 	}
 }

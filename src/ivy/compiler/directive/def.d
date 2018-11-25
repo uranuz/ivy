@@ -102,13 +102,13 @@ class DefCompiler: IDirectiveCompiler
 							if( !res.attr.isNoscope )
 							{
 								// Compiler should enter frame of directive body, identified by index in source code
-								compiler.enterScope(bodyStatement.location.index);
+								compiler._symbolsCollector.enterScope(bodyStatement.location.index);
 							}
 
 							scope(exit)
 							{
 								if( !res.attr.isNoscope ) {
-									compiler.exitScope();
+									compiler._symbolsCollector.exitScope();
 								}
 							}
 

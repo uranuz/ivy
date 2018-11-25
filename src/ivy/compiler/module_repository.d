@@ -115,4 +115,15 @@ public:
 			return null;
 		}
 	}
+
+	/// Clears parsed tree when we no longer need it
+	void clearCache()
+	{
+		foreach( IvyNode node; _moduleTrees ) {
+			if( node ) {
+				node.destroy();
+			}
+		}
+		_moduleTrees.clear();
+	}
 }
