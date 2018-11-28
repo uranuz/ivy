@@ -1397,7 +1397,6 @@ public:
 			this._stack.popBack(); // Drop old result from stack
 		}
 
-		this._stack ~= callableNode;
 		size_t stackItemsCount = 1; // Pass callable at least
 
 		// Put params into stack
@@ -1449,6 +1448,8 @@ public:
 				default: break;
 			}
 		}
+		this._stack ~= callableNode;
+
 		this._pk = 0;
 		this._codeRange = [Instruction(OpCode.RunCallable, stackItemsCount)];
 		return this.execLoopImpl(2);
