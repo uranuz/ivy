@@ -1086,7 +1086,6 @@ return __mixinProto(Interpreter, {
 			this._stack.pop(); // Drop old result from stack
 		}
 
-		this._stack.push(callableNode);
 		var
 			stackItemsCount = 1, // Pass callable at least
 			attrBlocks = callableNode.callable.attrBlocks();
@@ -1146,6 +1145,9 @@ return __mixinProto(Interpreter, {
 				default: break;
 			}
 		}
+
+		this._stack.push(callableNode);
+
 		this._pk = 0;
 		this._codeRange = [Instruction(OpCode.RunCallable, stackItemsCount)];
 		return this.execLoopImpl(2);
