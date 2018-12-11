@@ -75,7 +75,7 @@ public:
 		this._stack.addStackBlock();
 		_moduleFrames[mainModuleName] = this._frameStack.back; // We need to add entry point module frame to storage manually
 
-		_addDirInterpreters(directiveFactory.interps);
+		this._addDirInterpreters(directiveFactory.interps);
 	}
 
 	private void _addNativeDirInterp(string name, INativeDirectiveInterpreter dirInterp)
@@ -90,7 +90,7 @@ public:
 	void _addDirInterpreters(INativeDirectiveInterpreter[string] dirInterps)
 	{
 		foreach( name, dirInterp; dirInterps ) {
-			_addNativeDirInterp(name, dirInterp);
+			this._addNativeDirInterp(name, dirInterp);
 		}
 	}
 

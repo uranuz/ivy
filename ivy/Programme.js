@@ -1,21 +1,27 @@
 define('ivy/Programme', [
 	'ivy/Interpreter'
 ], function(Interpreter) {
-	function Programme(moduleObjs, mainModuleName, dirInterps) {
-		this._moduleObjs = moduleObjs;
+	function Programme(moduleObjCache, directiveFactory, mainModuleName) {
+		this._moduleObjCache = moduleObjCache;
+		this._directiveFactory = directiveFactory;
 		this._mainModuleName = mainModuleName;
-		this._dirInterps = dirInterps || {};
 	};
 	return __mixinProto(Programme, {
-		run: function(mainModuleScope) {
-			mainModuleScope = mainModuleScope || {};
+		/// Run programme main module with arguments passed as mainModuleScope parameter
+		run: function(mainModuleScope, extraGlobals) {
+			return this.runSaveState(mainModuleScope, extraGlobals)._stack.back();
+		},
+
+		runSaveState: function(mainModuleScope, extraGlobals) {
 			var interp = new Interpreter(
-				this._moduleObjs,
+				this._moduleObjCache,
+				this._directiveFactory,
 				this._mainModuleName,
 				mainModuleScope
 			);
-			interp.addDirInterpreters(this._dirInterps);
-			return interp.execLoop();
+			interp.addExtraGlobals(extraGlobals);
+			interp.execLoop();
+			return interp;
 		}
 	});
 });

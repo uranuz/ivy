@@ -85,6 +85,8 @@ class CodeObject
 public:
 	this(string name, ModuleObject moduleObj)
 	{
+		assert(name.length > 0, `Expected code object name`);
+		assert(moduleObj !is null, `Expected module object`);
 		_name = name;
 		_moduleObj = moduleObj;
 	}

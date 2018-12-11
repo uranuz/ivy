@@ -144,16 +144,18 @@ public:
 		return newModObj;
 	}
 
-	size_t enterNewCodeObject(string name, ModuleObject moduleObj)
+	size_t enterNewModuleCodeObject(string moduleName)
 	{
-		import std.range: back;
-		_codeObjStack ~= new CodeObject(name, moduleObj);
+		import std.range: back, empty;
+		loger.internalAssert(!moduleName.empty, "Expected module name!");
+		_codeObjStack ~= new CodeObject(moduleName, newModuleObject(moduleName));
 		return this.addConst( IvyData(_codeObjStack.back) );
 	}
 
 	size_t enterNewCodeObject(string name)
 	{
-		import std.range: back;
+		import std.range: back, empty;
+		loger.internalAssert(!name.empty, "Expected code object name!");
 		_codeObjStack ~= new CodeObject(name, this.currentModule());
 		return this.addConst( IvyData(_codeObjStack.back) );
 	}
@@ -161,7 +163,7 @@ public:
 	void exitCodeObject()
 	{
 		import std.range: empty, popBack;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!" );
+		loger.internalAssert(!_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!");
 
 		_codeObjStack.popBack();
 	}
@@ -273,7 +275,7 @@ public:
 			loger.internalAssert(moduleNode, `Module node is null`);
 
 			loger.write(`Entering new code object`);
-			enterNewCodeObject(null, newModuleObject(moduleName));
+			enterNewModuleCodeObject(moduleName);
 			loger.write(`Entering module scope`);
 			_symbolsCollector.enterModuleScope(moduleName);
 			loger.write(`Starting compiling module AST`);
@@ -646,7 +648,7 @@ public:
 	{
 		// Add core directives set:
 		_symbolsCollector.enterModuleScope(moduleName);
-		enterNewCodeObject(null, newModuleObject(moduleName));
+		enterNewModuleCodeObject(moduleName);
 		_moduleRepo.getModuleTree(moduleName).accept(this);
 		_clearTemporaries();
 	}

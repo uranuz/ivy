@@ -13,6 +13,7 @@ class DefCompiler: IDirectiveCompiler
 	{
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
+		compiler.loger.internalAssert(defNameExpr.name.length > 0, `Directive definition name shouldn't be empty!`);
 
 		ICompoundStatement bodyStatement;
 		size_t stackItemsCount = 2; // CodeObject and it's name counted

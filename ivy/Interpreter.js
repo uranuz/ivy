@@ -27,21 +27,22 @@ define('ivy/Interpreter', [
 		FrameSearchMode = Consts.FrameSearchMode,
 		OpCode = Consts.OpCode,
 		DirAttrKind = Consts.DirAttrKind;
-function Interpreter(moduleObjs, mainModuleName, dataDict) {
+function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict) {
 	this._frameStack = [];
 	this._stack = new ExecStack();
-	this._moduleObjects = moduleObjs;
+	this._moduleObjCache = moduleObjCache;
+	this._directiveFactory = directiveFactory;
 	this._pk = 0;
 	this._codeRange = [];
 	
-	if( !this._moduleObjects.hasOwnProperty(mainModuleName) ) {
+	if( !this._moduleObjCache.get(mainModuleName) ) {
 		this.rtError('Unable to get main module object');
 	}
 	
 	var
 		rootCallableObj = new CallableObject(
 			'__main__',
-			this._moduleObjects[mainModuleName].mainCodeObject()
+			this._moduleObjCache.get(mainModuleName).mainCodeObject()
 		),
 		globalDataDict = {
 			'__scopeName__': '__global__'
@@ -52,6 +53,8 @@ function Interpreter(moduleObjs, mainModuleName, dataDict) {
 	dataDict.__scopeName__ = '__main__'; // Allocating a dict if it's not
 	this._moduleFrames[mainModuleName] = this.newFrame(rootCallableObj, null, dataDict, false);
 	this._stack.addStackBlock();
+
+	this._addDirInterpreters(directiveFactory.interps());
 }
 
 return __mixinProto(Interpreter, {
@@ -76,17 +79,20 @@ return __mixinProto(Interpreter, {
 		for( this._pk = 0; this._pk <= this._codeRange.length; ) {
 			if( this._pk >= this._codeRange.length ) {
 				// Ended with this code object
-				var result = this._stack.pop();
-
-				this.removeFrame(); // Exit out of this frame
-				if( this._frameStack.length === 0 ) {
-					return result; // If there is no frames left - then we finished
+				loger.internalAssert(this._stack.getLength() === 1, 'Frame stack should contain 1 item now!');
+				if( this._frameStack.length === exitFrames ) {
+					// If there is no frames left - then we finished
+					return this._stack.back();
 				}
+				var result = this._stack.pop();; // Drop result
+				this.removeFrame(); // Exit out of this frame
+
 				var returnPk = this._stack.pop();
 				loger.internalAssert(
 					iu.getDataNodeType(returnPk) === IvyDataType.Integer,
 					'Expected integer as instruction pointer'
 				);
+
 				this._pk = returnPk;
 				// Set old instruction range back
 				var oldCodeObj = this.getCodeObject();
@@ -636,10 +642,10 @@ return __mixinProto(Interpreter, {
 						);
 
 						// If frame stack contains last frame - it means that we nave done with programme
-						if( this._frameStack.length == exitFrames ) {
+						if( this._frameStack.length === exitFrames ) {
 							return this._stack.back();
 						}
-						var result = this._stack.pop();
+						var result = this._stack.pop(); // Drop result
 						this.removeFrame(); // Drop frame from stack after end of execution
 						this._stack.push(result); // Get result back
 					}
@@ -654,14 +660,14 @@ return __mixinProto(Interpreter, {
 						this.rtError('Expected String as module name');
 					}
 					
-					if( !this._moduleObjects.hasOwnProperty(moduleName) ) {
+					if( !this._moduleObjCache.get(moduleName) ) {
 						this.rtError('Failed to get module with name: ' + moduleName);
 					}
 
 					if( !this._moduleFrames.hasOwnProperty(moduleName) ) {
 						// Run module here
 						var
-							modObject = this._moduleObjects[moduleName],
+							modObject = this._moduleObjCache.get(moduleName),
 							codeObject = modObject.mainCodeObject(),
 							callableObj = new CallableObject(moduleName, codeObject),
 							dataDict = {
@@ -1047,7 +1053,7 @@ return __mixinProto(Interpreter, {
 	},
 
 	// Method used to set custom global directive interpreters
-	addDirInterpreters: function(dirInterps) {
+	_addDirInterpreters: function(dirInterps) {
 		for( var name in dirInterps ) {
 			this._addNativeDirInterp(name, dirInterps[name]);
 		}
@@ -1151,6 +1157,15 @@ return __mixinProto(Interpreter, {
 		this._pk = 0;
 		this._codeRange = [Instruction(OpCode.RunCallable, stackItemsCount)];
 		return this.execLoopImpl(2);
+	},
+
+	// Method used to add extra global data into interpreter
+	// Consider not to bloat it to much ;)
+	addExtraGlobals: function(extraGlobals) {
+		for( var name in extraGlobals ) {
+			// Take a copy of it just like with consts
+			this._globalFrame.setValue(name, extraGlobals[name]);
+		}
 	}
 });
 }); // define

@@ -83,7 +83,7 @@ iu = {
 				var newArr = [];
 				newArr.length = val.length; // Preallocate
 				for( var i = 0; i < val.length; ++i ) {
-					newArr[i] = val[i];
+					newArr[i] = this.deeperCopy(val[i]);
 				}
 				return newArr;
 			}
