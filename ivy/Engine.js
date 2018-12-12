@@ -1,14 +1,13 @@
 define('ivy/Engine', [
-	'ivy/ModuleObjectsCache',
+	'ivy/RemoteModuleLoader',
 	'ivy/DirectiveFactory',
 	'ivy/Programme'
 ], function(
-	ModuleObjectsCache,
+	RemoteModuleLoader,
 	DirectiveFactory,
 	ExecutableProgramme
 ) {
 	function Engine(ivyConfig, codeLoader) {
-		this._moduleObjCache = null;
 		this._config = ivyConfig;
 
 		// Instance of class that is used to load compiled programme
@@ -26,8 +25,6 @@ define('ivy/Engine', [
 			if( this._config.directiveFactory == null ) {
 				this._config.directiveFactory = DirectiveFactory.makeStandardInterpreterDirFactory();
 			}
-
-			this._moduleObjCache = new ModuleObjectsCache();
 		},
 
 		/// Generate programme object or get existing from cache (if cache enabled)
@@ -44,13 +41,8 @@ define('ivy/Engine', [
 				this.clearCache();
 			}
 
-			if( this._moduleObjCache.get(moduleName) == null ) {
-				this._codeLoader.load(moduleName, function(moduleObjs) {
-					for( var key in moduleObjs ) {
-						if( moduleObjs.hasOwnProperty(key) ) {
-							this._moduleObjCache.add(moduleObjs[key]);
-						}
-					}
+			if( this._codeLoader.get(moduleName) == null ) {
+				this._codeLoader.load(moduleName, function() {
 					callback(this._makeProgramme(moduleName));
 				}.bind(this));
 			} else {
@@ -60,14 +52,14 @@ define('ivy/Engine', [
 
 		_makeProgramme: function(moduleName) {
 			return new ExecutableProgramme(
-				this._moduleObjCache,
+				this._codeLoader,
 				this._config.directiveFactory,
 				moduleName
 			);
 		},
 
 		clearCache: function() {
-			this._moduleObjCache.clearCache();
+			this._codeLoader.clearCache();
 		}
 	});
 });

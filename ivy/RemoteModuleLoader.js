@@ -1,4 +1,4 @@
-define('ivy/RemoteCodeLoader', [
+define('ivy/RemoteModuleLoader', [
 	'ivy/ModuleObject',
 	'ivy/CodeObject',
 	'ivy/Consts'
@@ -7,16 +7,35 @@ define('ivy/RemoteCodeLoader', [
 	CodeObject,
 	Consts
 ) {
-function RemoteCodeLoader(endpoint) {
+function RemoteModuleLoader(endpoint) {
 	if( !endpoint ) {
 		throw Error('Endpoint URL required to load compiled templates!');
 	}
 	this._endpoint = endpoint;
 	this._moduleObjects = {};
-	this._mainModuleName = null;
 };
 var IvyDataType = Consts.IvyDataType;
-return __mixinProto(RemoteCodeLoader, {
+return __mixinProto(RemoteModuleLoader, {
+	get: function(moduleName) {
+		return this._moduleObjects[moduleName];
+	},
+
+	add: function(moduleObj) {
+		this._moduleObjects[moduleObj._name] = moduleObj;
+	},
+
+	clearCache: function() {
+		for( var key in this._moduleObjects ) {
+			if( this._moduleObjects.hasOwnProperty(key) ) {
+				delete this._moduleObjects[key];
+			}
+		}
+	},
+
+	moduleObjects: function() {
+		return this._moduleObjects;
+	},
+
 	load: function(moduleName, callback) {
 		var self = this;
 		$.ajax(this._endpoint + '?moduleName=' + moduleName + '&generalTemplate=no', {
@@ -31,10 +50,11 @@ return __mixinProto(RemoteCodeLoader, {
 	},
 	parseModules: function(json) {
 		var moduleObjects = json.moduleObjects;
-		this._mainModuleName = json.mainModuleName;
-
-		for(var modName in moduleObjects) {
-			if( !moduleObjects.hasOwnProperty(modName) ) continue;
+		for( var modName in moduleObjects ) {
+			if( !moduleObjects.hasOwnProperty(modName) || this._moduleObjects.hasOwnProperty(modName) ) {
+				// Skip build-in properties. Do not recreate the same modules again
+				continue;
+			}
 			var
 				jMod = moduleObjects[modName],
 				consts = jMod.consts,
