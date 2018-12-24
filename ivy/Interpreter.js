@@ -653,6 +653,79 @@ return __mixinProto(Interpreter, {
 					break;
 				}
 
+				case Call: {
+					var args = this._stack.pop(), argsType = iu.getDataNodeType(args);
+					loger.internalAssert(
+						[IvyDataType.AssocArray, IvyDataType.Undef, IvyDataType.Null].indexOf(argsType) > -1,
+						`Expected assoc array, undef or null as arguments operand`
+					);
+
+					var callableObj = this._stack.pop();
+					loger.internalAssert(
+						iu.getDataNodeType(callableObj) === IvyDataType.Callable,
+						`Expected Callable operand`
+					);
+
+					var
+						attrBlocks = callableObj.attrBlocks(),
+						dataDict = {
+							"__scopeName__": callableObj._name
+						}; // Allocating scope
+
+					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
+
+					// Put params into stack
+					for( var i = 0; i < attrBlocks.length; ++i )
+					{
+						var attrBlock = attrBlocks[i];
+						switch( attrBlock.kind )
+						{
+							case DirAttrKind.NamedAttr:
+							{
+								var namedAttrs = attrBlock.namedAttrs;
+								if( iu.getDataNodeType(args) == IvyDataType.AssocArray )
+								for( var attrName in namedAttrs )
+								{
+									if( args.hasOwnProperty(attrName) ) {
+										this.setLocalValue(attrName, args[attrName]);
+									} else {
+										this.setLocalValue(attrName, iu.deeperCopy(namedAttr.defaultValue));
+									}
+								}
+								break;
+							}
+							case DirAttrKind.ExprAttr:
+							{
+								var exprAttrs = attrBlock.exprAttrs;
+								if( iu.getDataNodeType(args) === IvyDataType.AssocArray )
+								for( var j = 0; j < exprAttrs; ++j )
+								{
+									var exprAttr = exprAttrs[j];
+									if( args.hasOwnProperty(exprAttr.name) ) {
+										this.setLocalValue(attrName, args[exprAttr.name]);
+									} else {
+										this.setLocalValue(attrName, iu.deeperCopy(exprAttr.defaultValue));
+									}
+								}
+								break;
+							}
+							default: break;
+						}
+					}
+
+					if( callableObj._codeObj )
+					{
+						this._stack.push(this._pk+1); // Put next instruction index on the stack to return at
+						this._stack.addStackBlock();
+						this._codeRange = callableObj._codeObj._instrs; // Set new instruction range to execute
+						this._pk = 0;
+						continue; // Skip _pk increment
+					} else {
+						loger.internalAssert(false, `Unimplemented yet, sorry...`);
+					}
+					break;
+				}
+
 				// Import another module
 				case ImportModule: {
 					var moduleName = this._stack.pop();
@@ -1091,71 +1164,11 @@ return __mixinProto(Interpreter, {
 		if( this._stack.getLength() === 1 ) {
 			this._stack.pop(); // Drop old result from stack
 		}
-
-		var
-			stackItemsCount = 1, // Pass callable at least
-			attrBlocks = callableNode.callable.attrBlocks();
-
-		// Put params into stack
-		for( var i = 0; i < attrBlocks.length; ++i )
-		{
-			var attrBlock = attrBlocks[i];
-			switch( attrBlock.kind )
-			{
-				case DirAttrKind.ExprAttr:
-				{
-					var argCount = 0;
-					if( iu.getDataNodeType(args) === IvyDataType.AssocArray )
-					{
-						for( var j = 0; j < attrBlock.exprAttrs; ++j )
-						{
-							var exprAttr = attrBlock.exprAttrs[j];
-							if( args.hasOwnProperty(exprAttr.name) ) {
-								this._stack.push(args[exprAttr.name]); ++stackItemsCount; ++argCount;
-							}
-						}
-					}
-
-					// Add instruction to load value that consists of number of positional arguments in block and type of block
-					var blockHeader = ( argCount << Consts.stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
-					this._stack.push(blockHeader);
-					++stackItemsCount; // We should count args block header
-					break;
-				}
-				case DirAttrKind.NamedAttr:
-				{
-					var argCount = 0;
-					if( iu.getDataNodeType(args) == IvyDataType.AssocArray )
-					{
-						for( var attrName in attrBlock.namedAttrs )
-						{
-							if( !attrBlock.namedAttrs.hasOwnProperty(attrName) ) {
-								continue;
-							}
-							var namedAttr = attrBlock.namedAttrs[attrName];
-							if( args.hasOwnProperty(attrName) )
-							{
-								this._stack.push(attrName); ++stackItemsCount;
-								this._stack.push(args[attrName]); ++stackItemsCount;
-								++argCount;
-							}
-						}
-					}
-
-					// Add instruction to load value that consists of number of positional arguments in block and type of block
-					var blockHeader = ( argCount << Consts.stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
-					this._stack.push(blockHeader);
-					++stackItemsCount; // We should count args block header
-					break;
-				}
-				default: break;
-			}
-		}
-
 		this._stack.push(callableNode);
+		this._stack.push(args);
 
 		this._pk = 0;
-		this._codeRange = [Instruction(OpCode.RunCallable, stackItemsCount)];
+		this._codeRange = [Instruction(OpCode.Call)];
 		return this.execLoopImpl(2);
 	},
 

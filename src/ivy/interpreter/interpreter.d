@@ -1331,48 +1331,40 @@ public:
 					loger.internalAssert(callableObj, `Callable node is null`);
 
 					IvyData dataDict = ["__scopeName__": callableObj._name]; // Allocating scope at the same time
-					newFrame(callableObj, _getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
+					newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
 
 					// Put params into stack
 					foreach( attrBlock; callableObj.attrBlocks )
 					{
 						switch( attrBlock.kind )
 						{
+							case DirAttrKind.NamedAttr:
+							{
+								if( args.type == IvyDataType.AssocArray )
+								foreach( attrName, namedAttr; attrBlock.namedAttrs )
+								{
+									if( auto valuePtr = attrName in args ) {
+										this.setLocalValue(attrName, *valuePtr);
+									} else {
+										// Do deep copy of default value
+										this.setLocalValue(attrName, deeperCopy(namedAttr.defaultValue));
+									}
+								}
+								break;
+							}
 							case DirAttrKind.ExprAttr:
 							{
 								if( args.type == IvyDataType.AssocArray )
 								foreach( j, exprAttr; attrBlock.exprAttrs )
 								{
-									if( auto valuePtr = exprAttr.name in args.assocArray ) {
+									if( auto valuePtr = exprAttr.name in args ) {
 										this.setLocalValue(exprAttr.name, *valuePtr);
+									} else {
+										this.setLocalValue(exprAttr.name, deeperCopy(exprAttr.defaultValue));
 									}
 								}
 
 								// TODO: Implement default values for positional argument
-								break;
-							}
-							case DirAttrKind.NamedAttr:
-							{
-								bool[string] passedArgs;
-								if( args.type == IvyDataType.AssocArray )
-								foreach( attrName, namedAttr; attrBlock.namedAttrs )
-								{
-									if( auto valuePtr = attrName in args.assocArray )
-									{
-										loger.internalAssert(attrName !in passedArgs, "Duplicate named argument detected!");
-										this.setLocalValue(attrName, *valuePtr);
-										passedArgs[attrName] = true;
-									}
-								}
-
-								foreach( attrName, namedAttr; attrBlock.namedAttrs )
-								{
-									if( attrName in passedArgs ) {
-										continue; // Attribute already passes to directive
-									}
-									// Do deep copy of default value
-									this.setLocalValue(attrName, deeperCopy(namedAttr.defaultValue));
-								}
 								break;
 							}
 							default: break;
@@ -1384,11 +1376,12 @@ public:
 						this._stack.addStackBlock();
 						this._codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
 						this._pk = 0;
+						continue execution_loop; // Skip _pk increment
 					} else {
 						loger.internalAssert(false, `Unimplemented yet, sorry...`);
 					}
 
-					continue execution_loop; // Skip _pk increment
+					break;
 				}
 
 				case OpCode.MakeArray:
