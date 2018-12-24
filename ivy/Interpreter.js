@@ -686,6 +686,7 @@ return __mixinProto(Interpreter, {
 								if( iu.getDataNodeType(args) == IvyDataType.AssocArray )
 								for( var attrName in namedAttrs )
 								{
+									var namedAttr = namedAttrs[attrName];
 									if( args.hasOwnProperty(attrName) ) {
 										this.setLocalValue(attrName, args[attrName]);
 									} else {
