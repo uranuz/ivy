@@ -1206,8 +1206,7 @@ public:
 					loger.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
 
 					loger.write("RunCallable creating execution frame...");
-					IvyData dataDict;
-					dataDict["__scopeName__"] = callableObj._name; // Allocating scope
+					IvyData dataDict = ["__scopeName__": callableObj._name]; // Allocating scope at the same time
 					newFrame(callableObj, _getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
@@ -1316,6 +1315,82 @@ public:
 					break;
 				}
 
+				case OpCode.Call: {
+					import std.algorithm: canFind;
+					IvyData args = this._stack.popBack();
+					loger.internalAssert(
+						[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].canFind(args.type),
+						`Expected assoc array with arguments, or undef, or null`);
+
+					IvyData callableNode = this._stack.popBack();
+					loger.internalAssert(
+						callableNode.type == IvyDataType.Callable,
+						`Expected callable in order to be called. Do you mind?`);
+
+					CallableObject callableObj = callableNode.callable;
+					loger.internalAssert(callableObj, `Callable node is null`);
+
+					IvyData dataDict = ["__scopeName__": callableObj._name]; // Allocating scope at the same time
+					newFrame(callableObj, _getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
+
+					// Put params into stack
+					foreach( attrBlock; callableObj.attrBlocks )
+					{
+						switch( attrBlock.kind )
+						{
+							case DirAttrKind.ExprAttr:
+							{
+								if( args.type == IvyDataType.AssocArray )
+								foreach( j, exprAttr; attrBlock.exprAttrs )
+								{
+									if( auto valuePtr = exprAttr.name in args.assocArray ) {
+										this.setLocalValue(exprAttr.name, *valuePtr);
+									}
+								}
+
+								// TODO: Implement default values for positional argument
+								break;
+							}
+							case DirAttrKind.NamedAttr:
+							{
+								bool[string] passedArgs;
+								if( args.type == IvyDataType.AssocArray )
+								foreach( attrName, namedAttr; attrBlock.namedAttrs )
+								{
+									if( auto valuePtr = attrName in args.assocArray )
+									{
+										loger.internalAssert(attrName !in passedArgs, "Duplicate named argument detected!");
+										this.setLocalValue(attrName, *valuePtr);
+										passedArgs[attrName] = true;
+									}
+								}
+
+								foreach( attrName, namedAttr; attrBlock.namedAttrs )
+								{
+									if( attrName in passedArgs ) {
+										continue; // Attribute already passes to directive
+									}
+									// Do deep copy of default value
+									this.setLocalValue(attrName, deeperCopy(namedAttr.defaultValue));
+								}
+								break;
+							}
+							default: break;
+						}
+					}
+
+					if( callableObj._codeObj ) {
+						this._stack ~= IvyData(this._pk+1); // Put next instruction index on the stack to return at
+						this._stack.addStackBlock();
+						this._codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
+						this._pk = 0;
+					} else {
+						loger.internalAssert(false, `Unimplemented yet, sorry...`);
+					}
+
+					continue execution_loop; // Skip _pk increment
+				}
+
 				case OpCode.MakeArray:
 				{
 					size_t arrayLen = instr.arg;
@@ -1396,62 +1471,12 @@ public:
 		if( this._stack.length == 1 ) {
 			this._stack.popBack(); // Drop old result from stack
 		}
-
-		size_t stackItemsCount = 1; // Pass callable at least
-
-		// Put params into stack
-		foreach( attrBlock; callableNode.callable.attrBlocks )
-		{
-			switch( attrBlock.kind )
-			{
-				case DirAttrKind.ExprAttr:
-				{
-					size_t argCount = 0;
-					if( args.type == IvyDataType.AssocArray )
-					{
-						foreach( exprAttr; attrBlock.exprAttrs )
-						{
-							if( auto valuePtr = exprAttr.name in args.assocArray ) {
-								this._stack ~= *valuePtr; ++stackItemsCount; ++argCount;
-							}
-						}
-					}
-
-					// Add instruction to load value that consists of number of positional arguments in block and type of block
-					size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
-					this._stack ~= IvyData(blockHeader);
-					++stackItemsCount; // We should count args block header
-					break;
-				}
-				case DirAttrKind.NamedAttr:
-				{
-					size_t argCount = 0;
-					if( args.type == IvyDataType.AssocArray )
-					{
-						foreach( attrName, namedAttr; attrBlock.namedAttrs )
-						{
-							if( auto valuePtr = attrName in args.assocArray )
-							{
-								this._stack ~= IvyData(attrName); ++stackItemsCount;
-								this._stack ~= *valuePtr; ++stackItemsCount;
-								++argCount;
-							}
-						}
-					}
-
-					// Add instruction to load value that consists of number of positional arguments in block and type of block
-					size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
-					this._stack ~= IvyData(blockHeader);
-					++stackItemsCount; // We should count args block header
-					break;
-				}
-				default: break;
-			}
-		}
 		this._stack ~= callableNode;
+		this._stack ~= args;
 
 		this._pk = 0;
-		this._codeRange = [Instruction(OpCode.RunCallable, stackItemsCount)];
+		this._codeRange = [Instruction(OpCode.Call)];
+
 		return this.execLoopImpl(2);
 	}
 }

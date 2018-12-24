@@ -49,6 +49,7 @@ enum OpCode: ubyte {
 	// Preparing and calling directives
 	LoadDirective,
 	RunCallable,
+	Call,
 
 	// Import another module
 	ImportModule,

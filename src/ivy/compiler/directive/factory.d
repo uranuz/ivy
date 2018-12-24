@@ -27,6 +27,7 @@ auto makeStandartDirCompilerFactory()
 	auto factory = new DirectiveCompilerFactory;
 	factory.set(`at`, new AtCompiler);
 	factory.set(`break`, new BreakCompiler);
+	factory.set(`call`, new CallCompiler);
 	factory.set(`continue`, new ContinueCompiler);
 	factory.set(`def`, new DefCompiler);
 	factory.set(`expr`, new ExprCompiler);
