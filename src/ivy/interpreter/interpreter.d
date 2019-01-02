@@ -10,7 +10,7 @@ import ivy.interpreter.exec_stack;
 import ivy.interpreter.common;
 import ivy.interpreter.iface: INativeDirectiveInterpreter;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-import ivy.interpreter.directive_factory: InterpreterDirectiveFactory;
+import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyInterpreterDebug;

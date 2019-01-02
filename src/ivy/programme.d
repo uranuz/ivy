@@ -6,12 +6,12 @@ import ivy.compiler.compiler;
 import ivy.compiler.symbol_collector;
 import ivy.compiler.module_repository;
 import ivy.compiler.iface: IDirectiveCompiler;
-import ivy.compiler.directive.factory: makeStandartDirCompilerFactory;
+import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
 import ivy.interpreter.data_node;
 import ivy.interpreter.interpreter;
-import ivy.interpreter.directives;
+import ivy.interpreter.directive;
 import ivy.interpreter.iface: INativeDirectiveInterpreter;
-import ivy.interpreter.directive_factory: InterpreterDirectiveFactory;
+import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 import ivy.engine: IvyEngine;
 

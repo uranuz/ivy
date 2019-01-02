@@ -1,10 +1,10 @@
 define('ivy/Engine', [
 	'ivy/RemoteModuleLoader',
-	'ivy/DirectiveFactory',
+	'ivy/directive/StandardFactory',
 	'ivy/Programme'
 ], function(
 	RemoteModuleLoader,
-	DirectiveFactory,
+	StandardFactory,
 	ExecutableProgramme
 ) {
 	function Engine(ivyConfig, codeLoader) {
@@ -23,7 +23,7 @@ define('ivy/Engine', [
 	return __mixinProto(Engine, {
 		_initObjects: function() {
 			if( this._config.directiveFactory == null ) {
-				this._config.directiveFactory = DirectiveFactory.makeStandardInterpreterDirFactory();
+				this._config.directiveFactory = StandardFactory();
 			}
 		},
 

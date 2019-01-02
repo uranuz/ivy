@@ -17,7 +17,7 @@ import ivy.compiler.node_visit_mixin: NodeVisitMixin;
 import ivy.compiler.errors: IvyCompilerException;
 import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-import ivy.interpreter.directive_factory: InterpreterDirectiveFactory;
+import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 
 // If IvyTotalDebug is defined then enable compiler debug
 version(IvyTotalDebug) version = IvyCompilerDebug;

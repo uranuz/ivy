@@ -1,7 +1,7 @@
 module ivy.engine;
 
-import ivy.compiler.directive.factory: makeStandartDirCompilerFactory;
-import ivy.interpreter.directive_factory: makeStandardInterpreterDirFactory;
+import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
+import ivy.interpreter.directive.standard_factory: makeStandardInterpreterDirFactory;
 import ivy.engine_config: IvyConfig;
 import ivy.compiler.module_repository: CompilerModuleRepository;
 import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
@@ -36,7 +36,7 @@ public:
 	void _initObjects()
 	{
 		if( _config.compilerFactory is null ) {
-			_config.compilerFactory = makeStandartDirCompilerFactory();
+			_config.compilerFactory = makeStandardDirCompilerFactory();
 		}
 		if( _config.directiveFactory is null ) {
 			_config.directiveFactory = makeStandardInterpreterDirFactory();
