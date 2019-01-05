@@ -7,6 +7,7 @@ auto makeStandardDirCompilerFactory()
 	
 	auto factory = new DirectiveCompilerFactory;
 	factory.set(`at`, new AtCompiler);
+	factory.set(`await`, new AwaitCompiler);
 	factory.set(`break`, new BreakCompiler);
 	factory.set(`call`, new CallCompiler);
 	factory.set(`continue`, new ContinueCompiler);

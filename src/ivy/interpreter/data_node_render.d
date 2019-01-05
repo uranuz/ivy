@@ -196,5 +196,8 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 		case DataNodeRange:
 			outRange._writeEscapedString!renderType("<data node range>");
 			break;
+		case AsyncResult:
+			outRange._writeEscapedString!renderType("<async result>");
+			break;
 	}
 }

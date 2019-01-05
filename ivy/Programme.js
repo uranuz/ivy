@@ -1,6 +1,7 @@
 define('ivy/Programme', [
-	'ivy/Interpreter'
-], function(Interpreter) {
+	'ivy/Interpreter',
+	'ivy/AsyncResult',
+], function(Interpreter, AsyncResult) {
 	function Programme(moduleObjCache, directiveFactory, mainModuleName) {
 		this._moduleObjCache = moduleObjCache;
 		this._directiveFactory = directiveFactory;
@@ -9,19 +10,23 @@ define('ivy/Programme', [
 	return __mixinProto(Programme, {
 		/// Run programme main module with arguments passed as mainModuleScope parameter
 		run: function(mainModuleScope, extraGlobals) {
-			return this.runSaveState(mainModuleScope, extraGlobals)._stack.back();
+			return this.runSaveState(mainModuleScope, extraGlobals).asyncResult;
 		},
 
 		runSaveState: function(mainModuleScope, extraGlobals) {
-			var interp = new Interpreter(
-				this._moduleObjCache,
-				this._directiveFactory,
-				this._mainModuleName,
-				mainModuleScope
-			);
+			var
+				fResult = new AsyncResult(),
+				interp = new Interpreter(
+					this._moduleObjCache,
+					this._directiveFactory,
+					this._mainModuleName,
+					mainModuleScope
+				);
 			interp.addExtraGlobals(extraGlobals);
-			interp.execLoop();
-			return interp;
+			return {
+				interp: interp,
+				asyncResult: interp.execLoop()
+			};
 		}
 	});
 });

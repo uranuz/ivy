@@ -50,6 +50,7 @@ enum OpCode: ubyte {
 	LoadDirective,
 	RunCallable,
 	Call,
+	Await,
 
 	// Import another module
 	ImportModule,

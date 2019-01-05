@@ -4,6 +4,7 @@ import ivy.common: IvyException;
 import ivy.code_object: CodeObject;
 import ivy.interpreter.data_node_types: CallableObject;
 import ivy.interpreter.data_node_render: renderDataNode, DataRenderType;
+import ivy.interpreter.async_result: AsyncResult;
 
 interface IvyNodeRange
 {
@@ -49,7 +50,8 @@ enum IvyDataType: ubyte {
 	CodeObject,
 	Callable,
 	ExecutionFrame,
-	DataNodeRange
+	DataNodeRange,
+	AsyncResult
 }
 
 enum NodeEscapeState: ubyte {
@@ -87,6 +89,7 @@ struct TIvyData(S)
 			CallableObject callable;
 			ExecutionFrame execFrame;
 			IvyNodeRange dataRange;
+			AsyncResult asyncResult;
 		}
 	}
 
@@ -216,6 +219,16 @@ struct TIvyData(S)
 	}
 
 	void dataRange(IvyNodeRange val) @property {
+		assign(val);
+	}
+
+	AsyncResult asyncResult() @property
+	{
+		enforce!DataNodeException( type == IvyDataType.AsyncResult, "IvyData is not an async result");
+		return storage.asyncResult;
+	}
+
+	void asyncResult(AsyncResult val) @property {
 		assign(val);
 	}
 
@@ -354,6 +367,11 @@ struct TIvyData(S)
 			typeTag = IvyDataType.DataNodeRange;
 			storage.dataRange = arg;
 		}
+		else static if( is( T : AsyncResult ) )
+		{
+			typeTag = IvyDataType.AsyncResult;
+			storage.asyncResult = arg;
+		}
 		else static if(is(T : MIvyData))
 		{
 			typeTag = arg.type;
@@ -372,6 +390,7 @@ struct TIvyData(S)
 				case IvyDataType.Callable: storage.callable = arg.callable; break;
 				case IvyDataType.ExecutionFrame: storage.execFrame = arg.execFrame; break;
 				case IvyDataType.DataNodeRange: storage.dataRange = arg.dataRange; break;
+				case IvyDataType.AsyncResult: storage.asyncResult = arg.asyncResult; break;
 			}
 		}
 		else
@@ -609,5 +628,7 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 			assert( false, `Getting of deeper copy for execution frame is not implemented for now` );
 		case DataNodeRange:
 			assert( false, `Getting of deeper copy for data node range is not implemented for now` );
+		case AsyncResult:
+			assert( false, `Getting of deeper copy for async result is not implemented for now` );
 	}
 }

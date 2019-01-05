@@ -14,7 +14,8 @@ var Consts = {
 		'CodeObject',
 		'Callable',
 		'ExecutionFrame',
-		'DataNodeRange'
+		'DataNodeRange',
+		'AsyncResult'
 	],
 	OpCodeItems: [
 		'InvalidCode', // Used to check if code of operation was not properly set
@@ -65,6 +66,7 @@ var Consts = {
 		'LoadDirective',
 		'RunCallable',
 		'Call',
+		'Await',
 
 		// Import another module
 		'ImportModule',
@@ -113,6 +115,9 @@ var Consts = {
 	stackBlockHeaderTypeMask: 0b111,
 	NodeEscapeStateItems: [
 		'Init', 'Safe', 'Unsafe'
+	],
+	AsyncResultStateItems: [
+		'Init', 'Pending', 'Success', 'Error'
 	]
 },
 EnumConsts = [
@@ -121,7 +126,8 @@ EnumConsts = [
 	'FrameSearchMode',
 	'CallableKind',
 	'DirAttrKind',
-	'NodeEscapeState'
+	'NodeEscapeState',
+	'AsyncResultState'
 ];
 for( var i = 0; i < EnumConsts.length; ++i ) {
 	var

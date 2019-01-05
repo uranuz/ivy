@@ -8,7 +8,8 @@ define('ivy/Interpreter', [
 	'ivy/CallableObject',
 	'ivy/ArrayRange',
 	'ivy/AssocArrayRange',
-	'ivy/utils'
+	'ivy/utils',
+	'ivy/AsyncResult'
 ], function(
 	Consts,
 	ExecStack,
@@ -19,7 +20,8 @@ define('ivy/Interpreter', [
 	CallableObject,
 	ArrayRange,
 	AssocArrayRange,
-	iu
+	iu,
+	AsyncResult
 ) {
 	var
 		IvyDataType = Consts.IvyDataType,
@@ -59,17 +61,23 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 
 return __mixinProto(Interpreter, {
 	execLoop: function() {
-		var loger = this;
+		var
+			loger = this,
+			fResult = new AsyncResult();
 		loger.internalAssert(this._frameStack.length, `this._frameStack is empty`);
 		loger.internalAssert(iu.back(this._frameStack), `this._frameStack.back is null`);
 		loger.internalAssert(iu.back(this._frameStack)._callableObj, `this._frameStack.back._callableObj is null`);
 		loger.internalAssert(iu.back(this._frameStack)._callableObj._codeObj, `this._frameStack.back._callableObj._codeObj is null`);
 		this._pk = 0;
 		this._codeRange = iu.back(this._frameStack)._callableObj._codeObj._instrs;
-
-		return this.execLoopImpl();
+		try {
+			this.execLoopImpl(fResult);
+		} catch (ex) {
+			fResult.reject(ex);
+		}
+		return fResult;
 	},
-	execLoopImpl: function(exitFrames) {
+	execLoopImpl: function(fResult, exitFrames) {
 		var
 			codeObj = this.getCodeObject(),
 			loger = this;
@@ -82,7 +90,8 @@ return __mixinProto(Interpreter, {
 				loger.internalAssert(this._stack.getLength() === 1, 'Frame stack should contain 1 item now!');
 				if( this._frameStack.length === exitFrames ) {
 					// If there is no frames left - then we finished
-					return this._stack.back();
+					fResult.resolve(this._stack.back());
+					return;
 				}
 				var result = this._stack.pop();; // Drop result
 				this.removeFrame(); // Exit out of this frame
@@ -643,7 +652,8 @@ return __mixinProto(Interpreter, {
 
 						// If frame stack contains last frame - it means that we nave done with programme
 						if( this._frameStack.length === exitFrames ) {
-							return this._stack.back();
+							fResult.resolve(this._stack.back());
+							return;
 						}
 						var result = this._stack.pop(); // Drop result
 						this.removeFrame(); // Drop frame from stack after end of execution
@@ -725,6 +735,29 @@ return __mixinProto(Interpreter, {
 						loger.internalAssert(false, `Unimplemented yet, sorry...`);
 					}
 					break;
+				}
+
+				case Await: {
+					var aResult = this._stack.pop();
+					loger.internalAssert(
+						iu.getDataNodeType(aResult) === IvyDataType.AsyncResult,
+						`Expected Callable operand`
+					);
+					aResult.then(function(data) {
+						this._stack.push({
+							isError: false,
+							data: data
+						});
+						this.execLoopImpl(fResult, exitFrames);
+					}.bind(this), function(data) {
+						this._stack.push({
+							isError: true,
+							data: data
+						});
+						this.execLoopImpl(fResult, exitFrames);
+					}.bind(this));
+					++this._pk; // Goto next instruction after resuming execution
+					return; // Wait for resuming execution
 				}
 
 				// Import another module
@@ -1170,7 +1203,13 @@ return __mixinProto(Interpreter, {
 
 		this._pk = 0;
 		this._codeRange = [Instruction(OpCode.Call)];
-		return this.execLoopImpl(2);
+		var fResult = new AsyncResult()
+		try {
+			this.execLoopImpl(2);
+		} catch(ex) {
+			fResult.reject(ex);
+		}
+		return fResult;
 	},
 
 	// Method used to add extra global data into interpreter

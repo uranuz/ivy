@@ -11,6 +11,7 @@ import ivy.interpreter.common;
 import ivy.interpreter.iface: INativeDirectiveInterpreter;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
+import ivy.interpreter.async_result: AsyncResult, AsyncResultState;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyInterpreterDebug;
@@ -419,7 +420,7 @@ public:
 		assert(false);
 	}
 
-	IvyData execLoop() 
+	AsyncResult execLoop() 
 	{
 		import std.range: empty, back, popBack;
 
@@ -429,21 +430,17 @@ public:
 		loger.internalAssert(this._frameStack.back._callableObj._codeObj, `this._frameStack.back._callableObj._codeObj is null`);
 		this._pk = 0;
 		this._codeRange = this._frameStack.back._callableObj._codeObj._instrs[];
+		AsyncResult fResult = new AsyncResult;
 
-		return execLoopImpl();
-	}
-
-	IvyData execLoopImpl(size_t exitFrames = 1)
-	{
 		try {
-			return execLoopInnerImpl(exitFrames);
-		} catch(Exception exc) {
-			loger.error(exc.msg);
+			execLoopImpl(fResult);
+		} catch( Exception ex ) {
+			fResult.reject(IvyData(ex.msg));
 		}
-		assert(false, `This should never happen`);
+		return fResult;
 	}
 
-	IvyData execLoopInnerImpl(size_t exitFrames)
+	void execLoopImpl(AsyncResult fResult, size_t exitFrames = 1)
 	{
 		import std.range: empty, back, popBack;
 		import std.conv: to, text;
@@ -464,7 +461,8 @@ public:
 				if( this._frameStack.length == exitFrames ) {
 					// If there is the last frame it means that it is the last module frame.
 					// We need to leave frame here for case when we want to execute specific function of module
-					return this._stack.back();
+					fResult.resolve(this._stack.back());
+					return;
 				}
 				IvyData result = this._stack.popBack();
 				this.removeFrame(); // Exit out of this frame
@@ -1305,7 +1303,8 @@ public:
 
 						// If frame stack contains last frame - it means that we nave done with programme
 						if( this._frameStack.length == exitFrames ) {
-							return this._stack.back();
+							fResult.resolve(this._stack.back());
+							return;
 						}
 						IvyData result = this._stack.popBack();
 						this.removeFrame(); // Drop frame from stack after end of execution
@@ -1384,6 +1383,34 @@ public:
 					break;
 				}
 
+				case OpCode.Await: {
+					IvyData aResultNode = this._stack.popBack();
+					loger.internalAssert(
+						aResultNode.type == IvyDataType.AsyncResult,
+						`Expected AsyncResult operand`
+					);
+					AsyncResult aResult = aResultNode.asyncResult;
+					loger.internalAssert(
+						aResult.state != AsyncResultState.pending,
+						`Async operations in server-side interpreter are fake and not supported`
+					);
+					aResult.then(
+						(IvyData data) {
+							this._stack ~= IvyData([
+								`isError`: IvyData(false),
+								`data`: data
+							]);
+						},
+						(IvyData data) {
+							this._stack ~= IvyData([
+								`isError`: IvyData(true),
+								`data`: data
+							]);
+						}
+					);
+					break;
+				}
+
 				case OpCode.MakeArray:
 				{
 					size_t arrayLen = instr.arg;
@@ -1446,7 +1473,7 @@ public:
 		return moduleFrame;
 	}
 
-	IvyData runModuleDirective(string name, IvyData args = IvyData())
+	AsyncResult runModuleDirective(string name, IvyData args = IvyData())
 	{
 		import std.exception: enforce;
 		import std.algorithm: canFind;
@@ -1469,7 +1496,12 @@ public:
 
 		this._pk = 0;
 		this._codeRange = [Instruction(OpCode.Call)];
-
-		return this.execLoopImpl(2);
+		AsyncResult fResult = new AsyncResult();
+		try {
+			this.execLoopImpl(fResult, 2);
+		} catch( Exception ex ) {
+			fResult.reject(IvyData(ex.msg));
+		}
+		return fResult;
 	}
 }

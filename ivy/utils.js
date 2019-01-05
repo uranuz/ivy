@@ -5,8 +5,8 @@ define('ivy/utils', [
 	'ivy/CodeObject',
 	'ivy/CallableObject',
 	'ivy/DataNodeRange',
-	'ivy/ClassNode'
-	
+	'ivy/ClassNode',
+	'ivy/AsyncResult'
 ], function(
 	exports,
 	Consts,
@@ -14,7 +14,8 @@ define('ivy/utils', [
 	CodeObject,
 	CallableObject,
 	DataNodeRange,
-	ClassNode
+	ClassNode,
+	AsyncResult
 ) {
 var
 IvyDataType = Consts.IvyDataType,
@@ -40,6 +41,8 @@ iu = {
 			return IvyDataType.Array;
 		} else if( con instanceof CodeObject ) {
 			return IvyDataType.CodeObject;
+		} else if( con instanceof AsyncResult ) {
+			return IvyDataType.AsyncResult;
 		} else if( con instanceof Date ) {
 			return IvyDataType.DateTime;
 		} else if( con instanceof CallableObject ) {

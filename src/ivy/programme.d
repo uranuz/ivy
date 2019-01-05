@@ -14,6 +14,11 @@ import ivy.interpreter.iface: INativeDirectiveInterpreter;
 import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 import ivy.engine: IvyEngine;
+import ivy.interpreter.async_result: AsyncResult, AsyncResultState;
+
+import std.typecons: Tuple;
+
+alias SaveStateResult = Tuple!(Interpreter, `interp`, AsyncResult, `asyncResult`);
 
 // Representation of programme ready for execution
 class ExecutableProgramme
@@ -43,11 +48,21 @@ public:
 	}
 
 	/// Run programme main module with arguments passed as mainModuleScope parameter
-	IvyData run(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null) {
-		return runSaveState(mainModuleScope, extraGlobals)._stack.back();
+	AsyncResult run(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null) {
+		return runSaveState(mainModuleScope, extraGlobals).asyncResult;
 	}
 
-	Interpreter runSaveState(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null)
+	IvyData runSync(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null) {
+		IvyData ivyRes = runSaveStateSync(mainModuleScope, extraGlobals)._stack.back();
+		if( ivyRes.type == IvyDataType.AsyncResult ) {
+			ivyRes.asyncResult.then(
+				(IvyData methodRes) => ivyRes = methodRes
+			);
+		}
+		return ivyRes;
+	}
+
+	SaveStateResult runSaveState(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null)
 	{
 		import ivy.interpreter.interpreter: Interpreter;
 		Interpreter interp = new Interpreter(
@@ -58,8 +73,61 @@ public:
 			_logerMethod
 		);
 		interp.addExtraGlobals(extraGlobals);
-		interp.execLoop();
-		return interp;
+		return SaveStateResult(interp, interp.execLoop());
+	}
+
+	Interpreter runSaveStateSync(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null)
+	{
+		import std.exception: enforce;
+		SaveStateResult moduleExecRes = runSaveState(mainModuleScope, extraGlobals);
+		enforce(
+			moduleExecRes.asyncResult.state == AsyncResultState.resolved,
+			`Expected module execution async result resolved state`);
+		return moduleExecRes.interp;
+	}
+
+	AsyncResult runMethod(
+		string methodName,
+		IvyData methodParams = IvyData(),
+		IvyData[string] extraGlobals = null,
+		IvyData mainModuleScope = IvyData()
+	) {
+		AsyncResult fResult = new AsyncResult();
+		SaveStateResult moduleExecRes = runSaveState(mainModuleScope, extraGlobals);
+		
+		moduleExecRes.asyncResult.then(
+			(IvyData modRes) {
+				// Module executed successfuly, then call method
+				moduleExecRes.interp.runModuleDirective(methodName, methodParams).then(
+					(IvyData methodRes) {
+						fResult.resolve(methodRes); // Successfully called method
+					},
+					(IvyData methodRes) {
+						fResult.reject(methodRes); // Error in calling method
+					});
+			},
+			(IvyData modRes) {
+				fResult.reject(modRes); // Error in running module
+			});
+		return fResult;
+	}
+
+	IvyData runMethodSync(
+		string methodName,
+		IvyData methodParams = IvyData(),
+		IvyData[string] extraGlobals = null,
+		IvyData mainModuleScope = IvyData()
+	) {
+		import std.exception: enforce;
+		AsyncResult asyncRes =
+			runSaveStateSync(mainModuleScope, extraGlobals)
+			.runModuleDirective(methodName, methodParams);
+		enforce(
+			asyncRes.state == AsyncResultState.resolved,
+			`Expected method execution async result resolved state`);
+		IvyData ivyRes;
+		asyncRes.then((IvyData methodRes) => ivyRes = methodRes);
+		return ivyRes;
 	}
 
 	void logerMethod(LogerMethod method) @property {
@@ -178,7 +246,7 @@ JSONValue toStdJSON(IvyData con)
 			jCode["attrBlocks"] = jAttrBlocks;
 			return jCode;
 		}
-		case Callable, ClassNode, ExecutionFrame, DataNodeRange: {
+		case Callable, ClassNode, ExecutionFrame, DataNodeRange, AsyncResult: {
 			return JSONValue(["_t": con.type]);
 		}
 	}

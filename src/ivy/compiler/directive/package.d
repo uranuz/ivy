@@ -1,6 +1,7 @@
 module ivy.compiler.directive;
 
 public import ivy.compiler.directive.at: AtCompiler;
+public import ivy.compiler.directive.await_dir: AwaitCompiler;
 public import ivy.compiler.directive.break_dir: BreakCompiler;
 public import ivy.compiler.directive.call: CallCompiler;
 public import ivy.compiler.directive.continue_dir: ContinueCompiler;
