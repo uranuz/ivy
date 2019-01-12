@@ -1339,28 +1339,33 @@ public:
 						{
 							case DirAttrKind.NamedAttr:
 							{
-								if( args.type == IvyDataType.AssocArray )
 								foreach( attrName, namedAttr; attrBlock.namedAttrs )
 								{
-									if( auto valuePtr = attrName in args ) {
-										this.setLocalValue(attrName, *valuePtr);
-									} else {
-										// Do deep copy of default value
-										this.setLocalValue(attrName, deeperCopy(namedAttr.defaultValue));
+									if( args.type == IvyDataType.AssocArray )
+									{
+										if( auto valuePtr = attrName in args ) {
+											this.setLocalValue(attrName, *valuePtr);
+											continue;
+										}
 									}
+									
+									this.setLocalValue(attrName, deeperCopy(namedAttr.defaultValue));
 								}
 								break;
 							}
 							case DirAttrKind.ExprAttr:
 							{
-								if( args.type == IvyDataType.AssocArray )
 								foreach( j, exprAttr; attrBlock.exprAttrs )
 								{
-									if( auto valuePtr = exprAttr.name in args ) {
-										this.setLocalValue(exprAttr.name, *valuePtr);
-									} else {
-										this.setLocalValue(exprAttr.name, deeperCopy(exprAttr.defaultValue));
+									if( args.type == IvyDataType.AssocArray )
+									{
+										if( auto valuePtr = exprAttr.name in args ) {
+											this.setLocalValue(exprAttr.name, *valuePtr);
+											continue;
+										}
 									}
+									// Do deep copy of default value if parameter not found in args
+									this.setLocalValue(exprAttr.name, deeperCopy(exprAttr.defaultValue));
 								}
 
 								// TODO: Implement default values for positional argument
@@ -1463,7 +1468,7 @@ public:
 
 		} // execution_loop:
 
-		assert(false, `Failed to get result of execution`);
+		loger.internalAssert(false, `Failed to get result of execution`);
 	} // void execLoop()
 
 	ExecutionFrame _getModuleFrame(CallableObject callableObj) {
