@@ -435,7 +435,7 @@ public:
 		try {
 			execLoopImpl(fResult);
 		} catch( Exception ex ) {
-			fResult.reject(IvyData(ex.msg));
+			fResult.reject(ex);
 		}
 		return fResult;
 	}
@@ -1406,11 +1406,10 @@ public:
 								`data`: data
 							]);
 						},
-						(IvyData data) {
-							this._stack ~= IvyData([
-								`isError`: IvyData(true),
-								`data`: data
-							]);
+						(Throwable error) {
+							IvyData ivyError = errorToIvyData(error);
+							ivyError[`isError`] = true;
+							this._stack ~= ivyError;
 						}
 					);
 					break;
@@ -1505,7 +1504,7 @@ public:
 		try {
 			this.execLoopImpl(fResult, 2);
 		} catch( Exception ex ) {
-			fResult.reject(IvyData(ex.msg));
+			fResult.reject(ex);
 		}
 		return fResult;
 	}

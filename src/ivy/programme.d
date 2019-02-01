@@ -102,12 +102,12 @@ public:
 					(IvyData methodRes) {
 						fResult.resolve(methodRes); // Successfully called method
 					},
-					(IvyData methodRes) {
-						fResult.reject(methodRes); // Error in calling method
+					(Throwable error) {
+						fResult.reject(error); // Error in calling method
 					});
 			},
-			(IvyData modRes) {
-				fResult.reject(modRes); // Error in running module
+			(Throwable error) {
+				fResult.reject(error); // Error in running module
 			});
 		return fResult;
 	}

@@ -8,8 +8,9 @@ enum AsyncResultState: ubyte {
 
 class AsyncResult
 {
-	alias HandlerMethod = void delegate(IvyData data);
-	void then(HandlerMethod doneFn, HandlerMethod failFn = null)
+	alias CalbackMethod = void delegate(IvyData data);
+	alias ErrbackMethod = void delegate(Throwable error);
+	void then(CalbackMethod doneFn, ErrbackMethod failFn = null)
 	{
 		if( doneFn !is null )
 		{
@@ -23,18 +24,18 @@ class AsyncResult
 		{
 			_errbacks ~= failFn;
 			if( _state == AsyncResultState.rejected ) {
-				failFn(_value);
+				failFn(_error);
 			}
 		}
 	}
 
-	void except(HandlerMethod failFn)
+	void except(ErrbackMethod failFn)
 	{
 		if( failFn !is null )
 		{
 			_errbacks ~= failFn;
 			if( _state == AsyncResultState.rejected ) {
-				failFn(_value);
+				failFn(_error);
 			}
 		}
 	}
@@ -52,16 +53,16 @@ class AsyncResult
 		}
 	}
 
-	void reject(IvyData value)
+	void reject(Throwable error)
 	{
 		if( _state != AsyncResultState.pending )
 			return; // Already resolved or rejected
 
 		_state = AsyncResultState.rejected;
-		_value = value;
+		_error = error;
 
 		foreach( fn; _errbacks ) {
-			fn(_value);
+			fn(_error);
 		}
 	}
 
@@ -69,8 +70,9 @@ class AsyncResult
 		return _state;
 	}
 private:
-	HandlerMethod[] _callbacks;
-	HandlerMethod[] _errbacks;
+	CalbackMethod[] _callbacks;
+	ErrbackMethod[] _errbacks;
 	IvyData _value;
+	Throwable _error;
 	AsyncResultState _state;
 }

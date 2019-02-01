@@ -632,3 +632,18 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 			assert( false, `Getting of deeper copy for async result is not implemented for now` );
 	}
 }
+
+IvyData errorToIvyData(Throwable error)
+{
+	import std.conv: to;
+	string[] traceInfo;
+	foreach( info; error.info ) {
+		traceInfo ~= info.to!string;
+	}
+	IvyData res;
+	res[`errorMsg`] = error.msg;
+	res[`traceInfo`] = traceInfo;
+	res[`errorFile`] = error.file;
+	res[`errorLine`] = error.line;
+	return res;
+}
