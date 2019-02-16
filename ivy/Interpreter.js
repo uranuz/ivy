@@ -53,6 +53,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 	this._moduleFrames = {'__global__': this._globalFrame};
 	dataDict = dataDict || {};
 	dataDict.__scopeName__ = '__main__'; // Allocating a dict if it's not
+	dataDict.__moduleName__ = mainModuleName;
 	this._moduleFrames[mainModuleName] = this.newFrame(rootCallableObj, null, dataDict, false);
 	this._stack.addStackBlock();
 
@@ -82,8 +83,6 @@ return __mixinProto(Interpreter, {
 			codeObj = this.getCodeObject(),
 			loger = this;
 		exitFrames = exitFrames || 1;
-		loger.internalAssert(codeObj, 'Unable to get CodeObject to execute');
-		this._codeRange = codeObj._instrs;
 		for( this._pk = 0; this._pk <= this._codeRange.length; ) {
 			if( this._pk >= this._codeRange.length ) {
 				// Ended with this code object
@@ -528,7 +527,8 @@ return __mixinProto(Interpreter, {
 					var
 						attrBlocks = callableObj.attrBlocks(),
 						dataDict = {
-							"__scopeName__": callableObj._name
+							"__scopeName__": callableObj._name,
+							"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
 						}; // Allocating scope
 
 					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
@@ -679,7 +679,8 @@ return __mixinProto(Interpreter, {
 					var
 						attrBlocks = callableObj.attrBlocks(),
 						dataDict = {
-							"__scopeName__": callableObj._name
+							"__scopeName__": callableObj._name,
+							"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
 						}; // Allocating scope
 
 					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
@@ -778,7 +779,8 @@ return __mixinProto(Interpreter, {
 							codeObject = modObject.mainCodeObject(),
 							callableObj = new CallableObject(moduleName, codeObject),
 							dataDict = {
-								"__scopeName__": moduleName
+								"__scopeName__": moduleName,
+								"__moduleName__": moduleName
 							},
 							// Create entry point module frame
 							frame = this.newFrame(callableObj, null, dataDict, false);
@@ -990,7 +992,7 @@ return __mixinProto(Interpreter, {
 		}
 		return [left, right, lType];
 	},
-	getCurrentFrame: function() {
+	currentFrame: function() {
 		if( this._frameStack.length === 0 ) {
 			return null;
 		}
@@ -1007,7 +1009,7 @@ return __mixinProto(Interpreter, {
 		this.rtError('Cannot get current independent execution frame!');
 	},
 	getCodeObject: function() {
-		var frame = this.getCurrentFrame();
+		var frame = this.currentFrame();
 		if( !frame ) {
 			return null;
 		}
@@ -1183,15 +1185,15 @@ return __mixinProto(Interpreter, {
 	runModuleDirective: function(name, args)
 	{
 		var loger = this;
-		enforce(
-			[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].canFind(iu.getDataNodeType(args)),
+		loger.internalAssert(
+			[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].indexOf(iu.getDataNodeType(args)) > 0,
 			`Expected Undef, Null or AssocArray as list of directive arguments`
 		);
 
-		loger.internalAssert(this.currentFrame, `Could not get module frame!`);
+		loger.internalAssert(this.currentFrame(), `Could not get module frame!`);
 
 		// Find desired directive by name in current module frame
-		var callableNode = this.currentFrame.getValue(name);
+		var callableNode = this.currentFrame().getValue(name);
 		loger.internalAssert(iu.getDataNodeType(callableNode) === IvyDataType.Callable, `Expected Callable!`);
 
 		loger.internalAssert(this._stack.getLength() < 2, `Expected 0 or 1 items in stack!`);
@@ -1202,10 +1204,10 @@ return __mixinProto(Interpreter, {
 		this._stack.push(args);
 
 		this._pk = 0;
-		this._codeRange = [Instruction(OpCode.Call)];
+		this._codeRange = [[OpCode.Call,0]];
 		var fResult = new AsyncResult()
 		try {
-			this.execLoopImpl(2);
+			this.execLoopImpl(fResult, 2);
 		} catch(ex) {
 			fResult.reject(ex);
 		}

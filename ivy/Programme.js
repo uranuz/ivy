@@ -27,6 +27,28 @@ define('ivy/Programme', [
 				interp: interp,
 				asyncResult: interp.execLoop()
 			};
+		},
+
+		runMethod: function(methodName, methodParams, extraGlobals, mainModuleScope) {
+			var
+				fResult = new AsyncResult(),
+				moduleExecRes = this.runSaveState(mainModuleScope, extraGlobals);
+			
+			moduleExecRes.asyncResult.then(
+				function(modRes) {
+					// Module executed successfuly, then call method
+					moduleExecRes.interp.runModuleDirective(methodName, methodParams).then(
+						function(methodRes) {
+							fResult.resolve(methodRes); // Successfully called method
+						},
+						function(error) {
+							fResult.reject(error); // Error in calling method
+						});
+				},
+				function(error) {
+					fResult.reject(error); // Error in running module
+				});
+			return fResult;
 		}
 	});
 });

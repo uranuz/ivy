@@ -72,6 +72,7 @@ public:
 		loger.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
 
 		dataDict["__scopeName__"] = "__main__"; // Allocating a dict if it's not
+		dataDict["__moduleName__"] = mainModuleName;
 		newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
 		this._stack.addStackBlock();
 		_moduleFrames[mainModuleName] = this._frameStack.back; // We need to add entry point module frame to storage manually
@@ -914,7 +915,10 @@ public:
 
 						CallableObject callableObj = new CallableObject(moduleName, codeObject, CallableKind.Module);
 
-						IvyData dataDict = ["__scopeName__": moduleName];
+						IvyData dataDict = [
+							"__scopeName__": moduleName,
+							"__moduleName__": moduleName
+						];
 						newFrame(callableObj, null, dataDict, false); // Create entry point module frame
 						_moduleFrames[moduleName] = this._frameStack.back; // We need to store module frame into storage
 
@@ -1204,7 +1208,10 @@ public:
 					loger.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
 
 					loger.write("RunCallable creating execution frame...");
-					IvyData dataDict = ["__scopeName__": callableObj._name]; // Allocating scope at the same time
+					IvyData dataDict = [
+						"__scopeName__": callableObj._name,
+						"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
+					]; // Allocating scope at the same time
 					newFrame(callableObj, _getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
 
 					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
@@ -1329,7 +1336,10 @@ public:
 					CallableObject callableObj = callableNode.callable;
 					loger.internalAssert(callableObj, `Callable node is null`);
 
-					IvyData dataDict = ["__scopeName__": callableObj._name]; // Allocating scope at the same time
+					IvyData dataDict = [
+						"__scopeName__": callableObj._name,
+						"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
+					]; // Allocating scope at the same time
 					newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
 
 					// Put params into stack
