@@ -375,6 +375,7 @@ struct TIvyData(S)
 		else static if(is(T : MIvyData))
 		{
 			typeTag = arg.type;
+			_escapeState = arg.escapeState;
 			final switch(typeTag)
 			{
 				case IvyDataType.Undef: case IvyDataType.Null:  break;
@@ -554,11 +555,28 @@ struct TIvyData(S)
 		}
 	}
 
-	void escapeState(NodeEscapeState state) @property {
+	void escapeState(NodeEscapeState state) @property
+	{
 		_escapeState = state;
+		switch( this.type )
+		{
+			case IvyDataType.Array: {
+				foreach( ref it; this.array ) {
+					it.escapeState = state;
+				}
+				break;
+			}
+			case IvyDataType.AssocArray: {
+				foreach( it, ref val; this.assocArray ) {
+					val.escapeState = state;
+				}
+				break;
+			}
+			default: break;
+		}
 	}
 
-	NodeEscapeState escapeState()  @property {
+	NodeEscapeState escapeState() @property {
 		return _escapeState;
 	}
 
