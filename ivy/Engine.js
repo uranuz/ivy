@@ -33,20 +33,22 @@ define('ivy/Engine', [
 				throw new Error('Module name is required!');
 			}
 
-			if( typeof(callback) !== 'function' ) {
-				throw new Error('Callback function is required!')
-			}
-
 			if( this._config.clearCache ) {
 				this.clearCache();
 			}
 
 			if( this._codeLoader.get(moduleName) == null ) {
 				this._codeLoader.load(moduleName, function() {
-					callback(this._makeProgramme(moduleName));
+					if( typeof(callback) === 'function' ) {
+						callback(this._makeProgramme(moduleName));
+					}
 				}.bind(this));
 			} else {
-				callback(this._makeProgramme(moduleName));
+				var ivyProg = this._makeProgramme(moduleName);
+				if( typeof(callback) === 'function' ) {
+					callback(ivyProg);
+				}
+				return ivyProg;
 			}
 		},
 
