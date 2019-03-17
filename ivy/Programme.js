@@ -4,12 +4,12 @@ define('ivy/Programme', [
 	'ivy/Consts'
 ], function(Interpreter, AsyncResult, Consts) {
 var AsyncResultState = Consts.AsyncResultState;
+return FirClass(
 	function Programme(moduleObjCache, directiveFactory, mainModuleName) {
 		this._moduleObjCache = moduleObjCache;
 		this._directiveFactory = directiveFactory;
 		this._mainModuleName = mainModuleName;
-	};
-	return __mixinProto(Programme, {
+	}, {
 		/// Run programme main module with arguments passed as mainModuleScope parameter
 		run: function(mainModuleScope, extraGlobals) {
 			return this.runSaveState(mainModuleScope, extraGlobals).asyncResult;

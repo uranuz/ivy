@@ -7,7 +7,8 @@ define('ivy/directive/Range', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function RangeDirInterpreter() {
+return FirClass(
+	function RangeDirInterpreter() {
 		this._name = 'range';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -19,7 +20,7 @@ define('ivy/directive/Range', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			var
 				begin = interp.getValue("begin"),

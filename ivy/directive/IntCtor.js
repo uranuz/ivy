@@ -6,7 +6,8 @@ define('ivy/directive/IntCtor', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function IntCtorDirInterpreter() {
+return FirClass(
+	function IntCtorDirInterpreter() {
 		this._name = 'int';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -15,7 +16,7 @@ define('ivy/directive/IntCtor', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) ) {

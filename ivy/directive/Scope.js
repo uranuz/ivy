@@ -6,7 +6,8 @@ define('ivy/directive/Scope', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function ScopeDirInterpreter() {
+return FirClass(
+	function ScopeDirInterpreter() {
 		this._name = 'scope';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -15,7 +16,7 @@ define('ivy/directive/Scope', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {'isNoscope': true}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			var frame = interp.independentFrame();
 			if( !frame ) {

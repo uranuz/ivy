@@ -1,4 +1,5 @@
 define('ivy/ModuleObject', [], function() {
+return FirClass(
 	function ModuleObject(name, consts, entryPointIndex) {
 		if( entryPointIndex >= consts.length ) {
 			throw Error('Index of module object main code object is out of range!');
@@ -6,8 +7,7 @@ define('ivy/ModuleObject', [], function() {
 		this._name = name;
 		this._consts = consts;
 		this._entryPointIndex = entryPointIndex;
-	};
-	return __mixinProto(ModuleObject, {
+	}, {
 		mainCodeObject: function() {
 			return this._consts[this._entryPointIndex];
 		},

@@ -1,8 +1,8 @@
 define('ivy/AsyncResult', ['ivy/Consts'], function(Consts) {
+return FirClass(
 	function AsyncResult() {
 		this._deferred = new $.Deferred();
-	};
-	return __mixinProto(AsyncResult, {
+	}, {
 		then: function(doneFn, failFn) {
 			if( (doneFn != null) && (typeof doneFn !== 'function') ) {
 				throw new Error('doneFn argument expected to be function, undefined or null');

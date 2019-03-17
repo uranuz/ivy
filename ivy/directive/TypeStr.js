@@ -6,7 +6,8 @@ define('ivy/directive/TypeStr', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function TypeStrDirInterpreter() {
+return FirClass(
+	function TypeStrDirInterpreter() {
 		this._name = 'typestr';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -15,7 +16,7 @@ define('ivy/directive/TypeStr', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			var valueType = iu.getDataNodeType(interp.getValue("value"));
 			if( valueType >= Consts.IvyDataTypeItems.length ) {

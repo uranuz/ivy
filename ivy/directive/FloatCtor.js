@@ -6,7 +6,8 @@ define('ivy/directive/FloatCtor', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function FloatCtorDirInterpreter() {
+return FirClass(
+	function FloatCtorDirInterpreter() {
 		this._name = 'float';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -15,7 +16,7 @@ define('ivy/directive/FloatCtor', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) ) {

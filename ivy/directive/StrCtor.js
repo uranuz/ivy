@@ -6,7 +6,8 @@ define('ivy/directive/StrCtor', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function StrCtorDirInterpreter() {
+return FirClass(
+	function StrCtorDirInterpreter() {
 		this._name = 'str';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -15,7 +16,7 @@ define('ivy/directive/StrCtor', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			this._stack.push(String(interp.getValue("value")));
 		}

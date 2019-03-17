@@ -12,7 +12,8 @@ define('ivy/directive/ToJSONBase64', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function ToJSONBase64DirInterpreter() {
+return FirClass(
+	function ToJSONBase64DirInterpreter() {
 		this._name = 'toJSONBase64';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -21,7 +22,7 @@ define('ivy/directive/ToJSONBase64', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			interp._stack.push(
 				base64.encodeUTF8(

@@ -29,6 +29,7 @@ define('ivy/Interpreter', [
 		FrameSearchMode = Consts.FrameSearchMode,
 		OpCode = Consts.OpCode,
 		DirAttrKind = Consts.DirAttrKind;
+return FirClass(
 function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict) {
 	this._frameStack = [];
 	this._stack = new ExecStack();
@@ -58,9 +59,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 	this._stack.addStackBlock();
 
 	this._addDirInterpreters(directiveFactory.interps());
-}
-
-return __mixinProto(Interpreter, {
+}, {
 	execLoop: function() {
 		var
 			loger = this,

@@ -3,6 +3,7 @@ define('ivy/CallableObject', [
 	'ivy/utils',
 	'ivy/Consts'
 ], function(CodeObject, iu, Consts) {
+return FirClass(
 	function CallableObject(name, codeObj) {
 		this._name = name;
 		if( codeObj instanceof CodeObject ) {
@@ -12,8 +13,7 @@ define('ivy/CallableObject', [
 			this._codeObj = null;
 			this._dirInterp = codeObj;
 		}
-	};
-	return __mixinProto(CallableObject, {
+	}, {
 		attrBlocks: function() {
 			return (this._codeObj? this._codeObj._attrBlocks: this._dirInterp._attrBlocks)
 		},

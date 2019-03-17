@@ -2,15 +2,14 @@ define('ivy/ArrayRange', [
 	'ivy/errors',
 	'ivy/DataNodeRange'
 ], function(errors, DataNodeRange) {
-	__extends(ArrayRange, DataNodeRange);
+return FirClass(
 	function ArrayRange(aggr) {
 		if( !(aggr instanceof Array) ) {
 			throw new errors.IvyError('Expected array as ArrayRange aggregate');
 		}
 		this._array = aggr;
 		this._i = 0;
-	};
-	return __mixinProto(ArrayRange, {
+	}, DataNodeRange, {
 		// Method must return first item of range or raise error if range is empty
 		front: function() {
 			if( this.empty() ) {
@@ -29,5 +28,5 @@ define('ivy/ArrayRange', [
 		empty: function() {
 			return this._i >= this._array.length;
 		}
-	});
+});
 });

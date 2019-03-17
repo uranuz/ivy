@@ -2,7 +2,7 @@ define('ivy/IntegerRange', [
 	'ivy/errors',
 	'ivy/DataNodeRange'
 ], function(errors, DataNodeRange) {
-	__extends(IntegerRange, DataNodeRange);
+return FirClass(
 	function IntegerRange(begin, end) {
 		if( typeof(begin) !== 'number' || typeof(end) !== 'number' ) {
 			throw new errors.IvyError('Number range begin and end arguments must be numbers');
@@ -12,8 +12,7 @@ define('ivy/IntegerRange', [
 		}
 		this._current = begin;
 		this._end = end;
-	};
-	return __mixinProto(IntegerRange, {
+	}, DataNodeRange, {
 		// Method must return first item of range or raise error if range is empty
 		front: function() {
 			return this._current;

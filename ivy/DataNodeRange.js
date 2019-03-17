@@ -1,8 +1,8 @@
 define('ivy/DataNodeRange', [], function() {
+return FirClass(
 	function DataNodeRange() {
 		throw new Error('Cannot create instance of abstract class!');
-	};
-	return __mixinProto(DataNodeRange, {
+	}, {
 		// Method must return first item of range or raise error if range is empty
 		front: function() {
 			throw new Error('Not implemented!');

@@ -8,13 +8,13 @@ define('ivy/ExecutionFrame', [
 var
 	FrameSearchMode = Consts.FrameSearchMode,
 	IvyDataType = Consts.IvyDataType;
+return FirClass(
 function ExecutionFrame(callableObj, modFrame, dataDict, isNoscope) {
 	this._callableObj = callableObj;
 	this._moduleFrame = modFrame;
 	this._dataDict = dataDict || {};
 	this._isNoscope = isNoscope || false;
-};
-return __mixinProto(ExecutionFrame, {
+}, {
 	getValue: function(varName) {
 		var res = this.findValue(varName, FrameSearchMode.get);
 		if( res.parent === undefined ) {

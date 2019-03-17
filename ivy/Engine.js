@@ -7,6 +7,7 @@ define('ivy/Engine', [
 	StandardFactory,
 	ExecutableProgramme
 ) {
+return FirClass(
 	function Engine(ivyConfig, codeLoader) {
 		this._config = ivyConfig;
 
@@ -19,8 +20,7 @@ define('ivy/Engine', [
 		}
 		
 		this._initObjects();
-	};
-	return __mixinProto(Engine, {
+	}, {
 		_initObjects: function() {
 			if( this._config.directiveFactory == null ) {
 				this._config.directiveFactory = StandardFactory();

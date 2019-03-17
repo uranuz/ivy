@@ -6,7 +6,8 @@ define('ivy/directive/Empty', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function EmptyDirInterpreter() {
+return FirClass(
+	function EmptyDirInterpreter() {
 		this._name = 'empty';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -15,7 +16,7 @@ define('ivy/directive/Empty', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) )

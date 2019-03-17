@@ -2,15 +2,14 @@ define('ivy/AssocArrayRange', [
 	'ivy/errors',
 	'ivy/DataNodeRange'
 ], function(errors, DataNodeRange) {
-	__extends(AssocArrayRange, DataNodeRange);
+return FirClass(
 	function AssocArrayRange(aggr) {
 		if( aggr != null && aggr instanceof Object ) {
 			throw new errors.IvyError('Expected AssocArray as AssocArrayRange aggregate');
 		}
 		this._keys = Object.keys(aggr);
 		this._i = 0;
-	};
-	return __mixinProto(AssocArrayRange, {
+	}, DataNodeRange, {
 		// Method must return first item of range or raise error if range is empty
 		front: function() {
 			if( this.empty() ) {

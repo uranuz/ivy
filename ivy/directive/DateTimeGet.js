@@ -6,7 +6,8 @@ define('ivy/directive/DateTimeGet', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function DateTimeGetDirInterpreter() {
+return FirClass(
+	function DateTimeGetDirInterpreter() {
 		this._name = 'dtGet';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -18,7 +19,7 @@ define('ivy/directive/DateTimeGet', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			var
 				dt = interp.getValue("value"), dtType = iu.getDataNodeType(dt),

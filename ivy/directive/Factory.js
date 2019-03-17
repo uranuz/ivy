@@ -1,8 +1,8 @@
 define('ivy/directive/Factory', [], function(dirs) {
+return FirClass(
 	function DirectiveFactory() {
 		this._dirInterps = {};
-	};
-	__mixinProto(DirectiveFactory, {
+	}, {
 		get: function(name) {
 			return this._dirInterps[name];
 		},

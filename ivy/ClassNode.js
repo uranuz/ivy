@@ -1,8 +1,8 @@
 define('ivy/ClassNode', [], function() {
+return FirClass(
 	function ClassNode() {
 		throw new Error('Cannot create instance of abstract class!');
-	};
-	return __mixinProto(ClassNode, {
+	}, {
 		/** Analogue to IvyNodeRange opSlice(); in D impl */
 		range: function() {
 			throw new Error('Not implemented!');

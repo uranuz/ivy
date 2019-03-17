@@ -1,9 +1,9 @@
 define('ivy/ExecStack', ['ivy/utils'], function(iu) {
+return FirClass(
 	function ExecStack() {
 		this._stack = [];
 		this._blocks = [];
-	};
-	return __mixinProto(ExecStack, {
+	}, {
 		/** Returns last item added into stack */
 		back: function() {
 			if( this.empty() ) {

@@ -6,7 +6,8 @@ define('ivy/directive/Len', [
 	var
 		IvyDataType = Consts.IvyDataType,
 		DirAttrKind = Consts.DirAttrKind;
-	return __mixinProto(__extends(function LenDirInterpreter() {
+return FirClass(
+	function LenDirInterpreter() {
 		this._name = 'len';
 		this._attrBlocks = [{
 			'kind': DirAttrKind.ExprAttr,
@@ -15,7 +16,7 @@ define('ivy/directive/Len', [
 			'kind': DirAttrKind.BodyAttr,
 			'bodyAttr': {}
 		}]
-	}, DirectiveInterpreter), {
+	}, DirectiveInterpreter, {
 		interpret: function(interp) {
 			var value = interp.getValue("value");
 			switch( iu.getDataNodeType(value) ) {

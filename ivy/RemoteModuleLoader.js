@@ -7,15 +7,15 @@ define('ivy/RemoteModuleLoader', [
 	CodeObject,
 	Consts
 ) {
+var IvyDataType = Consts.IvyDataType;
+return FirClass(
 function RemoteModuleLoader(endpoint) {
 	if( !endpoint ) {
 		throw Error('Endpoint URL required to load compiled templates!');
 	}
 	this._endpoint = endpoint;
 	this._moduleObjects = {};
-};
-var IvyDataType = Consts.IvyDataType;
-return __mixinProto(RemoteModuleLoader, {
+}, {
 	get: function(moduleName) {
 		return this._moduleObjects[moduleName];
 	},
