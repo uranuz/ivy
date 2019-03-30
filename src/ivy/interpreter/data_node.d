@@ -17,8 +17,7 @@ interface IClassNode
 {
 	IvyNodeRange opSlice();
 	IClassNode opSlice(size_t, size_t);
-	IvyData opIndex(string);
-	IvyData opIndex(size_t);
+	IvyData opIndex(IvyData);
 	IvyData __getAttr__(string);
 	void __setAttr__(IvyData, string);
 	IvyData __serialize__();
@@ -144,7 +143,7 @@ struct TIvyData(S)
 	ref String str() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.String, "IvyData is not string");
-		assert(storage.str.length == 1, "Expected internal storage length of 1");
+		enforce!DataNodeException(storage.str.length == 1, "Expected internal storage length of 1");
 		return storage.str[0];
 	}
 
@@ -155,7 +154,7 @@ struct TIvyData(S)
 	ref MIvyData[] array() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not array");
-		assert(storage.array.length == 1, "Expected internal storage length of 1");
+		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
 		return storage.array[0];
 	}
 
@@ -406,7 +405,7 @@ struct TIvyData(S)
 	void opIndexAssign(T)(auto ref T value, size_t index)
 	{
 		enforce!DataNodeException( type == IvyDataType.Array, "IvyData is not an array");
-		assert(storage.array.length == 1, "Expected internal storage length of 1");
+		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
 		enforce!DataNodeException( index < storage.array[0].length , "IvyData array index is out of range");
 
 		storage.array[0][index] = value;
@@ -419,9 +418,9 @@ struct TIvyData(S)
 			[IvyDataType.Array, IvyDataType.ClassNode].canFind(type),
 			"IvyData is not an array or class node, but is: " ~ type.text);
 		if( type == IvyDataType.ClassNode ) {
-			return storage.classNode is null? MIvyData(): storage.classNode[index];
+			return storage.classNode is null? MIvyData(): storage.classNode[MIvyData(index)];
 		}
-		assert(storage.array.length == 1, "Expected internal storage length of 1");
+		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
 		enforce!DataNodeException(index < storage.array[0].length, "IvyData array index is out of range");
 
 		return storage.array[0][index];
@@ -437,7 +436,7 @@ struct TIvyData(S)
 
 		if( type != IvyDataType.Array )
 			this = (MIvyData[]).init;
-		assert(storage.array.length == 1, "Expected internal storage length of 1");
+		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
 
 		static if( isArray!T )
 		{
@@ -477,7 +476,7 @@ struct TIvyData(S)
 			[IvyDataType.AssocArray, IvyDataType.ClassNode].canFind(type),
 			"IvyData is not a dict or class node, but is: " ~ type.text);
 		if( type == IvyDataType.ClassNode ) {
-			return storage.classNode is null? MIvyData(): storage.classNode[key];
+			return storage.classNode is null? MIvyData(): storage.classNode[MIvyData(key)];
 		}
 		
 		enforce!DataNodeException(key in storage.assocArray, "IvyData dict has no such key");
@@ -608,16 +607,24 @@ struct TIvyData(S)
 
 IvyData deeperCopy(IvyData)(auto ref IvyData node)
 {
-	final switch( node.type ) with( IvyDataType )
+	final switch( node.type )
 	{
-		case Undef, Null, Boolean, Integer, Floating, DateTime:
+		case IvyDataType.Undef:
+		case IvyDataType.Null:
+		case IvyDataType.Boolean:
+		case IvyDataType.Integer:
+		case IvyDataType.Floating:
+		case IvyDataType.DateTime:
 			// These types of nodes are value types, so make plain copy
-			return node;
-		case String:
+
+		case IvyDataType.String:
 			// String is not a value type, but they are immutable in D implementation,
 			// so we only get new slice of existing string
+
+		case IvyDataType.CodeObject:
+			// We don't do deeper copy of code object, because it should always be used as constant
 			return node;
-		case Array:
+		case IvyDataType.Array:
 		{
 			IvyData[] newArray;
 			newArray.length = node.array.length; // Preallocating
@@ -626,7 +633,7 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 			}
 			return IvyData(newArray);
 		}
-		case AssocArray:
+		case IvyDataType.AssocArray:
 		{
 			IvyData[string] newAA;
 			foreach( ref key, ref val; node.assocArray ) {
@@ -634,21 +641,16 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 			}
 			return IvyData(newAA);
 		}
-		case ClassNode:
-			assert( false, `Getting of deeper copy for class node is not implemented for now` );
-		case CodeObject:
-			// We don't do deeper copy of code object, because it should always be used as constant
-			return node;
-		case Callable:
+		case IvyDataType.Callable:
+		case IvyDataType.ClassNode:
+		case IvyDataType.ExecutionFrame:
+		case IvyDataType.DataNodeRange:
+		case IvyDataType.AsyncResult:
 			// These types of nodes shouldn't appear in module constants table so leave these not implemented for now
-			assert( false, `Getting of deeper copy for callable is not implemented for now` );
-		case ExecutionFrame:
-			assert( false, `Getting of deeper copy for execution frame is not implemented for now` );
-		case DataNodeRange:
-			assert( false, `Getting of deeper copy for data node range is not implemented for now` );
-		case AsyncResult:
-			assert( false, `Getting of deeper copy for async result is not implemented for now` );
+			break;
 	}
+	import std.conv: text;
+	throw new DataNodeException(`Getting of deeper copy for "` ~ node.type.text ~ `" is not implemented for now`);
 }
 
 IvyData errorToIvyData(Throwable error)

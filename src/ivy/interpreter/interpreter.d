@@ -591,15 +591,11 @@ public:
 					loger.write(`OpCode.LoadSubscr. aggr: `, aggr);
 					loger.write(`OpCode.LoadSubscr. indexValue: `, indexValue);
 
-					loger.internalAssert(
-						[IvyDataType.String, IvyDataType.Array, IvyDataType.AssocArray, IvyDataType.ClassNode].canFind(aggr.type),
-						"Cannot execute LoadSubscr instruction. Aggregate value must be string, array, assoc array or class node!");
-
 					switch( aggr.type )
 					{
 						case IvyDataType.String:
 							loger.internalAssert(indexValue.type == IvyDataType.Integer,
-								"Cannot execute LoadSubscr instruction. Index value for string aggregate must be integer!");
+								"Cannot execute LoadSubscr instruction. Index value for string aggregate must be integer!", indexValue);
 
 							// Index operation for string in D is little more complicated
 							 size_t startIndex = aggr.str.toUTFindex(indexValue.integer); // Get code unit index by index of symbol
@@ -623,16 +619,11 @@ public:
 							this._stack ~= aggr.assocArray[indexValue.str];
 							break;
 						case IvyDataType.ClassNode:
-							if( indexValue.type == IvyDataType.Integer ) {
-								this._stack ~= aggr.classNode[indexValue.integer];
-							} else if( indexValue.type == IvyDataType.String ) {
-								this._stack ~= aggr.classNode[indexValue.str];
-							} else {
-								loger.error("Cannot execute LoadSubscr instruction. Index value for class node must be string or integer!");
-							}
+							this._stack ~= aggr.classNode[indexValue];
 							break;
 						default:
-							loger.internalAssert(false, `Cannot execute LoadSubscr instruction. Unexpected aggregate type`);
+							loger.internalAssert(
+								false, "Unexpected type of aggregate " ~ aggr.type.text ~ " for LoadSubscr instruction!");
 					}
 					break;
 				}
