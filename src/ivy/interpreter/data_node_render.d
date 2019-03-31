@@ -7,7 +7,7 @@ import ivy.interpreter.data_node: IvyDataType;
 /// TextDebug - для вывода данных в виде текста в отладочном режиме (выводятся некоторые данные для узлов внутренних типов)
 /// JSON - вывод узлов, которые соответствуют типам в JSON в формате собственно JSON (остальные типы узлов выводим как null)
 /// JSONFull - выводим всё максимально в JSON, сериализуя узлы внутренних типов в JSON
-enum DataRenderType { Text, TextDebug, HTML, JSON, JSONFull };
+enum DataRenderType { Text, TextDebug, HTML, JSON, JSONFull, HTMLDebug };
 /// Думаю, нужен ещё флаг isPrettyPrint
 
 private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref OutRange outRange, string str)
@@ -15,6 +15,7 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref O
 	import std.range: put;
 	import std.algorithm: canFind;
 	enum bool isQuoted = ![DataRenderType.Text, DataRenderType.HTML].canFind(renderType);
+	enum bool isHTML = [DataRenderType.HTML, DataRenderType.HTMLDebug].canFind(renderType);
 	static if( isQuoted ) {
 		outRange.put("\"");
 	}
@@ -27,7 +28,7 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref O
 
 		foreach( size_t i, char symb; str )
 		{
-			static if( renderType == DataRenderType.HTML ) {
+			static if( isHTML ) {
 				static immutable escapedSymb = `&\"<>`;
 			} else {
 				static immutable escapedSymb = "\"\\/\b\f\n\r\t";
@@ -38,7 +39,7 @@ private void _writeEscapedString(DataRenderType renderType, OutRange)(auto ref O
 				chunkStart = i + 1; // Set chunk start to the next symbol
 			}
 			
-			static if( renderType == DataRenderType.HTML )
+			static if( isHTML )
 			{
 				switch( symb )
 				{
@@ -86,7 +87,7 @@ private void _writeEscapedString(DataRenderType renderType, OutRange, IvyData)(a
 	}
 	static if( renderType == DataRenderType.TextDebug ) {
 		import std.conv: text;
-		outRange.put(` <[` ~ strNode.escapeState.text ~ `]>`);
+		outRange.put(` [[` ~ strNode.escapeState.text ~ `]]`);
 	}
 }
 
@@ -104,10 +105,10 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 		case Undef:
 			static if( [DataRenderType.Text, DataRenderType.HTML].canFind(renderType) ) {
 				outRange.put("");
-			} else static if( renderType == DataRenderType.TextDebug ) {
-				outRange.put("undef");
-			} else {
+			} else static if( [DataRenderType.JSON, DataRenderType.JSONFull].canFind(renderType) ) {
 				outRange.put("\"undef\""); // Serialize undef as string in JSON
+			} else {
+				outRange.put("undef");
 			}
 			break;
 		case Null:
@@ -167,37 +168,37 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 			{
 				IvyData serialized = node.classNode.__serialize__();
 				if( serialized.isUndef ) {
-					outRange._writeEscapedString!renderType("<class node>");
+					outRange._writeEscapedString!renderType("[[class node]]");
 				} else {
 					renderDataNode!(renderType)(serialized, outRange, maxRecursion - 1);
 				}
 			} else {
-				outRange._writeEscapedString!renderType("<class node (null)>");
+				outRange._writeEscapedString!renderType("[[class node (null)]]");
 			}
 			break;
 		case CodeObject:
 			import std.conv: text;
 			outRange._writeEscapedString!renderType(
 				node.codeObject?
-				"<code object, size: " ~ node.codeObject._instrs.length.text ~ ">":
-				"<code object (null)>"
+				"[[code object, size: " ~ node.codeObject._instrs.length.text ~ "]]":
+				"[[code object (null)]]"
 			);
 			break;
 		case Callable:
 			outRange._writeEscapedString!renderType(
 				node.callable?
-				"<callable object, " ~ node.callable._kind.to!string ~ ", " ~ node.callable._name ~ ">":
-				"<callable object (null)>"
+				"[[callable object, " ~ node.callable._kind.to!string ~ ", " ~ node.callable._name ~ "]]":
+				"[[callable object (null)]]"
 			);
 			break;
 		case ExecutionFrame:
-			outRange._writeEscapedString!renderType("<execution frame>");
+			outRange._writeEscapedString!renderType("[[execution frame]]");
 			break;
 		case DataNodeRange:
-			outRange._writeEscapedString!renderType("<data node range>");
+			outRange._writeEscapedString!renderType("[[data node range]]");
 			break;
 		case AsyncResult:
-			outRange._writeEscapedString!renderType("<async result>");
+			outRange._writeEscapedString!renderType("[[async result]]");
 			break;
 	}
 }

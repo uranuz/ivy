@@ -122,14 +122,21 @@ public:
 			import std.conv: text;
 
 			// Put name of module and line where event occured
-			msg = "Ivy module: " ~ interp.currentModuleName() ~ ":" ~ interp.currentInstrLine().text ~ ", OpCode: " ~ interp.currentOpCode().text ~ "\n" ~ msg;
+			msg = "Ivy module: " ~ interp.currentModuleName() ~ ":" ~ interp.currentInstrLine().text
+				~ ", OpCode: " ~ interp.currentOpCode().text ~ "\n" ~ msg;
 
 			debug {
 				if( [LogInfoType.error, LogInfoType.internalError].canFind(logInfoType) )
 				{
 					// Give additional debug data if error occured
-					string dataStack = interp._stack._stack.map!( (it) => it.toDebugString() ).join("\n");
-					msg ~= "\n\nCall stack (most recent call last):\n" ~ interp.callStackInfo.join("\n") ~ "\n\nData stack:\n" ~ dataStack;
+					string dataStack = interp._stack._stack.map!(
+						(it) => `<div style="padding: 8px; border-bottom: 1px solid gray;">` ~ it.toHTMLDebugString() ~ `</div>`
+					).join("\n");
+					string callStack = interp.callStackInfo.map!(
+						(it) => `<div style="padding: 8px; border-bottom: 1px solid gray;">` ~ it ~ `</div>`
+					).join("\n");
+					msg ~= "\n\n<h3 style=\"color: darkgreen;\">Call stack (most recent call last):</h3>\n" ~ callStack 
+						~ "\n\n<h3 style=\"color: darkgreen;\">Data stack:</h3>\n" ~ dataStack;
 				}
 			}
 

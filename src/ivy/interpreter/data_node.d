@@ -595,6 +595,14 @@ struct TIvyData(S)
 		return result.data;
 	}
 
+	string toHTMLDebugString()
+	{
+		import std.array: appender;
+		auto result = appender!string();
+		renderDataNode!(DataRenderType.HTMLDebug)(this, result);
+		return result.data;
+	}
+
 	string toJSONString()
 	{
 		import std.array: appender;
