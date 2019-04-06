@@ -664,6 +664,9 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 IvyData errorToIvyData(Throwable error)
 {
 	import std.conv: to;
+	import std.exception: enforce;
+	enforce(error, `Throwable is empty`);
+	enforce(error.info, `Trace info is empty for exception`);
 	string[] traceInfo;
 	foreach( info; error.info ) {
 		traceInfo ~= info.to!string;
