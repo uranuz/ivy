@@ -24,10 +24,8 @@ return FirClass(
 		}]
 	}, DirectiveInterpreter, {
 		interpret: function(interp) {
-			interp._stack.push(
-				base64.encodeUTF8(
-					JSON.stringify(
-						interp.getValue("value"))));
+			var serialized = iu.toStdJSON(interp.getValue("value"));
+			interp._stack.push(base64.encodeUTF8(serialized));
 		}
 	});
 });

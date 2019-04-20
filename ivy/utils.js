@@ -132,6 +132,17 @@ iu = {
 			default:
 				throw new Error('Getting of deeper copy for this type is not implemented for now');
 		}
+	},
+	toStdJSON: function(val) {
+		return JSON.stringify(val, iu._replaceIntoJSON);
+	},
+	_replaceIntoJSON: function(key, val) {
+		switch( iu.getDataNodeType(val) ) {
+			case IvyDataType.ClassNode:
+				return val.serialize();
+			default: break;
+		}
+		return val;
 	}
 };
 // For now use CommonJS format to resolve cycle dependencies
