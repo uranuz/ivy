@@ -29,7 +29,7 @@ return FirClass(
 
 		/// Generate programme object or get existing from cache (if cache enabled)
 		getByModuleName: function(moduleName, callback) {
-			if( typeof(moduleName) !== 'string' ) {
+			if( typeof(moduleName) !== 'string' && !(moduleName instanceof String) ) {
 				throw new Error('Module name is required!');
 			}
 

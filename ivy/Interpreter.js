@@ -527,7 +527,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						attrBlocks = callableObj.attrBlocks(),
 						dataDict = {
 							"__scopeName__": callableObj._name,
-							"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
+							"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj._name: null)
 						}; // Allocating scope
 
 					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
@@ -679,7 +679,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						attrBlocks = callableObj.attrBlocks(),
 						dataDict = {
 							"__scopeName__": callableObj._name,
-							"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
+							"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj._name: null)
 						}; // Allocating scope
 
 					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
@@ -979,7 +979,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 		throw new errors.InterpreterError({
 			msg: msg,
 			instrIndex: this._pk,
-			instrName: Consts.OpCodeItems[instr[0]]
+			instrName: (instr && instr.length? Consts.OpCodeItems[instr[0]]: null)
 		});
 	},
 	_getNumberArgs: function() {
@@ -1185,7 +1185,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 	{
 		var loger = this;
 		loger.internalAssert(
-			[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].indexOf(iu.getDataNodeType(args)) > 0,
+			[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].indexOf(iu.getDataNodeType(args)) >= 0,
 			`Expected Undef, Null or AssocArray as list of directive arguments`
 		);
 
@@ -1220,6 +1220,48 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 			// Take a copy of it just like with consts
 			this._globalFrame.setValue(name, extraGlobals[name]);
 		}
+	},
+
+	getDirAttrDefaults: function(name, attrNames) {
+		var loger = this;
+		loger.internalAssert(
+			attrNames == null || (attrNames instanceof Array),
+			`Expected Array of strings or null as requested attr names list`);
+		var callableNode = this.currentFrame().getValue(name);
+		loger.internalAssert(iu.getDataNodeType(callableNode) === IvyDataType.Callable, `Expected Callable!`);
+		var attrBlocks = callableNode.attrBlocks();
+		var res = {};
+
+		// Put params into stack
+		for( var i = 0; i < attrBlocks.length; ++i )
+		{
+			var attrBlock = attrBlocks[i];
+			switch( attrBlock.kind )
+			{
+				case DirAttrKind.NamedAttr:
+				{
+					for( var attrName in attrBlock.namedAttrs ) {
+						if( !attrNames || !attrNames.length || attrNames.indexOf(attrName) >= 0 ) {
+							res[attrName] = iu.deeperCopy(attrBlock.namedAttrs[attrName].defaultValue);
+						}
+					}
+					break;
+				}
+				case DirAttrKind.ExprAttr:
+				{
+					for( var j = 0; j < attrBlock.exprAttrs; ++j ) {
+						var attrName = attrBlock.exprAttrs[j].name;
+						if( !attrNames || !attrNames.length || attrNames.indexOf(attrName) >= 0 ) {
+							res[attrName] = iu.deeperCopy(attrBlock.exprAttrs[j].defaultValue);
+						}
+					}
+					break;
+				}
+				default: break;
+			}
+		}
+
+		return res;
 	}
 });
 }); // define
