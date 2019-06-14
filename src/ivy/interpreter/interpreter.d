@@ -66,13 +66,13 @@ public:
 		);
 
 		IvyData globalDataDict;
-		globalDataDict["__scopeName__"] = "__global__"; // Allocating dict
+		globalDataDict["_ivyMethod"] = "__global__"; // Allocating dict
 		_globalFrame = new ExecutionFrame(null, null, globalDataDict, _logerMethod, false);
 		_moduleFrames["__global__"] = _globalFrame; // We need to add entry point module frame to storage manually
 		loger.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
 
-		dataDict["__scopeName__"] = "__main__"; // Allocating a dict if it's not
-		dataDict["__moduleName__"] = mainModuleName;
+		dataDict["_ivyMethod"] = "__main__"; // Allocating a dict if it's not
+		dataDict["_ivyModule"] = mainModuleName;
 		newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
 		this._stack.addStackBlock();
 		_moduleFrames[mainModuleName] = this._frameStack.back; // We need to add entry point module frame to storage manually
@@ -914,8 +914,8 @@ public:
 						CallableObject callableObj = new CallableObject(moduleName, codeObject, CallableKind.Module);
 
 						IvyData dataDict = [
-							"__scopeName__": moduleName,
-							"__moduleName__": moduleName
+							"_ivyMethod": moduleName,
+							"_ivyModule": moduleName
 						];
 						newFrame(callableObj, null, dataDict, false); // Create entry point module frame
 						_moduleFrames[moduleName] = this._frameStack.back; // We need to store module frame into storage
@@ -1207,8 +1207,8 @@ public:
 
 					loger.write("RunCallable creating execution frame...");
 					IvyData dataDict = [
-						"__scopeName__": callableObj._name,
-						"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
+						"_ivyMethod": callableObj._name,
+						"_ivyModule": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
 					]; // Allocating scope at the same time
 					newFrame(callableObj, _getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
 
@@ -1335,8 +1335,8 @@ public:
 					loger.internalAssert(callableObj, `Callable node is null`);
 
 					IvyData dataDict = [
-						"__scopeName__": callableObj._name,
-						"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
+						"_ivyMethod": callableObj._name,
+						"_ivyModule": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
 					]; // Allocating scope at the same time
 					newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
 

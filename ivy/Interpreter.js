@@ -48,13 +48,13 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 			this._moduleObjCache.get(mainModuleName).mainCodeObject()
 		),
 		globalDataDict = {
-			'__scopeName__': '__global__'
+			'_ivyMethod': '__global__'
 		};
 	this._globalFrame = new ExecutionFrame(null, null, globalDataDict, false);
 	this._moduleFrames = {'__global__': this._globalFrame};
 	dataDict = dataDict || {};
-	dataDict.__scopeName__ = '__main__'; // Allocating a dict if it's not
-	dataDict.__moduleName__ = mainModuleName;
+	dataDict._ivyMethod = '__main__'; // Allocating a dict if it's not
+	dataDict._ivyModule = mainModuleName;
 	this._moduleFrames[mainModuleName] = this.newFrame(rootCallableObj, null, dataDict, false);
 	this._stack.addStackBlock();
 
@@ -78,11 +78,9 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 		return fResult;
 	},
 	execLoopImpl: function(fResult, exitFrames) {
-		var
-			codeObj = this.getCodeObject(),
-			loger = this;
+		var loger = this;
 		exitFrames = exitFrames || 1;
-		for( this._pk = 0; this._pk <= this._codeRange.length; ) {
+		while( this._pk <= this._codeRange.length ) {
 			if( this._pk >= this._codeRange.length ) {
 				// Ended with this code object
 				loger.internalAssert(this._stack.getLength() === 1, 'Frame stack should contain 1 item now!');
@@ -526,8 +524,8 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					var
 						attrBlocks = callableObj.attrBlocks(),
 						dataDict = {
-							"__scopeName__": callableObj._name,
-							"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj._name: null)
+							"_ivyMethod": callableObj._name,
+							"_ivyModule": (callableObj._codeObj? callableObj._codeObj._moduleObj._name: null)
 						}; // Allocating scope
 
 					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
@@ -678,8 +676,8 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					var
 						attrBlocks = callableObj.attrBlocks(),
 						dataDict = {
-							"__scopeName__": callableObj._name,
-							"__moduleName__": (callableObj._codeObj? callableObj._codeObj._moduleObj._name: null)
+							"_ivyMethod": callableObj._name,
+							"_ivyModule": (callableObj._codeObj? callableObj._codeObj._moduleObj._name: null)
 						}; // Allocating scope
 
 					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
@@ -743,6 +741,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						iu.getDataNodeType(aResult) === IvyDataType.AsyncResult,
 						`Expected Callable operand`
 					);
+					++this._pk; // Goto next instruction after resuming execution
 					aResult.then(function(data) {
 						this._stack.push({
 							isError: false,
@@ -756,7 +755,6 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						});
 						this.execLoopImpl(fResult, exitFrames);
 					}.bind(this));
-					++this._pk; // Goto next instruction after resuming execution
 					return; // Wait for resuming execution
 				}
 
@@ -778,8 +776,8 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 							codeObject = modObject.mainCodeObject(),
 							callableObj = new CallableObject(moduleName, codeObject),
 							dataDict = {
-								"__scopeName__": moduleName,
-								"__moduleName__": moduleName
+								"_ivyMethod": moduleName,
+								"_ivyModule": moduleName
 							},
 							// Create entry point module frame
 							frame = this.newFrame(callableObj, null, dataDict, false);
