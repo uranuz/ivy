@@ -1517,7 +1517,7 @@ public:
 		return fResult;
 	}
 
-	IvyData[string] getDirAttrDefaults(string name, string[] attrNames = null)
+	DirValueAttr[string] getDirAttrs(string name, string[] attrNames = null)
 	{
 		import std.range: empty;
 		import std.algorithm: canFind;
@@ -1525,8 +1525,8 @@ public:
 		IvyData callableNode = this.currentFrame.getValue(name);
 		loger.internalAssert(callableNode.type == IvyDataType.Callable, `Expected Callable!`);
 		CallableObject callableObj = callableNode.callable;
-		IvyData[string] res;
-		
+		DirValueAttr[string] res;
+
 		foreach( attrBlock; callableObj.attrBlocks )
 		{
 			switch( attrBlock.kind )
@@ -1536,7 +1536,7 @@ public:
 					foreach( attrName, namedAttr; attrBlock.namedAttrs )
 					{
 						if( attrNames.empty || attrNames.canFind(attrName) ) {
-							res[attrName] = deeperCopy(namedAttr.defaultValue);
+							res[attrName] = namedAttr;
 						}
 					}
 					break;
@@ -1546,7 +1546,7 @@ public:
 					foreach( j, exprAttr; attrBlock.exprAttrs )
 					{
 						if( attrNames.empty || attrNames.canFind(exprAttr.name) ) {
-							res[exprAttr.name] = deeperCopy(exprAttr.defaultValue);
+							res[exprAttr.name] = exprAttr;
 						}
 					}
 					break;
