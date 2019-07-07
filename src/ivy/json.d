@@ -280,26 +280,26 @@ auto parseIvyJSON(S)(S src)
 	return parser.parseValue();
 }
 
-import std.json: JSON_TYPE, JSONValue;
+import std.json: JSONType, JSONValue;
 IvyData toIvyJSON(ref JSONValue src)
 {
 	final switch( src.type )
 	{
-		case JSON_TYPE.NULL:
+		case JSONType.null_:
 			return IvyData(null);
-		case JSON_TYPE.TRUE:
+		case JSONType.true_:
 			return IvyData(true);
-		case JSON_TYPE.FALSE:
+		case JSONType.false_:
 			return IvyData(false);
-		case JSON_TYPE.INTEGER:
+		case JSONType.integer:
 			return IvyData(cast(ptrdiff_t) src.integer);
-		case JSON_TYPE.UINTEGER:
+		case JSONType.uinteger:
 			return IvyData(cast(ptrdiff_t) src.uinteger);
-		case JSON_TYPE.FLOAT:
+		case JSONType.float_:
 			return IvyData(src.floating);
-		case JSON_TYPE.STRING:
+		case JSONType.string:
 			return IvyData(src.str);
-		case JSON_TYPE.ARRAY:
+		case JSONType.array:
 		{
 			IvyData[] nodeArray;
 			nodeArray.length = src.array.length;
@@ -308,7 +308,7 @@ IvyData toIvyJSON(ref JSONValue src)
 			}
 			return IvyData(nodeArray);
 		}
-		case JSON_TYPE.OBJECT:
+		case JSONType.object:
 		{
 			IvyData[string] nodeAA;
 			foreach( string key, val; src.object ) {
