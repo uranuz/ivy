@@ -45,11 +45,11 @@ mixin template DefAnalyzeMixin()
 					if( attrRange.empty )
 						loger.error(`Expected attr type definition, but got end of attrs range!`);
 
-					auto attrTypeExpr = cast(INameExpression) attrRange.front;
-					if( !attrTypeExpr )
-						loger.error(`Expected attr type definition!`);
+					auto attrTypeExpr = cast(ILiteralExpression) attrRange.front;
+					if( !attrTypeExpr || attrTypeExpr.literalType != LiteralType.String )
+						loger.error(`Expected string literal as attr type definition!`);
 
-					res.attr.typeName = attrTypeExpr.name; // Getting type of attribute as string (for now)
+					res.attr.typeName = attrTypeExpr.toStr(); // Getting type of attribute as string (for now)
 
 					attrRange.popFront(); // Skip type expression
 				}
