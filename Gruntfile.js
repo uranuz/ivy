@@ -7,7 +7,7 @@
 
 	grunt.initConfig({
 		pkg: grunt.file.readJSON('package.json'),
-		deployPath: expandTilde(grunt.option('deployPath') || '~/sites/mkk_site'),
+		deployPath: expandTilde(grunt.option('deployPath') || '~/sites/mkk'),
 		symlink: {
 			scripts: {
 				expand: true,
