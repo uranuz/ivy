@@ -31,4 +31,5 @@
 	grunt.registerTask('cleanAll', ['clean:scripts'])
 	grunt.registerTask('deploy', ['cleanAll', 'symlink:scripts']);
 	grunt.registerTask('default', ['deploy']);
+	grunt.registerTask('dist', ['deploy']);
 }
