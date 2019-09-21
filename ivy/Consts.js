@@ -111,8 +111,8 @@ var Consts = {
 		'BodyAttr'
 	],
 	stackBlockHeaderSizeOffset: 4,
-	stackBlockHeaderCheckMask: 0b1000,
-	stackBlockHeaderTypeMask: 0b111,
+	stackBlockHeaderCheckMask: parseInt('1000', 2),
+	stackBlockHeaderTypeMask: parseInt('111', 2),
 	NodeEscapeStateItems: [
 		'Init', 'Safe', 'Unsafe'
 	],
