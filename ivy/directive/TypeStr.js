@@ -22,7 +22,7 @@ return FirClass(
 			if( valueType >= Consts.IvyDataTypeItems.length ) {
 				interp.rtError('Unable to get type-string for value');
 			}
-			this._stack.push(Consts.IvyDataTypeItems[valueType]);
+			interp._stack.push(Consts.IvyDataTypeItems[valueType]);
 		}
 	});
 });

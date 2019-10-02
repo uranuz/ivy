@@ -27,7 +27,7 @@ return FirClass(
 					if( isNaN(parsed) || String(parsed) !== value ) {
 						interp.rtError('Unable to parse value as Integer');
 					}
-					this._stack.push(parsed);
+					interp._stack.push(parsed);
 					break;
 				}
 				default:

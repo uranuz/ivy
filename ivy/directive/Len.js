@@ -22,10 +22,10 @@ return FirClass(
 			switch( iu.getDataNodeType(value) ) {
 				case IvyDataType.String:
 				case IvyDataType.Array:
-					this._stack.push(value.length);
+					interp._stack.push(value.length);
 					break;
 				case IvyDataType.AssocArray:
-					this._stack.push(Object.keys(value).length);
+					interp._stack.push(Object.keys(value).length);
 					break;
 				default:
 					interp.rtError('Cannot get length for value');

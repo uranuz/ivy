@@ -18,7 +18,7 @@ return FirClass(
 		}]
 	}, DirectiveInterpreter, {
 		interpret: function(interp) {
-			this._stack.push(String(interp.getValue("value")));
+			interp._stack.push(String(interp.getValue("value")));
 		}
 	})
 });
