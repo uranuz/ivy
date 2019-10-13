@@ -20,6 +20,9 @@ import std.typecons: Tuple;
 
 alias SaveStateResult = Tuple!(Interpreter, `interp`, AsyncResult, `asyncResult`);
 
+enum IVY_TYPE_FIELD = "_t";
+enum IVY_VALUE_FIELD = "_v";
+
 // Representation of programme ready for execution
 class ExecutableProgramme
 {
@@ -148,7 +151,8 @@ public:
 			moduleObjects[modName] = [
 				"entryPointIndex": JSONValue(modObj._entryPointIndex),
 				"consts": JSONValue(jConsts),
-				"fileName": JSONValue(modObj._fileName)
+				"fileName": JSONValue(modObj._fileName),
+				(cast(string) IVY_TYPE_FIELD): JSONValue(IvyDataType.ModuleObject)
 			];
 		}
 		jProg[`moduleObjects`] = moduleObjects;
@@ -159,36 +163,36 @@ public:
 import std.json: JSONValue;
 JSONValue toStdJSON(IvyData con)
 {
-	final switch( con.type ) with(IvyDataType)
+	final switch( con.type )
 	{
-		case Undef: return JSONValue("undef");
-		case Null: return JSONValue();
-		case Boolean: return JSONValue(con.boolean);
-		case Integer: return JSONValue(con.integer);
-		case Floating: return JSONValue(con.floating);
-		case String: return JSONValue(con.str);
-		case DateTime:
+		case IvyDataType.Undef: return JSONValue("undef");
+		case IvyDataType.Null: return JSONValue();
+		case IvyDataType.Boolean: return JSONValue(con.boolean);
+		case IvyDataType.Integer: return JSONValue(con.integer);
+		case IvyDataType.Floating: return JSONValue(con.floating);
+		case IvyDataType.String: return JSONValue(con.str);
+		case IvyDataType.DateTime:
 			return JSONValue([
-				"_t": JSONValue(con.type),
-				"_v": JSONValue(con.dateTime.toISOExtString())
+				IVY_TYPE_FIELD: JSONValue(con.type),
+				IVY_VALUE_FIELD: JSONValue(con.dateTime.toISOExtString())
 			]);
-		case Array: {
+		case IvyDataType.Array: {
 			JSONValue[] arr;
 			foreach( IvyData node; con.array ) {
 				arr ~= toStdJSON(node);
 			}
 			return JSONValue(arr);
 		}
-		case AssocArray: {
+		case IvyDataType.AssocArray: {
 			JSONValue[string] arr;
 			foreach( string key, IvyData node; con.assocArray ) {
 				arr[key] ~= toStdJSON(node);
 			}
 			return JSONValue(arr);
 		}
-		case CodeObject: {
+		case IvyDataType.CodeObject: {
 			JSONValue jCode = [
-				"_t": JSONValue(con.type),
+				IVY_TYPE_FIELD: JSONValue(con.type),
 				"name": JSONValue(con.codeObject.name),
 				"moduleObj": JSONValue(con.codeObject._moduleObj._name),
 			];
@@ -246,8 +250,13 @@ JSONValue toStdJSON(IvyData con)
 			jCode["attrBlocks"] = jAttrBlocks;
 			return jCode;
 		}
-		case Callable, ClassNode, ExecutionFrame, DataNodeRange, AsyncResult: {
-			return JSONValue(["_t": con.type]);
+		case IvyDataType.Callable:
+		case IvyDataType.ClassNode:
+		case IvyDataType.ExecutionFrame:
+		case IvyDataType.DataNodeRange:
+		case IvyDataType.AsyncResult:
+		case IvyDataType.ModuleObject: {
+			return JSONValue([IVY_TYPE_FIELD: con.type]);
 		}
 	}
 	assert(false);
@@ -260,19 +269,4 @@ JSONValue _valueAttrToStdJSON(VA)(auto ref VA va) {
 	]);
 }
 
-/++
-/// Simple method that can be used to compile source file and get executable
-ExecutableProgramme compileFile(string sourceFileName, IvyConfig config)
-{
-	import std.path: extension, stripExtension, relativePath, dirSeparator, dirName;
-	import std.array: split, join, empty, front;
-
-	//importPaths = sourceFileName.dirName() ~ importPaths; // For now let main source file path be in import paths
-
-	// Calculating main module name
-	string mainModuleName = sourceFileName.relativePath(config.importPaths.front).stripExtension().split(dirSeparator).join('.');
-
-	return compileModule(mainModuleName, config);
-}
-+/
 

@@ -84,9 +84,16 @@ function RemoteModuleLoader(endpoint) {
 					return new CodeObject(con.name, con.instrs, moduleObj, con.attrBlocks);
 				case IvyDataType.DateTime:
 					return new Date(con._v);
-				default:
-					return con;
+				default: break;
 			}
+			// Deserialize properties inside object also
+			for( var key in con ) {
+				if( con.hasOwnProperty(key) ) {
+					continue;
+				}
+				con[key] = this._deserializeValue(con[key])
+			}
+			return con;
 		} else {
 			throw new Error('Unexpected value type!');
 		}

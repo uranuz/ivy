@@ -50,7 +50,8 @@ enum IvyDataType: ubyte {
 	Callable,
 	ExecutionFrame,
 	DataNodeRange,
-	AsyncResult
+	AsyncResult,
+	ModuleObject // Used for serialization
 }
 
 enum NodeEscapeState: ubyte {
@@ -391,6 +392,7 @@ struct TIvyData(S)
 				case IvyDataType.ExecutionFrame: storage.execFrame = arg.execFrame; break;
 				case IvyDataType.DataNodeRange: storage.dataRange = arg.dataRange; break;
 				case IvyDataType.AsyncResult: storage.asyncResult = arg.asyncResult; break;
+				case IvyDataType.ModuleObject: break; // It is fake...
 			}
 		}
 		else
@@ -653,6 +655,7 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 		case IvyDataType.ExecutionFrame:
 		case IvyDataType.DataNodeRange:
 		case IvyDataType.AsyncResult:
+		case IvyDataType.ModuleObject:
 			// These types of nodes shouldn't appear in module constants table so leave these not implemented for now
 			break;
 	}

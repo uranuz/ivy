@@ -200,5 +200,8 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 		case AsyncResult:
 			outRange._writeEscapedString!renderType("[[async result]]");
 			break;
+		case ModuleObject:
+			outRange._writeEscapedString!renderType("[[module object]]");
+			break;
 	}
 }
