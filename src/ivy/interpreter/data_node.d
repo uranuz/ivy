@@ -629,8 +629,8 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 			// String is not a value type, but they are immutable in D implementation,
 			// so we only get new slice of existing string
 
-		case IvyDataType.CodeObject:
-			// We don't do deeper copy of code object, because it should always be used as constant
+		case IvyDataType.CodeObject: case IvyDataType.Callable:
+			// We don't do deeper copy of code object or callable, because it should be used as constant
 			return node;
 		case IvyDataType.Array:
 		{
@@ -649,7 +649,6 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 			}
 			return IvyData(newAA);
 		}
-		case IvyDataType.Callable:
 		case IvyDataType.ClassNode:
 		case IvyDataType.ExecutionFrame:
 		case IvyDataType.DataNodeRange:

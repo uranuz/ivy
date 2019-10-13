@@ -90,8 +90,8 @@ iu = {
 				}
 				return newArr;
 			}
-			case IvyDataType.CodeObject:
-				// CodeObject's are constants so don't do copy
+			case IvyDataType.CodeObject: case IvyDataType.Callable:
+				// CodeObject's and Callable's are constants so don't do copy
 				return val;
 			default:
 				throw new Error('Getting of deeper copy for this type is not implemented for now');
@@ -128,6 +128,9 @@ iu = {
 					result += this.toString(val[i]);
 				}
 				return result;
+			}
+			case IvyDataType.ClassNode: {
+				return this.toString(val.serialize());
 			}
 			default:
 				throw new Error('Getting of deeper copy for this type is not implemented for now');
