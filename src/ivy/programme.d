@@ -152,7 +152,7 @@ public:
 				"entryPointIndex": JSONValue(modObj._entryPointIndex),
 				"consts": JSONValue(jConsts),
 				"fileName": JSONValue(modObj._fileName),
-				(cast(string) IVY_TYPE_FIELD): JSONValue(IvyDataType.ModuleObject)
+				IVY_TYPE_FIELD: JSONValue(IvyDataType.ModuleObject)
 			];
 		}
 		jProg[`moduleObjects`] = moduleObjects;

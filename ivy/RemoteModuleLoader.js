@@ -1,13 +1,9 @@
 define('ivy/RemoteModuleLoader', [
-	'ivy/ModuleObject',
-	'ivy/CodeObject',
+	'fir/datctrl/ivy/Deserializer',
 	'ivy/Consts'
 ], function(
-	ModuleObject,
-	CodeObject,
-	Consts
+	IvyDeserializer
 ) {
-var IvyDataType = Consts.IvyDataType;
 return FirClass(
 function RemoteModuleLoader(endpoint) {
 	if( !endpoint ) {
@@ -55,48 +51,9 @@ function RemoteModuleLoader(endpoint) {
 				// Skip build-in properties. Do not recreate the same modules again
 				continue;
 			}
-			var
-				jMod = moduleObjects[modName],
-				consts = jMod.consts,
-				moduleObj = new ModuleObject(modName, consts, jMod.entryPointIndex);
-
-			this._moduleObjects[modName] = moduleObj;
-			for( var i = 0; i < consts.length; ++i ) {
-				consts[i] = this._deserializeValue(consts[i], moduleObj);
-			}
+			this._moduleObjects[modName] = IvyDeserializer.deserialize(moduleObjects[modName]);
 		}
 		return this._moduleObjects;
-	},
-	_deserializeValue: function(con, moduleObj) {
-		if( con === 'undef' ) {
-			return undefined;
-		} else if(
-			con === null
-			|| con === true || con === false || con instanceof Boolean
-			|| typeof(con) === 'number' || con instanceof Number
-			|| typeof(con) === 'string' || con instanceof String
-			|| con instanceof Array
-		) {
-			return con;
-		} else if( con instanceof Object ) {
-			switch( con._t ) {
-				case IvyDataType.CodeObject:
-					return new CodeObject(con.name, con.instrs, moduleObj, con.attrBlocks);
-				case IvyDataType.DateTime:
-					return new Date(con._v);
-				default: break;
-			}
-			// Deserialize properties inside object also
-			for( var key in con ) {
-				if( con.hasOwnProperty(key) ) {
-					continue;
-				}
-				con[key] = this._deserializeValue(con[key])
-			}
-			return con;
-		} else {
-			throw new Error('Unexpected value type!');
-		}
 	}
 });
 });

@@ -15,7 +15,8 @@ var Consts = {
 		'Callable',
 		'ExecutionFrame',
 		'DataNodeRange',
-		'AsyncResult'
+		'AsyncResult',
+		'ModuleObject'
 	],
 	OpCodeItems: [
 		'InvalidCode', // Used to check if code of operation was not properly set
