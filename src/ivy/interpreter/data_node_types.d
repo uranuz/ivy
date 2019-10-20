@@ -56,6 +56,10 @@ class CallableObject
 			`Last attr block definition expected to be BodyAttr, but got: ` ~ attrBlocks[$-1].kind.text);
 		return attrBlocks[$-1].bodyAttr.isNoscope;
 	}
+
+	string moduleName() @property {
+		return _codeObj? _codeObj._moduleObj._name: `__global__`;
+	}
 }
 
 class ArrayRange: IvyNodeRange

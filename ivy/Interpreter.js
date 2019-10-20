@@ -119,29 +119,29 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 
 				// Arithmetic binary operations opcodes
 				case Add: {
-					var args =  this._getNumberArgs();
+					var args = this._getNumberArgs();
 					this._stack.push(args[0] + args[1]);
 					break;
 				}
 				case Sub: {
-					var args =  this._getNumberArgs();
+					var args = this._getNumberArgs();
 					this._stack.push(args[0] - args[1]);
 					break;
 				}
 				case Mul: {
-					var args =  this._getNumberArgs();
+					var args = this._getNumberArgs();
 					this._stack.push(args[0] * args[1]);
 					break;
 				}
 				case Div: {
 					var
-						args =  this._getNumberArgs(),
+						args = this._getNumberArgs(),
 						res = args[0] / args[1];
 					this._stack.push( args[2] === IvyDataType.Integer? Math.trunc(res): res );
 					break;
 				}
 				case Mod: {
-					var args =  this._getNumberArgs();
+					var args = this._getNumberArgs();
 					this._stack.push(args[0] % args[1]);
 					break;
 				}
@@ -304,9 +304,21 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						}
 						case IvyDataType.ClassNode: {
 							if( [IvyDataType.String, IvyDataType.Integer].indexOf(indexType) < 0 ) {
-								this.rtError('Expected String or Integer as index value');
+								this.rtError('Expected String or Integer as index value. Got: ' + indexType);
 							}
 							this._stack.push(aggr.at( indexValue ));
+							break;
+						}
+						case IvyDataType.Callable: {
+							loger.internalAssert(
+								indexType === IvyDataType.String,
+								'Expected String as index value'
+							);
+							if( indexValue === `moduleName` ) {
+								this._stack.push(aggr.moduleName());
+							} else {
+								loger.internalAssert(false, `Unexpected property "` + indexValue.str + `" for callable object`);
+							}
 							break;
 						}
 						default:
@@ -340,7 +352,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						}
 						case IvyDataType.ClassNode: {
 							if( [IvyDataType.String, IvyDataType.Integer].indexOf(indexType) < 0 ) {
-								this.rtError('Expected String or Integer as index value');
+								this.rtError('Expected String or Integer as index value. Got: ' + indexType);
 							}
 							aggr.setAt(value, indexType);
 							break;
@@ -873,12 +885,18 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					this._stack.pop();
 					break;
 				}
+
 				case SwapTwo: {
 					var
 						tmp = this._stack.back(), len = this._stack.getLength(),
 						lastIndex = len - 1, prevIndex = len - 2;
 					this._stack.setAt(this._stack.at(prevIndex), lastIndex);
 					this._stack.setAt(tmp, prevIndex)
+					break;
+				}
+
+				case OpCode.DubTop: {
+					this._stack.push(this._stack.back());
 					break;
 				}
 
@@ -1044,14 +1062,15 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 			case IvyDataType.Floating:
 			case IvyDataType.DateTime:
 			case IvyDataType.ClassNode:
-				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
-				// because in many cases they could be treated as significant values
-				// DateTime and Boolean are not empty too, because we cannot say what value should be treated as empty
+				// I don't like that integer 0 is treated as false in C-style languages,
+				// because evaluation in logical context is often used to check if value is empty.
+				// But 0 shouldn't always mean `empty` or false. It could be identifier (for instance)
 				return true;
 			case IvyDataType.String:
 			case IvyDataType.Array:
-			case IvyDataType.AssocArray:
 				return !!val.length;
+			case IvyDataType.AssocArray:
+				return !!Object.keys(val).length;
 			case IvyDataType.DataNodeRange:
 				return !val.empty();
 			default:
@@ -1172,9 +1191,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 	},
 
 	_getModuleFrame: function(callableObj) {
-		var
-			moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__",
-			moduleFrame = this._moduleFrames[moduleName];
+		var moduleFrame = this._moduleFrames[callableObj.moduleName()];
 		this.internalAssert(moduleFrame, "Module frame doesn't exist");
 		return moduleFrame;
 	},

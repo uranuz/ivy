@@ -24,7 +24,7 @@ public:
 		compiler.addInstr(OpCode.SwapTwo); // Swap module return value and imported execution frame
 		//compiler.addInstr(OpCode.PopTop); // Drop return value of module importing, because it is meaningless
 		compiler.addInstr(OpCode.StoreNameWithParents, modNameConstIndex);
-		// OpCode.StoreName  does not put value on the stack so do it there
+		// OpCode.StoreName does not put value on the stack so do it there
 		//compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ) );
 	}
 }

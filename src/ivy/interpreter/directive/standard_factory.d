@@ -8,6 +8,7 @@ InterpreterDirectiveFactory makeStandardInterpreterDirFactory()
 	import ivy.interpreter.directive.factory;
 
 	auto factory = new InterpreterDirectiveFactory;
+	factory.add(new BoolCtorDirInterpreter);
 	factory.add(new IntCtorDirInterpreter);
 	factory.add(new FloatCtorDirInterpreter);
 	factory.add(new StrCtorDirInterpreter);

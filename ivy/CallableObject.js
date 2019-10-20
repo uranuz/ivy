@@ -27,6 +27,10 @@ return FirClass(
 				throw new Error('Last attr block definition expected to be BodyAttr');
 			}
 			return iu.back(attrBlocks).bodyAttr.isNoscope;
+		},
+
+		moduleName: function() {
+			return this._codeObj? this._codeObj._moduleObj._name: "__global__"
 		}
 	});
 });

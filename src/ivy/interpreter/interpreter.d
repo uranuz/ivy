@@ -628,6 +628,16 @@ public:
 						case IvyDataType.ClassNode:
 							this._stack ~= aggr.classNode[indexValue];
 							break;
+						case IvyDataType.Callable: {
+							loger.internalAssert(indexValue.type == IvyDataType.String,
+								"Cannot execute LoadSubscr instruction. Index value for callable aggregate must be string!");
+							if( indexValue.str == `moduleName` ) {
+								this._stack ~= IvyData(aggr.callable.moduleName);
+							} else {
+								loger.internalAssert(false, `Unexpected property "` ~ indexValue.str ~ `" for callable object`);
+							}
+							break;
+						}
 						default:
 							loger.internalAssert(
 								false, "Unexpected type of aggregate " ~ aggr.type.text ~ " for LoadSubscr instruction!");
@@ -716,11 +726,6 @@ public:
 					IvyData indexValue = this._stack.popBack();
 					IvyData value = this._stack.popBack();
 					IvyData aggr = this._stack.popBack();
-
-					// Do not support setting individual characters of strings for now and maybe forever... Who knowns how it turns...
-					loger.internalAssert(
-						[IvyDataType.Array, IvyDataType.AssocArray, IvyDataType.ClassNode].canFind(aggr.type),
-						"Cannot execute StoreSubscr instruction. Aggregate value must be array, assoc array or class node!");
 
 					switch( aggr.type )
 					{
@@ -1094,6 +1099,12 @@ public:
 					IvyData tmp = this._stack[$-1];
 					this._stack[$-1] = this._stack[$-2];
 					this._stack[$-2] = tmp;
+					break;
+				}
+
+				case OpCode.DubTop: {
+					loger.internalAssert(!this._stack.empty, "Stack must have item to duplicate");
+					this._stack ~= this._stack.back;
 					break;
 				}
 
@@ -1478,9 +1489,9 @@ public:
 		loger.internalAssert(false, `Failed to get result of execution`);
 	} // void execLoop()
 
-	ExecutionFrame _getModuleFrame(CallableObject callableObj) {
-		string moduleName = callableObj._codeObj? callableObj._codeObj._moduleObj._name: "__global__";
-		ExecutionFrame moduleFrame = _moduleFrames.get(moduleName, null);
+	ExecutionFrame _getModuleFrame(CallableObject callableObj)
+	{
+		ExecutionFrame moduleFrame = _moduleFrames.get(callableObj.moduleName, null);
 		loger.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callableObj._name, ` does not exist!` );
 		return moduleFrame;
 	}

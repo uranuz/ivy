@@ -2,6 +2,7 @@ module ivy.interpreter.directive;
 
 public import ivy.interpreter.directive.date_time_get: DateTimeGetDirInterpreter;
 public import ivy.interpreter.directive.empty: EmptyDirInterpreter;
+public import ivy.interpreter.directive.bool_ctor: BoolCtorDirInterpreter;
 public import ivy.interpreter.directive.float_ctor: FloatCtorDirInterpreter;
 public import ivy.interpreter.directive.has: HasDirInterpreter;
 public import ivy.interpreter.directive.int_ctor: IntCtorDirInterpreter;
