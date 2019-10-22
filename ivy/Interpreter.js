@@ -25,7 +25,6 @@ define('ivy/Interpreter', [
 ) {
 	var
 		IvyDataType = Consts.IvyDataType,
-		CallableKind = Consts.CallableKind,
 		FrameSearchMode = Consts.FrameSearchMode,
 		OpCode = Consts.OpCode,
 		DirAttrKind = Consts.DirAttrKind;
