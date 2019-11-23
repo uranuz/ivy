@@ -5,8 +5,5 @@
 	"authors": ["uranuz"],
 	"buildRequirements": [
 		"allowWarnings"
-	],
-	"dflags": [
-		"-lowmem"
 	]
 }
