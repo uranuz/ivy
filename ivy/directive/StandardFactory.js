@@ -10,7 +10,6 @@ define('ivy/directive/StandardFactory', [
 	'ivy/directive/Range',
 	'ivy/directive/Scope',
 	'ivy/directive/StrCtor',
-	'ivy/directive/ToJSONBase64',
 	'ivy/directive/TypeStr'
 ], function(
 	DirectiveFactory,
@@ -39,7 +38,6 @@ define('ivy/directive/StandardFactory', [
 		factory.add(new Range);
 		factory.add(new Scope);
 		factory.add(new StrCtor);
-		factory.add(new ToJSONBase64);
 		factory.add(new TypeStr);
 		return factory;
 	});

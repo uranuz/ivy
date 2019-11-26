@@ -1,9 +1,7 @@
 define('ivy/Engine', [
-	'ivy/RemoteModuleLoader',
 	'ivy/directive/StandardFactory',
 	'ivy/Programme'
 ], function(
-	RemoteModuleLoader,
 	StandardFactory,
 	ExecutableProgramme
 ) {
