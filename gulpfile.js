@@ -18,7 +18,7 @@ var
 	if( argv.publicPath ) {
 		config.publicPath = argv.publicPath;
 	} else {
-		config.publicPath = '/pub';
+		config.publicPath = '/pub/';
 		console.warn('--publicPath is not set, so using default value: ' + config.publicPath);
 	}
 	
@@ -34,6 +34,7 @@ var
 })();
 
 function buildLib(config, callback) {
+	var manifestsPath = path.join(config.outPub, `manifest/`);
 	// run webpack
 	webpack({
 		context: __dirname,
@@ -41,29 +42,45 @@ function buildLib(config, callback) {
 		entry: {
 			ivy: glob.sync(path.join(__dirname, 'ivy/**/*.js'))
 		},
+		/*
 		externals: [
 			nodeExternals(),
-			/^fir\//
+			// /^fir\//,
+			function(basePath, moduleName, callback) {
+				if( /^(fir)\//.test(moduleName) ) {
+					return callback(null, 'arguments[2]("./' + moduleName + '.js")');
+				}
+				callback();
+			}
+			
 		],
+		*/
 		resolve: {
 			modules: [
 				__dirname
 			],
 			extensions: ['.js']
 		},
+		/*
 		optimization: {
 			runtimeChunk: {
 				name: "manifest",
 			}
 		},
+		*/
 		devtool: 'cheap-source-map',
 		output: {
 			path: config.outPub,
 			publicPath: config.publicPath,
-			libraryTarget: 'umd',
-			library: 'ivy',
-			umdNamedDefine: true,
-		}
+			libraryTarget: 'var',
+			library: '[name]_lib',
+		},
+		plugins: [
+			new webpack.DllPlugin({
+				name: '[name]_lib',
+				path: path.join(manifestsPath, '[name].manifest.json')
+			}),
+		]
 	}, function(err, stats) {
 		if(err) {
 			throw new gutil.PluginError("webpack", err);

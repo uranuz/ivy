@@ -23,7 +23,6 @@ define('ivy/directive/StandardFactory', [
 	Range,
 	Scope,
 	StrCtor,
-	ToJSONBase64,
 	TypeStr
 ) {
 	return (function StandardFactory() {
