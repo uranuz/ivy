@@ -27,7 +27,7 @@ var
 	} else if( config.outSite ) {
 		config.outPub = path.resolve(
 			config.outSite,
-			config.publicPath.replace(/^\//, '') // Trime leading slash
+			config.publicPath.replace(/^\//, '') // Trim leading slash
 		);
 		console.warn('--outPub is not set, so using default value: ' + config.outPub);
 	}
@@ -59,7 +59,8 @@ function buildLib(config, callback) {
 			modules: [
 				__dirname
 			],
-			extensions: ['.js']
+			extensions: ['.js'],
+			symlinks: false
 		},
 		/*
 		optimization: {
