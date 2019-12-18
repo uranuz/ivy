@@ -73,12 +73,13 @@ function buildLib(config, callback) {
 		output: {
 			path: config.outPub,
 			publicPath: config.publicPath,
-			libraryTarget: 'var',
-			library: '[name]_lib',
+			filename: '[name].js',
+			libraryTarget: 'window',
+			library: '[name]',
 		},
 		plugins: [
 			new webpack.DllPlugin({
-				name: '[name]_lib',
+				name: '[name]',
 				path: path.join(manifestsPath, '[name].manifest.json')
 			}),
 		]
