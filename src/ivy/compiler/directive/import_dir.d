@@ -1,7 +1,7 @@
 module ivy.compiler.directive.import_dir;
 
 import ivy.compiler.directive.utils;
-import ivy.parser.node: INameExpression;
+import ivy.ast.iface: INameExpression;
 
 /// Compiles module into module object and saves it into dictionary
 class ImportCompiler: IDirectiveCompiler

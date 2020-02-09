@@ -1,6 +1,6 @@
-module ivy.parser.ast_writer;
+module ivy.ast.writer;
 
-import ivy.parser.node: IvyNode;
+import ivy.ast.iface: IvyNode;
 
 void writeAST(SourceRange, OutRange)(ref const(SourceRange) source, IvyNode node, ref OutRange output, int indent = 0)
 {

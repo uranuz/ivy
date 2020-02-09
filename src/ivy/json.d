@@ -2,8 +2,9 @@
 module ivy.json;
 
 import ivy.interpreter.data_node;
-import ivy.parser.lexer_tools;
-import ivy.common;
+
+
+import trifle.location: LocationConfig;
 
 class IvyJSONException: Exception
 {
@@ -16,6 +17,8 @@ public:
 
 struct JSONParser(S = string, LocationConfig c = LocationConfig.init)
 {
+	import trifle.text_forward_range: TextForwardRange;
+
 	alias String = S;
 	alias SourceRange = TextForwardRange!(String, c);
 	alias Char = SourceRange.Char;

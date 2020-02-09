@@ -8,7 +8,7 @@ import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
 import ivy.compiler.compiler: ByteCodeCompiler;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 import ivy.programme: ExecutableProgramme;
-import ivy.common: LogInfo, LogInfoType;
+import ivy.loger: LogInfo, LogInfoType;
 
 /// Dump-simple in-memory cache for compiled programmes
 class IvyEngine

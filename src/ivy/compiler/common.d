@@ -1,7 +1,9 @@
 module ivy.compiler.common;
 
-import ivy.parser.node: IAttributeRange;
+import ivy.ast.iface: IAttributeRange;
 import ivy.compiler.errors: ASTNodeTypeException;
+
+import ivy.loger: getShortFuncName;
 
 T expectNode(T)(IvyNode node, string msg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__)
 {
@@ -10,8 +12,8 @@ T expectNode(T)(IvyNode node, string msg = null, string file = __FILE__, string 
 	import std.array: array;
 	import std.conv: to;
 
-	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
-	enum shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
+	string shortFuncName = getShortFuncName(func);
+	enum shortObjName = getShortFuncName(T.stringof);
 
 	T typedNode = cast(T) node;
 	if( !typedNode )
@@ -27,8 +29,8 @@ T takeFrontAs(T)(IAttributeRange range, string errorMsg = null, string file = __
 	import std.array: array;
 	import std.conv: to;
 
-	static immutable shortObjName = T.stringof.splitter('.').retro.take(2).array.retro.join(".");
-	string shortFuncName = func.splitter('.').retro.take(2).array.retro.join(".");
+	static immutable shortObjName = getShortFuncName(T.stringof);
+	string shortFuncName = getShortFuncName(func);
 	string longMsg = shortFuncName ~ "[" ~ line.to!string ~ "]: Expected " ~ shortObjName ~ ":  " ~ errorMsg;
 
 	if( range.empty )

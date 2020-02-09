@@ -1,10 +1,16 @@
 module ivy.interpreter.execution_frame;
 
-import ivy.common;
+import ivy.exception: IvyException;
+import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
 import ivy.interpreter.data_node: IvyData, IvyDataType;
 import ivy.interpreter.data_node_types;
 
-enum FrameSearchMode { get, tryGet, set, setWithParents }
+enum FrameSearchMode {
+	get,
+	tryGet,
+	set,
+	setWithParents
+}
 
 class IvyExecutionFrameException: IvyException
 {
@@ -62,6 +68,8 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
+			import ivy.loger: getShortFuncName;
+
 			if( frame._logerMethod !is null ) {
 				frame._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
 			}

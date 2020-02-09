@@ -1,441 +1,36 @@
-module ivy.parser.lexer;
+module ivy.lexer.lexer;
 
-import std.range, std.algorithm, std.conv;
+import trifle.location: LocationConfig;
 
-import ivy.parser.lexer_tools, ivy.common;
+import ivy.lexer.lexeme_info: LexemeInfo;
+import ivy.lexer.lexeme: Lexeme;
+import ivy.lexer.consts;
+
+import std.range: empty, front, popFront, back, popBack;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyLexerDebug;
 
-class IvyLexerException: IvyException
-{
-public:
-	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
-	{
-		super(msg, file, line, next);
-	}
-}
-
-void lexerError(string msg, string file = __FILE__, size_t line = __LINE__)
-{
-	throw new IvyLexerException(msg, file, line);
-}
-
-static immutable mixedBlockBegin = "{*";
-static immutable mixedBlockEnd = "*}";
-
-static immutable commentBlockBegin = "{#";
-static immutable commentBlockEnd = "#}";
-
-static immutable dataBlockBegin = `{"`;
-static immutable dataBlockEnd = `"}`;
-
-static immutable exprBlockBegin = `{{`;
-static immutable exprBlockEnd = `}}`;
-static immutable codeBlockBegin = `{=`;
-static immutable codeListBegin = `{%`;
-
-enum LexemeType {
-	Unknown = 0,
-	Add,
-	Assign,
-	Colon,
-	Comma,
-	Div,
-	Dot,
-	Equal,
-	GT,
-	GTEqual,
-	LBrace,
-	LBracket,
-	LParen,
-	LT,
-	LTEqual,
-	DoubleMod,
-	Mod,
-	Mul,
-	NotEqual,
-	Pipe,
-	Pow,
-	RBrace,
-	RBracket,
-	RParen,
-	Semicolon,
-	Sub,
-	Tilde,
-	Integer,
-	Float,
-	String,
-	Name,
-	ExprBlockBegin,
-	ExprBlockEnd,
-	CodeBlockBegin,
-	CodeListBegin,
-	MixedBlockBegin,
-	MixedBlockEnd,
-	Comment,
-	Data,
-	DataBlock,
-	Invalid,
-	EndOfFile,
-
-
-	CoreTypesEnd,
-	ExtensionTypesStart = 100,
-
-	CodeBlockEnd = LexemeType.RBrace,
-	CodeListEnd = LexemeType.RBrace
-};
-
-
-enum LexemeFlag: uint
-{
-	None = 0,
-	Literal = 1 << 0,
-	Dynamic = 1 << 1,
-	Operator = 1 << 2,
-	Paren = 1 << 3,
-	Left = 1 << 4,
-	Right = 1 << 5,
-	Arithmetic = 1 << 6,
-	Compare = 1 << 7,
-	Separator = 1 << 8
-}
-
-//Minimal information about type of lexeme
-struct LexemeInfo
-{
-	import std.typecons: BitFlags;
-
-	int typeIndex = 0; // LexemeType for this lexeme
-	BitFlags!LexemeFlag flags;
-	int pairTypeIndex = 0; // LexemeType for pair of this lexeme
-
-	@property const
-	{
-		bool isLiteral()
-		{
-			return cast(bool)( flags & LexemeFlag.Literal );
-		}
-
-		bool isDynamic()
-		{
-			return cast(bool)( flags & LexemeFlag.Dynamic );
-		}
-
-		bool isStatic()
-		{
-			return !( flags & LexemeFlag.Dynamic );
-		}
-
-		bool isOperator()
-		{
-			return cast(bool)( flags & LexemeFlag.Operator );
-		}
-
-		bool isParen()
-		{
-			return cast(bool)( flags & LexemeFlag.Paren );
-		}
-
-		bool isLeftParen()
-		{
-			return cast(bool)(
-				( flags & LexemeFlag.Paren )
-				&& ( flags & LexemeFlag.Left )
-			);
-		}
-
-		bool isRightParen()
-		{
-			return cast(bool)(
-				( flags & LexemeFlag.Paren )
-				&& ( flags & LexemeFlag.Right )
-			);
-		}
-
-		bool isArithmeticOperator()
-		{
-			return cast(bool)(
-				( flags & LexemeFlag.Operator )
-				&& ( flags & LexemeFlag.Arithmetic )
-			);
-		}
-
-		bool isCompareOperator()
-		{
-			return cast(bool)(
-				( flags & LexemeFlag.Operator )
-				&& ( flags & LexemeFlag.Compare )
-			);
-		}
-
-		bool isValidCoreType()
-		{
-			return LexemeType.Unknown < typeIndex && typeIndex < LexemeType.Invalid;
-		}
-
-		bool isExtensionType()
-		{
-			return typeIndex >= LexemeType.ExtensionTypesStart;
-		}
-
-		bool isValidType()
-		{
-			return typeIndex != LexemeType.Unknown && typeIndex != LexemeType.EndOfFile && typeIndex != LexemeType.Invalid;
-		}
-
-		bool isUnknown()
-		{
-			return typeIndex == LexemeType.Unknown;
-		}
-
-		bool isInvalid()
-		{
-			return typeIndex == LexemeType.Invalid;
-		}
-
-		bool isEndOfFile()
-		{
-			return typeIndex == LexemeType.EndOfFile;
-		}
-	}
-}
-
-///Minumal info about found lexeme
-struct Lexeme(LocationConfig c)
-{
-	enum config = c;
-	alias CustLocation = CustomizedLocation!(config);
-
-	CustLocation loc; // Location of this lexeme in source text
-	LexemeInfo info; // Field containing information about this lexeme
-
-	bool test(int testType) const
-	{
-		return this.info.typeIndex == testType;
-	}
-
-	bool test(int[] testTypes) const
-	{
-		import std.algorithm: canFind;
-		return testTypes.canFind( this.info.typeIndex );
-	}
-
-	int typeIndex() const @property
-	{
-		return info.typeIndex;
-	}
-
-	auto getSlice(SourceRange)(ref SourceRange sourceRange) const
-	{
-		return sourceRange[loc.index .. loc.index + loc.length];
-	}
-}
-
-
-template GetSourceRangeConfig(R)
-{
-	static if( is( typeof(R.config) == LocationConfig ) )
-	{
-		enum GetSourceRangeConfig = R.config;
-	}
-	else
-	{
-		enum GetSourceRangeConfig = ( () {
-			LocationConfig c;
-
-			return c;
-		} )();
-	}
-}
-
-// Just creates empty lexeme at specified position and of certain type (Unknown type by default)
-template createLexemeAt(SourceRange)
-{
-	alias config = GetSourceRangeConfig!SourceRange;
-	alias LexemeT = Lexeme!(config);
-
-	LexemeT createLexemeAt(ref SourceRange source, LexemeType lexType = LexemeType.Unknown)
-	{
-		LexemeT lex;
-		lex.info = LexemeInfo(lexType);
-		lex.loc.index = source.index;
-		lex.loc.length = 0;
-
-		static if( config.withGraphemeIndex )
-		{
-			lex.loc.graphemeIndex = source.graphemeIndex;
-			lex.loc.graphemeLength = 0;
-		}
-
-		static if( config.withLineIndex )
-		{
-			lex.loc.lineIndex = source.lineIndex;
-			lex.loc.lineCount = 0;
-
-			static if( config.withColumnIndex )
-				lex.loc.columnIndex = source.columnIndex;
-
-			static if( config.withGraphemeColumnIndex )
-				lex.loc.graphemeColumnIndex = source.graphemeColumnIndex;
-		}
-
-		return lex;
-	}
-}
-
-// Universal super-duper extractor of lexemes by it's begin, end ranges and info about type of lexeme
-auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRange) endRange, ref const(LexemeInfo) lexemeInfo)
-{
-	enum LocationConfig config = GetSourceRangeConfig!SourceRange;
-
-	Lexeme!(config) lex;
-	lex.info = lexemeInfo;
-
-	// TODO: Maybe we should just add Location field for Lexeme
-	lex.loc.index = beginRange.index;
-
-	assert( endRange.index >= beginRange.index,
-		"Index for end range must not be less than for begin range!"
-	);
-	// Not idiomatic range maybe approach, but effective
-	lex.loc.length = endRange.index - beginRange.index;
-
-	static if( config.withGraphemeIndex )
-	{
-		lex.loc.graphemeIndex = beginRange.graphemeIndex;
-
-		assert( endRange.graphemeIndex >= beginRange.graphemeIndex,
-			"Grapheme index for end range must not be less than for begin range!"
-		);
-		lex.loc.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
-	}
-
-	static if( config.withLineIndex )
-	{
-		lex.loc.lineIndex = beginRange.lineIndex;
-
-		assert( endRange.lineIndex >= beginRange.lineIndex,
-			"Line index for end range must not be less than for begin range!"
-		);
-		lex.loc.lineCount = endRange.lineIndex - beginRange.lineIndex;
-
-		static if( config.withColumnIndex )
-			lex.loc.columnIndex = beginRange.columnIndex;
-
-		static if( config.withGraphemeColumnIndex )
-			lex.loc.graphemeColumnIndex = beginRange.graphemeColumnIndex;
-	}
-
-	// Getting slice of this lexeme in order to parse indents
-	auto parsedRange = beginRange[0..lex.loc.length];
-
-	IndentStyle indentStyle;
-	size_t minIndentCount = size_t.max;
-
-	by_line_loop:
-	while( !parsedRange.empty )
-	{
-		size_t lineIndentCount;
-		IndentStyle lineIndentStyle;
-		parsedRange.parseLineIndent( lineIndentCount, lineIndentStyle );
-
-		bool isEmptyLine = true;
-		// Inner loop check if line contains meaningful characters
-		while( !parsedRange.empty )
-		{
-			auto ch = parsedRange.popChar();
-			if( !" \t\r\n".canFind(ch) )
-			{
-				isEmptyLine = false;
-			}
-
-			if( ch == ' ' && ch == '\t' )
-			{
-				continue; //Just skip rest empty spaces
-			}
-			else if( parsedRange.isNewLine || parsedRange.empty )
-			{
-				if( !isEmptyLine )
-				{
-					minIndentCount = min(minIndentCount, lineIndentCount);
-					indentStyle = lineIndentStyle;
-				}
-
-				continue by_line_loop;
-			}
-		}
-	}
-	lex.loc.indentCount = minIndentCount;
-	lex.loc.indentStyle = indentStyle;
-
-	beginRange = endRange.save; //Move start currentRange to point of end currentRange
-	return lex;
-}
-
-// Simple function for parsing static lexemes
-bool parseStaticLexeme(SourceRange, LexRule)(ref SourceRange source, ref const(LexRule) rule)
-{
-	if( source.match(rule.val) )
-	{
-		return true;
-	}
-
-	return false;
-}
-
-struct LexicalRule(R)
-	if( isForwardRange!R )
-{
-	import std.traits: Unqual;
-
-	alias SourceRange = R;
-	enum config = GetSourceRangeConfig!R;
-	alias Char = Unqual!( ElementEncodingType!R );
-	alias String = immutable(Char)[];
-	alias LexemeT = Lexeme!(config);
-
-	// Methods of this type should return true if starting part of range matches this rule
-	// and consume this part. Otherwise it should return false
-	alias ParseMethodType = bool function(ref SourceRange source, ref const(LexicalRule!R) rule);
-	alias parseStaticMethod = parseStaticLexeme!( SourceRange, LexicalRule!R );
-
-	String val;
-	ParseMethodType parseMethod;
-	LexemeInfo lexemeInfo;
-
-	bool apply(ref SourceRange currentRange) inout
-	{
-		return parseMethod(currentRange, this);
-	}
-
-	@property const
-	{
-		bool isDynamic()
-		{
-			return lexemeInfo.isDynamic;
-		}
-
-		bool isStatic()
-		{
-			return lexemeInfo.isStatic;
-		}
-	}
-}
-
-enum ContextState { CodeContext, MixedContext };
-
 struct Lexer(S, LocationConfig c = LocationConfig.init)
 {
-	import std.typecons: BitFlags;
+	import trifle.text_forward_range: TextForwardRange;
 
+	import ivy.lexer.rule: LexicalRule;
+	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+
+	import ivy.lexer.lexeme_info: LexemeInfo;
+	import ivy.lexer.lexeme: Lexeme;
+
+	import std.typecons: BitFlags;
+	
+	//import std.algorithm;
+
+	enum LocationConfig config = c;
 	alias SourceRange = TextForwardRange!(String, c);
 	alias LexRule = LexicalRule!(SourceRange);
-	alias LexemeT = LexRule.LexemeT;
+	alias LexemeT = Lexeme!(config);
 	alias Char = SourceRange.Char;
 	alias String = S;
-	enum LocationConfig config = c;
 	alias LogerMethod = void delegate(LogInfo);
 	alias LexerT = Lexer!(String, config);
 
@@ -545,7 +140,7 @@ public:
 		dynamicRule( &parseString, LexemeType.String, LexemeFlag.Literal )
 	];
 
-	struct LexerContext
+	static struct LexerContext
 	{
 		ContextState[] statesStack;
 		LexemeInfo[] parenStack;
@@ -585,11 +180,15 @@ public:
 
 	static struct LogerProxy
 	{
+		import ivy.lexer.exception: IvyLexerException;
+
 		mixin LogerProxyImpl!(IvyLexerException, isDebugMode);
 		LexerT lexer;
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
+			import ivy.loger: getShortFuncName;
+
 			import std.array: array;
 			import std.conv: to;
 
@@ -597,7 +196,7 @@ public:
 				lexer.logerMethod(LogInfo(
 					msg,
 					logInfoType,
-					func.splitter('.').retro.take(2).array.retro.join("."),
+					getShortFuncName(func),
 					file,
 					line,
 					(!lexer.empty? lexer.front.loc.fileName: null),
@@ -690,6 +289,8 @@ public:
 
 	void popFront()
 	{
+		import ivy.lexer.exception: lexerError;
+
 		import std.array: array;
 		import std.conv: to;
 
@@ -801,6 +402,9 @@ public:
 
 	void fail_expectation(LexemeType lexType, String value, String msg, string func, string file, int line)
 	{
+		import std.conv: to;
+		import std.array: array;
+
 		String whatExpected = (msg.empty? null: msg ~ `. `) ~ `Lexeme of type "` ~ lexType.to!String ~ `"`;
 		if( !value.empty )
 			whatExpected ~= ` with value "` ~ value ~ `"`;
@@ -890,6 +494,8 @@ public:
 
 	static void skipWhiteSpaces(ref SourceRange source)
 	{
+		import std.algorithm: canFind;
+
 		Char ch;
 		while( !source.empty )
 		{
@@ -908,6 +514,8 @@ public:
 
 	static bool parseString(ref SourceRange source, ref const(LexRule) rule)
 	{
+		import std.conv: to;
+
 		String quoteLex;
 
 		foreach( ref quote; stringQuotes )
@@ -1049,6 +657,8 @@ public:
 
 	static bool parseName(ref SourceRange source, ref const(LexRule) rule)
 	{
+		import trifle.text_forward_range: decodeFront, frontUnitLength, isStartCodeUnit;
+
 		Char ch;
 		dchar dch;
 		ubyte len;
@@ -1081,4 +691,158 @@ public:
 
 		return true;
 	}
+}
+
+bool isNameChar(dchar ch)
+{
+	import std.uni: isAlpha;
+
+	return isAlpha(ch) || ('0' <= ch && ch <= '9') || ch == '_';
+}
+
+bool isNumberChar(dchar ch)
+{
+	return ('0' <= ch && ch <= '9');
+}
+
+// Just creates empty lexeme at specified position and of certain type (Unknown type by default)
+template createLexemeAt(SourceRange)
+{
+	import trifle.text_forward_range: GetSourceRangeConfig;
+
+	alias config = GetSourceRangeConfig!SourceRange;
+	alias LexemeT = Lexeme!(config);
+
+	LexemeT createLexemeAt(ref SourceRange source, LexemeType lexType = LexemeType.Unknown)
+	{
+		LexemeT lex;
+		lex.info = LexemeInfo(lexType);
+		lex.loc.index = source.index;
+		lex.loc.length = 0;
+
+		static if( config.withGraphemeIndex )
+		{
+			lex.loc.graphemeIndex = source.graphemeIndex;
+			lex.loc.graphemeLength = 0;
+		}
+
+		static if( config.withLineIndex )
+		{
+			lex.loc.lineIndex = source.lineIndex;
+			lex.loc.lineCount = 0;
+
+			static if( config.withColumnIndex )
+				lex.loc.columnIndex = source.columnIndex;
+
+			static if( config.withGraphemeColumnIndex )
+				lex.loc.graphemeColumnIndex = source.graphemeColumnIndex;
+		}
+
+		return lex;
+	}
+}
+
+// Universal super-duper extractor of lexemes by it's begin, end ranges and info about type of lexeme
+auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRange) endRange, ref const(LexemeInfo) lexemeInfo)
+{
+	import trifle.text_forward_range: GetSourceRangeConfig;
+	import trifle.location: IndentStyle;
+
+	import std.algorithm: canFind, min;
+
+	enum LocationConfig config = GetSourceRangeConfig!SourceRange;
+
+	Lexeme!(config) lex;
+	lex.info = lexemeInfo;
+
+	// TODO: Maybe we should just add Location field for Lexeme
+	lex.loc.index = beginRange.index;
+
+	assert( endRange.index >= beginRange.index,
+		"Index for end range must not be less than for begin range!"
+	);
+	// Not idiomatic range maybe approach, but effective
+	lex.loc.length = endRange.index - beginRange.index;
+
+	static if( config.withGraphemeIndex )
+	{
+		lex.loc.graphemeIndex = beginRange.graphemeIndex;
+
+		assert( endRange.graphemeIndex >= beginRange.graphemeIndex,
+			"Grapheme index for end range must not be less than for begin range!"
+		);
+		lex.loc.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
+	}
+
+	static if( config.withLineIndex )
+	{
+		lex.loc.lineIndex = beginRange.lineIndex;
+
+		assert( endRange.lineIndex >= beginRange.lineIndex,
+			"Line index for end range must not be less than for begin range!"
+		);
+		lex.loc.lineCount = endRange.lineIndex - beginRange.lineIndex;
+
+		static if( config.withColumnIndex )
+			lex.loc.columnIndex = beginRange.columnIndex;
+
+		static if( config.withGraphemeColumnIndex )
+			lex.loc.graphemeColumnIndex = beginRange.graphemeColumnIndex;
+	}
+
+	// Getting slice of this lexeme in order to parse indents
+	auto parsedRange = beginRange[0..lex.loc.length];
+
+	IndentStyle indentStyle;
+	size_t minIndentCount = size_t.max;
+
+	by_line_loop:
+	while( !parsedRange.empty )
+	{
+		size_t lineIndentCount;
+		IndentStyle lineIndentStyle;
+		parsedRange.parseLineIndent( lineIndentCount, lineIndentStyle );
+
+		bool isEmptyLine = true;
+		// Inner loop check if line contains meaningful characters
+		while( !parsedRange.empty )
+		{
+			auto ch = parsedRange.popChar();
+			if( !" \t\r\n".canFind(ch) )
+			{
+				isEmptyLine = false;
+			}
+
+			if( ch == ' ' && ch == '\t' )
+			{
+				continue; //Just skip rest empty spaces
+			}
+			else if( parsedRange.isNewLine || parsedRange.empty )
+			{
+				if( !isEmptyLine )
+				{
+					minIndentCount = min(minIndentCount, lineIndentCount);
+					indentStyle = lineIndentStyle;
+				}
+
+				continue by_line_loop;
+			}
+		}
+	}
+	lex.loc.indentCount = minIndentCount;
+	lex.loc.indentStyle = indentStyle;
+
+	beginRange = endRange.save; //Move start currentRange to point of end currentRange
+	return lex;
+}
+
+// Simple function for parsing static lexemes
+bool parseStaticLexeme(SourceRange, LexRule)(ref SourceRange source, ref const(LexRule) rule)
+{
+	if( source.match(rule.val) )
+	{
+		return true;
+	}
+
+	return false;
 }

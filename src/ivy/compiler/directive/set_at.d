@@ -1,7 +1,7 @@
 module ivy.compiler.directive.set_at;
 
 import ivy.compiler.directive.utils;
-import ivy.parser.node: IExpression;
+import ivy.ast.iface: IExpression;
 
 class SetAtCompiler : IDirectiveCompiler
 {

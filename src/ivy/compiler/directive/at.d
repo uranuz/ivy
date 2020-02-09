@@ -1,7 +1,7 @@
 module ivy.compiler.directive.at;
 
 import ivy.compiler.directive.utils;
-import ivy.parser.node: IvyNode;
+import ivy.ast.iface: IvyNode;
 
 class AtCompiler : IDirectiveCompiler
 {

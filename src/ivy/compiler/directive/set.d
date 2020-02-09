@@ -1,7 +1,7 @@
 module ivy.compiler.directive.set;
 
 import ivy.compiler.directive.utils;
-import ivy.parser.node: IKeyValueAttribute;
+import ivy.ast.iface: IKeyValueAttribute;
 
 /++
 	`Set` directive is used to set values of existing variables in context.

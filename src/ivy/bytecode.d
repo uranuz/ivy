@@ -1,7 +1,8 @@
 ///Module consists of declarations related to Ivy bytecode
 module ivy.bytecode;
 
-enum OpCode: ubyte {
+enum OpCode: ubyte
+{
 	InvalidCode, // Used to check if code of operation was not properly set
 
 	Nop,

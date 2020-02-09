@@ -1,7 +1,7 @@
 module ivy.compiler.directive.repeat;
 
 import ivy.compiler.directive.utils;
-import ivy.parser.node: INameExpression, IExpression, ICompoundStatement;
+import ivy.ast.iface: INameExpression, IExpression, ICompoundStatement;
 import ivy.compiler.compiler: JumpKind;
 
 class RepeatCompiler : IDirectiveCompiler

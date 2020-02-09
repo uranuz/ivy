@@ -1,6 +1,6 @@
 module ivy.interpreter.common;
 
-import ivy.common: IvyException;
+import ivy.exception: IvyException;
 import std.typecons: Tuple;
 alias CallStackInfoItem = Tuple!(string, "mod", string, "callable");
 

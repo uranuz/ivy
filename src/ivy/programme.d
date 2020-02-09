@@ -1,7 +1,7 @@
 module ivy.programme;
 
-import ivy.common;
-import ivy.code_object: ModuleObject;
+
+import ivy.module_object: ModuleObject;
 import ivy.compiler.compiler;
 import ivy.compiler.symbol_collector;
 import ivy.compiler.module_repository;
@@ -15,6 +15,7 @@ import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 import ivy.engine: IvyEngine;
 import ivy.interpreter.async_result: AsyncResult, AsyncResultState;
+import ivy.loger: LogInfo;
 
 import std.typecons: Tuple;
 

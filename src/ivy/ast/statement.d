@@ -1,10 +1,9 @@
-module ivy.parser.statement;
+module ivy.ast.statement;
 
-import ivy.common;
-import ivy.parser.common;
-import ivy.parser.node;
-import ivy.parser.node_visitor;
-import ivy.parser.expression;
+import trifle.location: LocationConfig;
+
+import ivy.ast.common: BaseDeclNodeImpl;
+import ivy.ast.iface;
 
 mixin template PlainStatementImpl(LocationConfig c)
 {
@@ -205,6 +204,8 @@ public:
 
 mixin template BaseBlockStatementImpl(LocationConfig c, alias IRange = IStatementRange)
 {
+	import ivy.ast.common: BaseExpressionImpl;
+
 	mixin BaseExpressionImpl!c;
 	//mixin BaseDeclNodeImpl!(c);
 	alias IStmt = typeof(IRange.front);
@@ -422,6 +423,3 @@ public:
 		}
 	}
 }
-
-
-

@@ -1,7 +1,7 @@
 module ivy.compiler.directive.var;
 
 import ivy.compiler.directive.utils;
-import ivy.parser.node: IKeyValueAttribute, INameExpression;
+import ivy.ast.iface: IKeyValueAttribute, INameExpression;
 
 /++
 	`Var` directive is defined as list of elements. Each of them could be of following forms:

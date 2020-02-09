@@ -1,8 +1,9 @@
 module ivy.interpreter.interpreter;
 
-import ivy.common;
+
 import ivy.directive_stuff;
-import ivy.code_object;
+import ivy.code_object: CodeObject;
+import ivy.module_object: ModuleObject;
 import ivy.interpreter.data_node;
 import ivy.interpreter.data_node_types;
 import ivy.interpreter.execution_frame;
@@ -12,6 +13,7 @@ import ivy.interpreter.iface: INativeDirectiveInterpreter;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 import ivy.interpreter.async_result: AsyncResult, AsyncResultState;
+import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyInterpreterDebug;
@@ -117,6 +119,8 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
+			import ivy.loger: getShortFuncName;
+
 			import std.algorithm: map, canFind;
 			import std.array: join;
 			import std.conv: text;

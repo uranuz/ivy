@@ -1,29 +1,25 @@
 module ivy.parser.parser;
 
-import std.range;
-
-import ivy.common;
-import ivy.parser.lexer_tools;
-import ivy.parser.lexer;
-import ivy.parser.node;
-import ivy.parser.expression;
-import ivy.parser.statement;
-
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyParserDebug;
 
-class IvyParserException: IvyException
-{
-public:
-	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow {
-		super(msg, file, line, next);
-	}
-}
-
 class Parser(R)
 {
-public:
+	import trifle.text_forward_range: TextForwardRange, GetSourceRangeConfig;
+	import trifle.location: LocationConfig, CustomizedLocation;
+
+	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.lexer.lexer: Lexer;
+	import ivy.lexer.lexeme: Lexeme;
+	import ivy.lexer.consts;
+	import ivy.ast.consts;
+	import ivy.ast.iface;
+	import ivy.ast.expr;
+	import ivy.ast.statement;
+
 	import std.traits: Unqual;
+	import std.range: empty, ElementEncodingType;
+public:
 
 	alias SourceRange = R;
 	enum LocationConfig config = GetSourceRangeConfig!R;
@@ -70,11 +66,15 @@ public:
 
 	static struct LogerProxy
 	{
+		import ivy.parser.exception: IvyParserException;
+
 		mixin LogerProxyImpl!(IvyParserException, isDebugMode);
 		ParserT parser;
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
+			import ivy.loger: getShortFuncName;
+
 			import std.array: array;
 			import std.conv: to;
 			import std.algorithm: splitter;
@@ -83,7 +83,7 @@ public:
 				parser.logerMethod(LogInfo(
 					msg,
 					logInfoType,
-					func.splitter('.').retro.take(2).array.retro.join("."),
+					getShortFuncName(func),
 					file,
 					line,
 					parser.fileName,
@@ -787,6 +787,8 @@ public:
 
 	String parseQuotedString()
 	{
+		import std.array: array;
+		
 		String result;
 		loger.write( "Parsing quoted string expression" );
 

@@ -1,6 +1,6 @@
 module ivy.compiler.errors;
 
-import ivy.common: IvyException;
+import ivy.exception: IvyException;
 
 class ASTNodeTypeException: IvyException
 {

@@ -1,6 +1,6 @@
 module ivy.interpreter.data_node;
 
-import ivy.common: IvyException;
+import ivy.exception: IvyException;
 import ivy.code_object: CodeObject;
 import ivy.interpreter.data_node_types: CallableObject;
 import ivy.interpreter.data_node_render: renderDataNode, DataRenderType;

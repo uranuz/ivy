@@ -1,9 +1,9 @@
-module ivy.parser.node_visitor;
-
-import ivy.parser.node;
+module ivy.ast.iface.visitor;
 
 class AbstractNodeVisitor
 {
+	import ivy.ast.iface;
+	
 	void visit(IvyNode node) { assert(0); }
 
 	//Expressions

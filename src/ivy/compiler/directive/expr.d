@@ -1,7 +1,7 @@
 module ivy.compiler.directive.expr;
 
 import ivy.compiler.directive.utils;
-import ivy.parser.node: INameExpression;
+import ivy.ast.iface: INameExpression;
 
 class ExprCompiler: IDirectiveCompiler
 {

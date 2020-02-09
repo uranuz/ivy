@@ -6,6 +6,8 @@ mixin template DefAnalyzeMixin()
 	
 	auto analyzeValueAttr(IAttributeRange attrRange)
 	{
+		import ivy.ast.consts: LiteralType;
+
 		import std.typecons: Tuple;
 		alias Result = Tuple!(
 			DirValueAttr, `attr`,

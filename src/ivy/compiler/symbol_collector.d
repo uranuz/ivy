@@ -1,15 +1,16 @@
 module ivy.compiler.symbol_collector;
 
-import ivy.common;
+
 import ivy.directive_stuff;
-import ivy.parser.node;
-import ivy.parser.node_visitor: AbstractNodeVisitor;
+import ivy.ast.iface;
+import ivy.ast.iface.visitor: AbstractNodeVisitor;
 import ivy.compiler.common: takeFrontAs;
 import ivy.compiler.module_repository;
 import ivy.compiler.symbol_table;
 import ivy.compiler.def_analyze_mixin: DefAnalyzeMixin;
 import ivy.compiler.errors: IvyCompilerException;
 import ivy.compiler.node_visit_mixin: NodeVisitMixin;
+import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
 
 
 class CompilerSymbolsCollector: AbstractNodeVisitor
@@ -41,6 +42,8 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
+			import ivy.loger: getShortFuncName;
+
 			if( collector._logerMethod !is null )
 			{
 				collector._logerMethod(LogInfo(

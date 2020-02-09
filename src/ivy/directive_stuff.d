@@ -1,7 +1,5 @@
 module ivy.directive_stuff;
 
-
-
 struct DirValueAttr
 {
 	import ivy.interpreter.data_node: IvyData;

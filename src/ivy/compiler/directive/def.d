@@ -3,7 +3,7 @@ module ivy.compiler.directive.def;
 import ivy.compiler.directive.utils;
 
 import ivy.directive_stuff: DirAttrKind, _stackBlockHeaderSizeOffset;
-import ivy.parser.node: INameExpression, ICompoundStatement, ICodeBlockStatement, IDirectiveStatementRange, IAttributeRange;
+import ivy.ast.iface: INameExpression, ICompoundStatement, ICodeBlockStatement, IDirectiveStatementRange, IAttributeRange;
 import ivy.compiler.symbol_table: Symbol, SymbolKind, DirectiveDefinitionSymbol;
 
 /// Defines directive using ivy language

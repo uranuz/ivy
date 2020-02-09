@@ -1,6 +1,6 @@
 module ivy.interpreter.module_objects_cache;
 
-import ivy.code_object: ModuleObject;
+import ivy.module_object: ModuleObject;
 import ivy.interpreter.data_node: IvyDataType;
 import ivy.bytecode: OpCode;
 

@@ -1,6 +1,6 @@
 module ivy.compiler.symbol_table;
 
-import ivy.common;
+
 import ivy.compiler.common;
 import ivy.directive_stuff;
 import ivy.compiler.errors: IvyCompilerException;
@@ -41,6 +41,8 @@ public:
 
 class SymbolTableFrame
 {
+	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	
 	alias LogerMethod = void delegate(LogInfo);
 	Symbol[string] _symbols;
 	SymbolTableFrame _moduleFrame;
@@ -65,6 +67,8 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
+			import ivy.loger: getShortFuncName;
+
 			if( table._logerMethod !is null ) {
 				table._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
 			}

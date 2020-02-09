@@ -1,12 +1,13 @@
 /// Module implements compilation of Ivy abstract syntax tree into bytecode
 module ivy.compiler.compiler;
 
-import ivy.common;
+
 import ivy.bytecode;
-import ivy.code_object: ModuleObject, CodeObject;
+import ivy.code_object: CodeObject;
+import ivy.module_object: ModuleObject;
 import ivy.directive_stuff;
-import ivy.parser.node;
-import ivy.parser.node_visitor;
+import ivy.ast.iface;
+import ivy.ast.iface.visitor;
 import ivy.compiler.common;
 import ivy.compiler.symbol_table: Symbol, SymbolTableFrame, DirectiveDefinitionSymbol, SymbolKind;
 import ivy.compiler.module_repository: CompilerModuleRepository;
@@ -18,6 +19,8 @@ import ivy.compiler.errors: IvyCompilerException;
 import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
 import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
+import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+import ivy.ast.consts: LiteralType, Operator;
 
 // If IvyTotalDebug is defined then enable compiler debug
 version(IvyTotalDebug) version = IvyCompilerDebug;
@@ -107,6 +110,8 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
+			import ivy.loger: getShortFuncName;
+
 			if( compiler._logerMethod !is null )
 			{
 				compiler._logerMethod(LogInfo(

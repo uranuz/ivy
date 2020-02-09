@@ -1,7 +1,7 @@
 module ivy.compiler.directive.if_dir;
 
 import ivy.compiler.directive.utils;
-import ivy.parser.node: INameExpression, IExpression;
+import ivy.ast.iface: INameExpression, IExpression;
 
 class IfCompiler: IDirectiveCompiler
 {

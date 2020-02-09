@@ -1,15 +1,17 @@
 module ivy.compiler.module_repository;
 
-import ivy.common;
+
 import ivy.compiler.common;
 import ivy.parser.parser;
-import ivy.parser.node: IvyNode;
+import ivy.ast.iface: IvyNode;
 import ivy.compiler.errors: IvyCompilerException;
 
 class CompilerModuleRepository
 {
-	import ivy.parser.lexer_tools: TextForwardRange;
-	import ivy.common: LocationConfig;
+	import trifle.text_forward_range: TextForwardRange;
+	import trifle.location: LocationConfig;
+
+	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
 
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 	alias LogerMethod = void delegate(LogInfo);
@@ -39,6 +41,8 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
+			import ivy.loger: getShortFuncName;
+
 			if( moduleRepo._logerMethod !is null ) {
 				moduleRepo._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
 			}
