@@ -7,6 +7,10 @@ import ivy.lexer.lexeme: Lexeme;
 import ivy.lexer.consts;
 
 import std.range: empty, front, popFront, back, popBack;
+import std.exception: enforce;
+import ivy.lexer.exception: IvyLexerException;
+
+alias enf = enforce!IvyLexerException;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyLexerDebug;
@@ -22,8 +26,6 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	import ivy.lexer.lexeme: Lexeme;
 
 	import std.typecons: BitFlags;
-	
-	//import std.algorithm;
 
 	enum LocationConfig config = c;
 	alias SourceRange = TextForwardRange!(String, c);
@@ -47,7 +49,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			}
 			else static if( is( typeof(flag) == LexemeType ) || is( typeof(flag) == int ) )
 			{
-				assert( pairTypeIndex == 0, "Pair type index is not 0, so seems that it's attempt to set multiple pairs for lexeme" );
+				enf(pairTypeIndex == 0, "Pair type index is not 0, so seems that it's attempt to set multiple pairs for lexeme");
 				pairTypeIndex = flag;
 			}
 			else
@@ -57,7 +59,9 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		}
 
 		newFlags &= ~LexemeFlag.Dynamic;
-		assert( !( cast(bool)(newFlags & LexemeFlag.Paren) && pairTypeIndex == 0 ), "Lexeme with LexemeFlag.Paren expected to have pair lexeme" );
+		enf(
+			!( cast(bool)(newFlags & LexemeFlag.Paren) && pairTypeIndex == 0 ),
+			"Lexeme with LexemeFlag.Paren expected to have pair lexeme");
 
 		return LexRule( str, &parseStaticLexeme!(SourceRange, LexRule), LexemeInfo( lexType, newFlags, pairTypeIndex ) );
 	}
@@ -75,7 +79,9 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 			}
 			else static if( is( typeof(flag) == LexemeType ) || is( typeof(flag) == int ) )
 			{
-				assert( pairTypeIndex == 0, "Pair type index is not 0, so seems that it's attempt to set multiple pairs for lexeme" );
+				enf(
+					pairTypeIndex == 0,
+					"Pair type index is not 0, so seems that it's attempt to set multiple pairs for lexeme");
 				pairTypeIndex = flag;
 			}
 			else
@@ -85,7 +91,9 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 		}
 
 		newFlags |= LexemeFlag.Dynamic;
-		assert( !( cast(bool)(newFlags & LexemeFlag.Paren) && pairTypeIndex == 0 ), "Lexeme with LexemeFlag.Paren expected to have pair lexeme" );
+		enf(
+			!( cast(bool)(newFlags & LexemeFlag.Paren) && pairTypeIndex == 0 ),
+			"Lexeme with LexemeFlag.Paren expected to have pair lexeme");
 
 		return LexRule( null, method, LexemeInfo( lexType, newFlags ) );
 	}
@@ -180,8 +188,6 @@ public:
 
 	static struct LogerProxy
 	{
-		import ivy.lexer.exception: IvyLexerException;
-
 		mixin LogerProxyImpl!(IvyLexerException, isDebugMode);
 		LexerT lexer;
 
@@ -229,6 +235,15 @@ public:
 			this.popFront();
 	}
 
+	this(ref return scope inout(LexerT) src) inout
+	{
+		this.sourceRange = src.sourceRange.save;
+		this.currentRange = src.currentRange.save;
+		this.logerMethod = src.logerMethod;
+		this._ctx = src._ctx;
+		this._front = src._front;
+	}
+
 	void parse()
 	{
 		while( !currentRange.empty )
@@ -240,32 +255,31 @@ public:
 	static LexemeT parseFront(ref SourceRange source, ref LexerContext ctx)
 	{
 		import std.conv: to;
+		import std.range: empty;
+
 		if( ctx.state == ContextState.CodeContext )
 			skipWhiteSpaces(source);
 
 		if( source.empty )
 		{
 			if( !ctx.parenStack.empty )
-				assert(false,
+				enf(
+					false,
 					"Expected matching parenthesis for "
 					~ (cast(LexemeType) ctx.parenStack.back.typeIndex).to!string
-					~ ", but unexpected end of input found!!!"
-				);
+					~ ", but unexpected end of input found!!!");
 
 			return createLexemeAt(source, LexemeType.EndOfFile);
 		}
 
 		LexRule[] rules;
 
-		if( ctx.state == ContextState.CodeContext )
-		{
+		if( ctx.state == ContextState.CodeContext ) {
 			rules = codeContextRules;
-		}
-		else if( ctx.state == ContextState.MixedContext )
-		{
+		} else if( ctx.state == ContextState.MixedContext ) {
 			rules = mixedContextRules;
 		} else {
-			assert(false, "No lexer context detected!");
+			enf(false, "No lexer context detected!");
 		}
 
 
@@ -281,36 +295,31 @@ public:
 			}
 		}
 
-		if( !lex.info.isValidType )
-			assert(false, "Expected valid token!");
+		enf(lex.info.isValidType, "Expected valid token!");
 
 		return lex;
 	}
 
 	void popFront()
 	{
-		import ivy.lexer.exception: lexerError;
-
 		import std.array: array;
 		import std.conv: to;
+
+		loger.write("Running lexer popFront");
 
 		_front = parseFront(currentRange, _ctx);
 
 		// Checking paren balance
 		if( _front.info.isRightParen )
 		{
-			if( !_ctx.parenStack.empty )
-			{
-				if( _ctx.parenStack.back.pairTypeIndex != _front.typeIndex )
-				{
-					lexerError( `Expected pair lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.pairTypeIndex).to!string
-						~ `" for lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.typeIndex).to!string ~ `", but got "`
-						~ (cast(LexemeType) _front.typeIndex).to!string ~ `"!` );
-				}
-			}
-			else
-			{
-				lexerError( `Right paren "` ~ (cast(LexemeType) _ctx.parenStack.back.typeIndex).to!string ~ `" found, but paren stack is empty!` );
+			if( !_ctx.parenStack.empty ) {
+				enf(
+					_ctx.parenStack.back.pairTypeIndex == _front.typeIndex,
+					`Expected pair lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.pairTypeIndex).to!string
+					~ `" for lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.typeIndex).to!string
+					~ `", but got "` ~ (cast(LexemeType) _front.typeIndex).to!string ~ `"!`);
+			} else {
+				enf(false, `Right paren "` ~ _front.typeIndex.to!string ~ `" found, but paren stack is empty!`);
 			}
 		}
 
@@ -389,15 +398,8 @@ public:
 		return front.getSlice(sourceRange);
 	}
 
-	@property auto save()
-	{
-		auto thisCopy = Lexer!(S, c)(sourceRange);
-		thisCopy.currentRange = this.currentRange.save;
-
-		thisCopy._ctx = this._ctx;
-		thisCopy._front = this._front;
-
-		return thisCopy;
+	@property auto save() {
+		return LexerT(this);
 	}
 
 	void fail_expectation(LexemeType lexType, String value, String msg, string func, string file, int line)
@@ -499,46 +501,36 @@ public:
 		Char ch;
 		while( !source.empty )
 		{
-			ch = source.front();
+			ch = source.front;
 			if( !whitespaceChars.canFind(ch) )
 				return;
 			source.popFront();
 		}
 	}
 
-	static immutable string[] stringQuotes = [
-		`"`, `'`
-	];
-
-	import std.traits;
+	static immutable String stringQuotes = `"'`;
 
 	static bool parseString(ref SourceRange source, ref const(LexRule) rule)
 	{
-		import std.conv: to;
+		import trifle.quoted_string_range: QuotedStringRange;
+		import std.algorithm: canFind;
 
-		String quoteLex;
-
-		foreach( ref quote; stringQuotes )
-		{
-			if( source.match(quote) )
-			{
-				quoteLex = quote;
-				break;
-			}
-		}
-
-		if( quoteLex.empty )
+		alias QuotRange = QuotedStringRange!(SourceRange, stringQuotes);
+		if( source.empty || !stringQuotes.canFind(source.front) ) {
 			return false;
-
-		while( !source.empty )
-		{
-			if( source.match(quoteLex) ) // Test and consume
-				return true;
-			else
-				source.popFront();
 		}
 
-		assert(false, `Expected <` ~ quoteLex.to!string ~ `> at the end of string literal, but end of input found!!!` );
+		auto qRange = QuotRange(source);
+		while( !qRange.empty ) {
+			qRange.popFront();
+		}
+		source = qRange.source; // Get processed range back
+
+		enf(!source.empty, `Expected quoted string's end quote, but unexpected end`);
+		enf(stringQuotes.canFind(source.front), `Expected quoted string's end quote`);
+		source.popFront(); // Skip end quote
+
+		return true;
 	}
 
 	static bool parseInteger(ref SourceRange source, ref const(LexRule) rule)
@@ -592,12 +584,11 @@ public:
 			return false;
 		source.popFront();
 
-		if( source.empty )
-			assert( false, `Expected decimal part of float!!!` );
+		enf(!source.empty, `Expected decimal part of float!!!`);
 
 		ch = source.front;
-		if( !('0' <= ch && ch <= '9') )
-			assert( false, `Expected decimal part of float!!!` );
+
+		enf('0' <= ch && ch <= '9', `Expected decimal part of float!!!`);
 		source.popFront();
 
 		while( !source.empty )
@@ -657,7 +648,7 @@ public:
 
 	static bool parseName(ref SourceRange source, ref const(LexRule) rule)
 	{
-		import trifle.text_forward_range: decodeFront, frontUnitLength, isStartCodeUnit;
+		import trifle.parse_utils: decodeFront, frontUnitLength, isStartCodeUnit;
 
 		Char ch;
 		dchar dch;
@@ -666,7 +657,7 @@ public:
 		if( source.empty )
 			return false;
 
-		ch = source.front();
+		ch = source.front;
 
 		if( !isStartCodeUnit(ch) )
 			return false;
@@ -758,9 +749,9 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 	// TODO: Maybe we should just add Location field for Lexeme
 	lex.loc.index = beginRange.index;
 
-	assert( endRange.index >= beginRange.index,
-		"Index for end range must not be less than for begin range!"
-	);
+	enf(
+		endRange.index >= beginRange.index,
+		"Index for end range must not be less than for begin range!");
 	// Not idiomatic range maybe approach, but effective
 	lex.loc.length = endRange.index - beginRange.index;
 
@@ -768,9 +759,9 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 	{
 		lex.loc.graphemeIndex = beginRange.graphemeIndex;
 
-		assert( endRange.graphemeIndex >= beginRange.graphemeIndex,
-			"Grapheme index for end range must not be less than for begin range!"
-		);
+		enf(
+			endRange.graphemeIndex >= beginRange.graphemeIndex,
+			"Grapheme index for end range must not be less than for begin range!");
 		lex.loc.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
 	}
 
@@ -778,9 +769,9 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 	{
 		lex.loc.lineIndex = beginRange.lineIndex;
 
-		assert( endRange.lineIndex >= beginRange.lineIndex,
-			"Line index for end range must not be less than for begin range!"
-		);
+		enf(
+			endRange.lineIndex >= beginRange.lineIndex,
+			"Line index for end range must not be less than for begin range!");
 		lex.loc.lineCount = endRange.lineIndex - beginRange.lineIndex;
 
 		static if( config.withColumnIndex )
@@ -837,12 +828,6 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 }
 
 // Simple function for parsing static lexemes
-bool parseStaticLexeme(SourceRange, LexRule)(ref SourceRange source, ref const(LexRule) rule)
-{
-	if( source.match(rule.val) )
-	{
-		return true;
-	}
-
-	return false;
+bool parseStaticLexeme(SourceRange, LexRule)(ref SourceRange source, ref const(LexRule) rule) {
+	return source.match(rule.val);
 }

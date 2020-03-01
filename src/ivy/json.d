@@ -18,6 +18,7 @@ public:
 struct JSONParser(S = string, LocationConfig c = LocationConfig.init)
 {
 	import trifle.text_forward_range: TextForwardRange;
+	import trifle.quoted_string_range: QuotedStringRange;
 
 	alias String = S;
 	alias SourceRange = TextForwardRange!(String, c);
@@ -46,94 +47,22 @@ public:
 		throw new IvyJSONException(`Parsing error in: ` ~ _source.str ~ `..: ` ~ msg, file, line);
 	}
 
-	wchar parseWChar()
-	{
-		import std.ascii : isDigit, isHexDigit, toUpper;
-		wchar val = 0;
-		foreach_reverse (i; 0 .. 4)
-		{
-			auto hex = toUpper(getChar());
-			_source.popFront();
-			if (!isHexDigit(hex)) error("Expecting hex character");
-			val += (isDigit(hex) ? hex - '0' : hex - ('A' - 10)) << (4 * i);
-		}
-		return val;
-	}
-
 	String parseString()
 	{
 		import std.array: appender;
+		import std.range: put;
 
-		assert( getChar() == '\"', "Expected \"" );
-		_source.popFront(); // Skip "
+		alias QuotRange = QuotedStringRange!(SourceRange, `"`);
 
+		auto qRange = QuotRange(_source);
 		auto buf = appender!String();
-
-		while( !_source.empty )
-		{
-			if( _source.front == '\\' )
-			{
-				_source.popFront();
-				switch( _source.front )
-				{
-					case '"': buf.put('"');   break;
-					case '\\': buf.put('\\'); break;
-					case '/': buf.put('/');   break;
-					case 'b': buf.put('\b');  break;
-					case 'f': buf.put('\f');  break;
-					case 'n': buf.put('\n');  break;
-					case 'r': buf.put('\r');  break;
-					case 't': buf.put('\t');  break;
-					case 'u': {
-						import std.uni : isSurrogateHi, isSurrogateLo;
-        				import std.utf : encode, decode;
-						import std.typecons : Yes;
-						wchar wc = parseWChar();
-						dchar val;
-						// Non-BMP characters are escaped as a pair of
-						// UTF-16 surrogate characters (see RFC 4627).
-						if (isSurrogateHi(wc))
-						{
-							wchar[2] pair;
-							pair[0] = wc;
-							if (getChar() != '\\') error("Expected escaped low surrogate after escaped high surrogate");
-							_source.popFront(); // Skip \
-							if (getChar() != 'u') error("Expected escaped low surrogate after escaped high surrogate");
-							_source.popFront(); // Skip u
-							pair[1] = parseWChar();
-							size_t index = 0;
-							val = decode(pair[], index);
-							if (index != 2) error("Invalid escaped surrogate pair");
-						} else if (isSurrogateLo(wc)) {
-							error("Unexpected low surrogate");
-						} else {
-							val = wc;
-						}
-
-						char[4] tmp;
-						immutable len = encode!(Yes.useReplacementDchar)(tmp, val);
-						buf.put(tmp[0 .. len]);
-						break;
-					}
-					default:
-						error( "Unexpected escape sequence..." );
-				}
-
-				_source.popFront(); // Skip escaped character
-			}
-			else if( _source.front == '\"' )
-			{
-				break; // Found end of string
-			}
-			else
-			{
-				buf.put(_source.front);
-				_source.popFront();
-			}
+		for( ; !qRange.empty; qRange.popFront() ) {
+			buf ~= qRange.front;
 		}
+		_source = qRange.source; // Because range can be copied, we need to take processed range
 
-		if( _source.empty || _source.front != '"' )
-			error( "Expected \"" );
+		if( _source.front != '\"' )
+			error("Expected \"");
 		_source.popFront(); // Skip "
 
 		return buf.data;

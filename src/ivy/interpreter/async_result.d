@@ -14,30 +14,32 @@ class AsyncResult
 	{
 		if( doneFn !is null )
 		{
-			_callbacks ~= doneFn;
 			if( _state == AsyncResultState.resolved ) {
 				doneFn(_value);
+			} else {
+				_callbacks ~= doneFn;
 			}
 		}
 
 		if( failFn !is null )
 		{
-			_errbacks ~= failFn;
 			if( _state == AsyncResultState.rejected ) {
 				failFn(_error);
+			} else {
+				_errbacks ~= failFn;
 			}
 		}
 	}
 
-	void except(ErrbackMethod failFn)
+	void then(AsyncResult other)
 	{
-		if( failFn !is null )
-		{
-			_errbacks ~= failFn;
-			if( _state == AsyncResultState.rejected ) {
-				failFn(_error);
-			}
+		if (other !is null) {
+			then(&other.resolve, &other.reject);
 		}
+	}
+
+	void except(ErrbackMethod failFn) {
+		this.then(null, failFn);
 	}
 
 	void resolve(IvyData value)
@@ -51,10 +53,15 @@ class AsyncResult
 		foreach( fn; _callbacks ) {
 			fn(_value);
 		}
+
+		_callbacks.length = 0;
 	}
 
 	void reject(Throwable error)
 	{
+		if( error is null )
+			return; // No error - no problemmes
+
 		if( _state != AsyncResultState.pending )
 			return; // Already resolved or rejected
 
@@ -64,6 +71,8 @@ class AsyncResult
 		foreach( fn; _errbacks ) {
 			fn(_error);
 		}
+
+		_errbacks.length = 0;
 	}
 
 	AsyncResultState state() @property {

@@ -72,6 +72,6 @@ mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
 
 	// Test assertion. If assertion is false then logs internal error and throws
 	void internalAssert(T...)(lazy T data) {
-		assert( data[0], genericWrite(LogInfoType.internalError, data) );
+		assert(data[0], genericWrite(LogInfoType.internalError, data[1..$]));
 	}
 }

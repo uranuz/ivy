@@ -102,17 +102,9 @@ public:
 		moduleExecRes.asyncResult.then(
 			(IvyData modRes) {
 				// Module executed successfuly, then call method
-				moduleExecRes.interp.runModuleDirective(methodName, methodParams).then(
-					(IvyData methodRes) {
-						fResult.resolve(methodRes); // Successfully called method
-					},
-					(Throwable error) {
-						fResult.reject(error); // Error in calling method
-					});
+				moduleExecRes.interp.runModuleDirective(methodName, methodParams).then(fResult);
 			},
-			(Throwable error) {
-				fResult.reject(error); // Error in running module
-			});
+			&fResult.reject);
 		return fResult;
 	}
 

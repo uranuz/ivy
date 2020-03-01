@@ -581,35 +581,27 @@ struct TIvyData(S)
 		return _escapeState;
 	}
 
-	string toString()
-	{
-		import std.array: appender;
-		auto result = appender!string();
-		renderDataNode!(DataRenderType.Text)(this, result);
-		return result.data;
+	string toString() {
+		return toSomeString!(DataRenderType.Text);
 	}
 
-	string toDebugString()
-	{
-		import std.array: appender;
-		auto result = appender!string();
-		renderDataNode!(DataRenderType.TextDebug)(this, result);
-		return result.data;
+	string toDebugString() {
+		return toSomeString!(DataRenderType.TextDebug);
 	}
 
-	string toHTMLDebugString()
-	{
-		import std.array: appender;
-		auto result = appender!string();
-		renderDataNode!(DataRenderType.HTMLDebug)(this, result);
-		return result.data;
+	string toHTMLDebugString() {
+		return toSomeString!(DataRenderType.HTMLDebug);
 	}
 
-	string toJSONString()
+	string toJSONString() {
+		return toSomeString!(DataRenderType.JSON);
+	}
+
+	string toSomeString(DataRenderType kind)()
 	{
 		import std.array: appender;
 		auto result = appender!string();
-		renderDataNode!(DataRenderType.JSON)(this, result);
+		renderDataNode!(kind)(this, result);
 		return result.data;
 	}
 }
@@ -667,15 +659,11 @@ IvyData errorToIvyData(Throwable error)
 {
 	import std.conv: to;
 	import std.exception: enforce;
-	enforce(error, `Throwable is empty`);
-	enforce(error.info, `Trace info is empty for exception`);
-	string[] traceInfo;
-	foreach( info; error.info ) {
-		traceInfo ~= info.to!string;
-	}
+	import trifle.backtrace: getBacktrace;
+
 	IvyData res;
 	res[`errorMsg`] = error.msg;
-	res[`traceInfo`] = traceInfo;
+	res[`traceInfo`] = getBacktrace(error);
 	res[`errorFile`] = error.file;
 	res[`errorLine`] = error.line;
 	return res;

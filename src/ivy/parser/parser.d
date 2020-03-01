@@ -157,7 +157,7 @@ public:
 
 		loger.write( "Parsing named attribute, attribute name is: ", attrName );
 
-		if( attrName.empty || !lexer.front.test( LexemeType.Colon ) || lexer.empty )
+		if( attrName.empty || lexer.empty || !lexer.front.test(LexemeType.Colon) )
 		{
 			lexer = lexerCopy.save;
 			loger.write( "Couldn't parse name for named attribute, so lexer is restored. Returning null" );
@@ -785,77 +785,39 @@ public:
 
 	} // static if
 
+	static immutable String stringQuotes = `"'`;
+
 	String parseQuotedString()
 	{
-		import std.array: array;
-		
-		String result;
+		import trifle.quoted_string_range: QuotedStringRange;
+		import std.array: appender;
+		import std.algorithm: canFind;
+
+		alias QuotRange = QuotedStringRange!(typeof(lexer.frontValue), stringQuotes);
+
 		loger.write( "Parsing quoted string expression" );
 
 		if( !lexer.front.test(LexemeType.String) )
 			loger.error("Expected quoted string literal");
 
 		auto strRange = lexer.frontValue.save;
+		auto buf = appender!String();
 
-		if( strRange.front != '\"' && strRange.front != '\'' )
-			loger.error("Expected \" or \' starting quoted string");
-		auto quoteChar = strRange.front;
-		strRange.popFront();
-
-		auto clearStrRange = strRange.save;
-		size_t clearCount;
-
-		while( !strRange.empty && strRange.front != quoteChar )
-		{
-			if( strRange.front == '\\' )
-			{
-				strRange.popFront(); // Skip slash
-
-				// Put previous (clear from escape symbols) part to result
-				result ~= clearStrRange[0..clearCount].array;
-
-				switch( strRange.front )
-				{
-					case 'b', 'f', 'n', 'r', 't', 'v', '0', '\'', '\"', '\\':
-					{
-						result ~= strRange.front;
-						strRange.popFront(); // Skip escaped character
-						break;
-					}
-					case 'u':
-					{
-						loger.internalAssert( 0, "Unicode escaping is not implemented yet!");
-						break;
-					}
-					case 'x':
-					{
-						loger.internalAssert( 0, "Hex escaping is not implemented yet!");
-						break;
-					}
-					default:
-					{
-						loger.error("Unexpected escape character: " ~ strRange.front);
-						break;
-					}
-				}
-
-				clearStrRange = strRange.save; // Previous "clear part" starts from there
-				clearCount = 0; // Reset "clear part" counter
-				continue;
-			}
-
-			++clearCount;
-			strRange.popFront();
+		auto qRange = QuotRange(strRange);
+		for( ; !qRange.empty; qRange.popFront() ) {
+			buf ~= qRange.front;
 		}
 
-		if( strRange.front != quoteChar )
-			loger.error("Expected end of quoted string literal");
-
-		result ~= clearStrRange[0..clearCount].array; //Appending last part of string except last quote
+		if( qRange.source.empty ) {
+			loger.error( "Expected quoted string end quote, but got end of input" );
+		}
+		if( !stringQuotes.canFind(qRange.source.front) ) {
+			loger.error( "Expected quoted string end quote" );
+		}
 
 		lexer.popFront(); //Skipping String lexeme
 
-		return result;
+		return buf.data;
 	}
 
 	static immutable int[int] lexToBinaryOpMap;

@@ -446,7 +446,7 @@ public:
 
 		try {
 			execLoopImpl(fResult);
-		} catch( Exception ex ) {
+		} catch( Throwable ex ) {
 			fResult.reject(ex);
 		}
 		return fResult;
@@ -1526,7 +1526,7 @@ public:
 		AsyncResult fResult = new AsyncResult();
 		try {
 			this.execLoopImpl(fResult, 2);
-		} catch( Exception ex ) {
+		} catch( Throwable ex ) {
 			fResult.reject(ex);
 		}
 		return fResult;
@@ -1536,8 +1536,9 @@ public:
 	{
 		import std.range: empty;
 		import std.algorithm: canFind;
+		ExecutionFrame frame = this.currentFrame;
 
-		IvyData callableNode = this.currentFrame.getValue(name);
+		IvyData callableNode = frame.getValue(name);
 		loger.internalAssert(callableNode.type == IvyDataType.Callable, `Expected Callable!`);
 		CallableObject callableObj = callableNode.callable;
 		DirValueAttr[string] res;
