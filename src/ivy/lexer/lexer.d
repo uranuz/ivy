@@ -526,10 +526,6 @@ public:
 		}
 		source = qRange.source; // Get processed range back
 
-		enf(!source.empty, `Expected quoted string's end quote, but unexpected end`);
-		enf(stringQuotes.canFind(source.front), `Expected quoted string's end quote`);
-		source.popFront(); // Skip end quote
-
 		return true;
 	}
 

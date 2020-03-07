@@ -61,10 +61,6 @@ public:
 		}
 		_source = qRange.source; // Because range can be copied, we need to take processed range
 
-		if( _source.front != '\"' )
-			error("Expected \"");
-		_source.popFront(); // Skip "
-
 		return buf.data;
 	}
 

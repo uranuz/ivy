@@ -808,13 +808,6 @@ public:
 			buf ~= qRange.front;
 		}
 
-		if( qRange.source.empty ) {
-			loger.error( "Expected quoted string end quote, but got end of input" );
-		}
-		if( !stringQuotes.canFind(qRange.source.front) ) {
-			loger.error( "Expected quoted string end quote" );
-		}
-
 		lexer.popFront(); //Skipping String lexeme
 
 		return buf.data;
