@@ -45,7 +45,7 @@ mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
 			formattedWrite(logMessage, "%s", item);
 		}
 
-		return this.sendLogInfo(logInfoType, logMessage.data()); /// This method need to be implemented to actualy send log message
+		return this.sendLogInfo(logInfoType, logMessage.data); /// This method need to be implemented to actualy send log message
 	}
 
 	// Write regular log message

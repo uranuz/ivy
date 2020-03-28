@@ -601,7 +601,7 @@ struct TIvyData(S)
 	{
 		import std.array: appender;
 		auto result = appender!string();
-		renderDataNode!(kind)(this, result);
+		renderDataNode!kind(result, this);
 		return result.data;
 	}
 }
