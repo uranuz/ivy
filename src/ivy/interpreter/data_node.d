@@ -328,10 +328,10 @@ struct TIvyData(S)
 			}
 
 			typeTag = IvyDataType.AssocArray;
-			static if(is(Value : MIvyData))
+			static if( is(Value : MIvyData) )
 			{
 				if( storage.assocArray !is null && arg !is null ) {
-					storage.assocArray = arg; // Assign only if it is not null
+					storage.assocArray = cast(typeof(storage.assocArray)) arg; // Assign only if it is not null
 				}
 			}
 			else
