@@ -8,7 +8,7 @@ class CallCompiler: IDirectiveCompiler
 	{
 		auto stmtRange = stmt[];
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected callable argument!`);
+			compiler.log.error(`Expected callable argument!`);
 
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
@@ -24,14 +24,14 @@ class CallCompiler: IDirectiveCompiler
 		compiler.addInstr(OpCode.PopTop); // Drop module's execution frame...
 
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected arguments!`);
+			compiler.log.error(`Expected arguments!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		compiler.addInstr(OpCode.Call);
 
 		if( !stmtRange.empty ) {
-			compiler.loger.error(`Expected end of "call" directive. Maybe ';' is missing`);
+			compiler.log.error(`Expected end of "call" directive. Maybe ';' is missing`);
 		}
 	}
 }

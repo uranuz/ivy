@@ -7,8 +7,7 @@ class TypeStrDirInterpreter: INativeDirectiveInterpreter
 	override void interpret(Interpreter interp)
 	{
 		import std.conv: text;
-		IvyData value = interp.getValue("value");
-		interp._stack ~= IvyData(value.type.text);
+		interp._stack.push(interp.getValue("value").type.text);
 	}
 
 	private __gshared DirAttrsBlock[] _attrBlocks = [

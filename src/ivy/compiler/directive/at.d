@@ -18,7 +18,7 @@ public:
 		compiler.addInstr(OpCode.LoadSubscr);
 
 		if( !stmtRange.empty )
-			compiler.loger.error(`Expected end of "at" directive after index expression. Maybe ';' is missing. `
+			compiler.log.error(`Expected end of "at" directive after index expression. Maybe ';' is missing. `
 				~ `Info: multiple index expressions are not supported yet.`);
 	}
 }

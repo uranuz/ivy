@@ -31,7 +31,7 @@ mixin template NodeVisitMixin()
 			`IMixedBlockStatement`
 		].map!(function(string typeStr) {
 			return `override void visit(` ~ typeStr ~ ` node) {
-				this.loger.internalAssert(node, "node is null!");
+				this.log.internalAssert(node, "node is null!");
 				this._currentLocation = node.extLocation;
 				this._visit(node);
 			}

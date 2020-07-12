@@ -146,6 +146,51 @@ iu = {
 			default: break;
 		}
 		return val;
+	},
+	getEmpty: function(val)
+	{
+		switch( iu.getDataNodeType(val) )
+		{
+			case IvyDataType.Undef: case IvyDataType.Null:
+				return true;
+			case IvyDataType.Integer:
+			case IvyDataType.Floating:
+			case IvyDataType.DateTime:
+			case IvyDataType.Boolean:
+				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
+				// because in many cases they could be treated as significant values
+				// DateTime and Boolean are not empty too, because we cannot say what value should be treated as empty
+				return false;
+			case IvyDataType.String:
+			case IvyDataType.Array:
+				return !val.length;
+			case IvyDataType.AssocArray:
+				return !Object.keys(val).length;
+			case IvyDataType.DataNodeRange:
+				return val.empty();
+			case IvyDataType.ClassNode:
+				return !!val.getLength();
+			default:
+				break;
+		}
+		throw new Error('Cannot test value for emptyness');
+	},
+	reversed: function(arr)
+	{
+		if( !(arr instanceof Array) ) {
+			throw new Error('Expected array');
+		}
+		var i = arr.length;
+		return {
+			next: function() {
+				return i > 0? {
+					done: false,
+					value: arr[i-1]
+				}: {
+					done: true
+				}
+			}
+		}
 	}
 };
 // For now use CommonJS format to resolve cycle dependencies

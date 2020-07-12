@@ -164,11 +164,13 @@ JSONValue toStdJSON(IvyData con)
 		case IvyDataType.Integer: return JSONValue(con.integer);
 		case IvyDataType.Floating: return JSONValue(con.floating);
 		case IvyDataType.String: return JSONValue(con.str);
+		/*
 		case IvyDataType.DateTime:
 			return JSONValue([
 				IVY_TYPE_FIELD: JSONValue(con.type),
 				IVY_VALUE_FIELD: JSONValue(con.dateTime.toISOExtString())
 			]);
+		*/
 		case IvyDataType.Array: {
 			JSONValue[] arr;
 			foreach( IvyData node; con.array ) {

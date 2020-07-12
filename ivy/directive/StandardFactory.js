@@ -1,6 +1,5 @@
 define('ivy/directive/StandardFactory', [
 	'ivy/directive/Factory',
-	'ivy/directive/DateTimeGet',
 	'ivy/directive/Empty',
 	'ivy/directive/BoolCtor',
 	'ivy/directive/FloatCtor',
@@ -13,7 +12,6 @@ define('ivy/directive/StandardFactory', [
 	'ivy/directive/TypeStr'
 ], function(
 	DirectiveFactory,
-	DateTimeGet,
 	Empty,
 	BoolCtor,
 	FloatCtor,
@@ -27,7 +25,6 @@ define('ivy/directive/StandardFactory', [
 ) {
 	return (function StandardFactory() {
 		var factory = new DirectiveFactory();
-		factory.add(new DateTimeGet);
 		factory.add(new Empty);
 		factory.add(new BoolCtor);
 		factory.add(new FloatCtor);

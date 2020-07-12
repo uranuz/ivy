@@ -214,7 +214,7 @@ public:
 		}
 	}
 
-	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this.save);
 	}
 
@@ -305,7 +305,7 @@ public:
 		import std.array: array;
 		import std.conv: to;
 
-		loger.write("Running lexer popFront");
+		log.write("Running lexer popFront");
 
 		_front = parseFront(currentRange, _ctx);
 
@@ -410,13 +410,13 @@ public:
 		String whatExpected = (msg.empty? null: msg ~ `. `) ~ `Lexeme of type "` ~ lexType.to!String ~ `"`;
 		if( !value.empty )
 			whatExpected ~= ` with value "` ~ value ~ `"`;
-		loger(func, file, line).error(!this.empty, whatExpected, ` expected, but got end of input!!!`);
+		log(func, file, line).error(!this.empty, whatExpected, ` expected, but got end of input!!!`);
 
 		String whatGot = `, but got lexeme of type "` ~ (cast(LexemeType) front.info.typeIndex).to!String ~ `"`;
 		if( !front.getSlice(sourceRange).empty )
 			whatGot ~= ` with value "` ~ front.getSlice(sourceRange).array ~ `"`;
 
-		loger(func, file, line).error(whatExpected, ` expected`, whatGot, `!!!`);
+		log(func, file, line).error(whatExpected, ` expected`, whatGot, `!!!`);
 	}
 
 	LexemeT expect(LexemeType lexType, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__) {
@@ -487,7 +487,7 @@ public:
 		//Creates copy of currentRange in order to not modify original one
 		SourceRange parsedRange = currentRange.save;
 		if( this.empty )
-			loger.error("Cannot peek lexeme, because currentRange is empty!!!");
+			log.error("Cannot peek lexeme, because currentRange is empty!!!");
 
 		return parseFront(parsedRange, _ctx);
 	}

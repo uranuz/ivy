@@ -50,7 +50,7 @@ public:
 		}
 	}
 
-	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this);
 	}
 
@@ -62,7 +62,7 @@ public:
 		import std.path: buildNormalizedPath, isAbsolute;
 		import std.file: read, exists, isFile, isDir;
 
-		loger.write("loadModuleFromFile attempt to load module: ", moduleName);
+		log.write("loadModuleFromFile attempt to load module: ", moduleName);
 
 		string fileName;
 		string[] existingFiles;
@@ -77,7 +77,7 @@ public:
 
 			// Check if file name is not empty and located in root path
 			if( fileName.empty || !fileName.startsWith( buildNormalizedPath(importPath) ) )
-				loger.error(`Incorrect path to module: `, fileName);
+				log.error(`Incorrect path to module: `, fileName);
 
 			if( exists(fileName) && isFile(fileName) ) {
 				existingFiles ~= fileName;
@@ -92,14 +92,14 @@ public:
 		}
 
 		if( existingFiles.length == 0 )
-			loger.error(`Cannot load module `, moduleName, ". Searching in import paths:\n", _importPaths.join(",\n") );
+			log.error(`Cannot load module `, moduleName, ". Searching in import paths:\n", _importPaths.join(",\n") );
 		else if( existingFiles.length == 1 )
 			fileName = existingFiles.front; // Success
 		else
-			loger.error(`Found multiple source files in import paths matching module name `, moduleName,
+			log.error(`Found multiple source files in import paths matching module name `, moduleName,
 				". Following files matched:\n", existingFiles.join(",\n") );
 
-		loger.write("loadModuleFromFile loading module from file: ", fileName);
+		log.write("loadModuleFromFile loading module from file: ", fileName);
 		string fileContent = cast(string) read(fileName);
 
 		auto parser = new Parser!(TextRange)(fileContent, fileName, _logerMethod);

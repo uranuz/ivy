@@ -9,15 +9,15 @@ class ExprCompiler: IDirectiveCompiler
 	{
 		auto stmtRange = stmt[];
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected node as "expr" argument!`);
+			compiler.log.error(`Expected node as "expr" argument!`);
 
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		if( !stmtRange.empty )
 		{
-			compiler.loger.write("ExprCompiler. At end. stmtRange.front.kind: ", ( cast(INameExpression) stmtRange.front ).name);
-			compiler.loger.error(`Expected end of "expr" directive. Maybe ';' is missing`);
+			compiler.log.write("ExprCompiler. At end. stmtRange.front.kind: ", ( cast(INameExpression) stmtRange.front ).name);
+			compiler.log.error(`Expected end of "expr" directive. Maybe ';' is missing`);
 		}
 	}
 }

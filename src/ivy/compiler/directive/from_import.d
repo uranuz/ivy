@@ -15,7 +15,7 @@ public:
 
 		INameExpression importKwdExpr = stmtRange.takeFrontAs!INameExpression("Expected 'import' keyword, but got end of range");
 		if( importKwdExpr.name != "import" )
-			compiler.loger.error("Expected 'import' keyword");
+			compiler.log.error("Expected 'import' keyword");
 
 		string[] varNames;
 		while( !stmtRange.empty )
@@ -25,7 +25,7 @@ public:
 		}
 
 		if( !stmtRange.empty )
-			compiler.loger.error(`Not all attributes for directive "from" were parsed. Maybe ; is missing somewhere`);
+			compiler.log.error(`Not all attributes for directive "from" were parsed. Maybe ; is missing somewhere`);
 
 		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
 

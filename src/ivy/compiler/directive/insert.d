@@ -9,17 +9,17 @@ class InsertCompiler: IDirectiveCompiler
 		auto stmtRange = stmt[];
 
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected node as "insert"s "aggregate" argument!`);
+			compiler.log.error(`Expected node as "insert"s "aggregate" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected node as "insert"s "value" argument!`);
+			compiler.log.error(`Expected node as "insert"s "value" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected node as "insert"s "index" argument!`);
+			compiler.log.error(`Expected node as "insert"s "index" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
@@ -27,8 +27,8 @@ class InsertCompiler: IDirectiveCompiler
 
 		if( !stmtRange.empty )
 		{
-			compiler.loger.write(`InsertCompiler. At end. stmtRange.front.kind: `, stmtRange.front.kind);
-			compiler.loger.error(`Expected end of "insert" directive. Maybe ';' is missing`);
+			compiler.log.write(`InsertCompiler. At end. stmtRange.front.kind: `, stmtRange.front.kind);
+			compiler.log.error(`Expected end of "insert" directive. Maybe ';' is missing`);
 		}
 	}
 }

@@ -14,15 +14,15 @@ class HasDirInterpreter: INativeDirectiveInterpreter
 		{
 			case IvyDataType.AssocArray:
 				if( key.type != IvyDataType.String ) {
-					interp.loger.error(`Expected string as second "has" directive attribute, but got: `, key.type);
+					interp.log.error(`Expected string as second "has" directive attribute, but got: `, key.type);
 				}
-				interp._stack ~= IvyData(cast(bool)(key.str in collection));
+				interp._stack.push(cast(bool)(key.str in collection));
 				break;
 			case IvyDataType.Array:
-				interp._stack ~= IvyData(collection.array.canFind(key));
+				interp._stack.push(collection.array.canFind(key));
 				break;
 			default:
-				interp.loger.error(`Expected array or assoc array as first "has" directive attribute, but got: `, collection.type);
+				interp.log.error(`Expected array or assoc array as first "has" directive attribute, but got: `, collection.type);
 				break;
 		}
 	}

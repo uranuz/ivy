@@ -81,11 +81,11 @@ public:
 		_logerMethod = logerMethod; // First of all set loger method in order to not miss any log messages
 
 		// Some internal checks goes here...
-		this.loger.internalAssert(moduleRepo, `Expected module repository`);
-		this.loger.internalAssert(symbolsCollector, `Expected symbols collector`);
-		this.loger.internalAssert(compilerFactory, `Expected compiler factory`);
-		this.loger.internalAssert(directiveFactory, `Expected directive factory`);
-		this.loger.internalAssert(moduleObjCache, `Expected module objects cache`);
+		this.log.internalAssert(moduleRepo, `Expected module repository`);
+		this.log.internalAssert(symbolsCollector, `Expected symbols collector`);
+		this.log.internalAssert(compilerFactory, `Expected compiler factory`);
+		this.log.internalAssert(directiveFactory, `Expected directive factory`);
+		this.log.internalAssert(moduleObjCache, `Expected module objects cache`);
 
 		_moduleRepo = moduleRepo;
 		_symbolsCollector = symbolsCollector;
@@ -128,7 +128,7 @@ public:
 		}
 	}
 
-	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this);
 	}
 
@@ -142,7 +142,7 @@ public:
 	ModuleObject newModuleObject(string moduleName)
 	{
 		if( ModuleObject moduleObj = _moduleObjCache.get(moduleName) )
-			loger.error(`Cannot create new module object "` ~ moduleName ~ `", because it already exists!`);
+			log.error(`Cannot create new module object "` ~ moduleName ~ `", because it already exists!`);
 
 		ModuleObject newModObj = new ModuleObject(moduleName, moduleName);
 		_moduleObjCache.add(newModObj);
@@ -152,7 +152,7 @@ public:
 	size_t enterNewModuleCodeObject(string moduleName)
 	{
 		import std.range: back, empty;
-		loger.internalAssert(!moduleName.empty, "Expected module name!");
+		log.internalAssert(!moduleName.empty, "Expected module name!");
 		_codeObjStack ~= new CodeObject(moduleName, newModuleObject(moduleName));
 		return this.addConst( IvyData(_codeObjStack.back) );
 	}
@@ -160,7 +160,7 @@ public:
 	size_t enterNewCodeObject(string name)
 	{
 		import std.range: back, empty;
-		loger.internalAssert(!name.empty, "Expected code object name!");
+		log.internalAssert(!name.empty, "Expected code object name!");
 		_codeObjStack ~= new CodeObject(name, this.currentModule());
 		return this.addConst( IvyData(_codeObjStack.back) );
 	}
@@ -168,7 +168,7 @@ public:
 	void exitCodeObject()
 	{
 		import std.range: empty, popBack;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!");
+		log.internalAssert(!_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!");
 
 		_codeObjStack.popBack();
 	}
@@ -176,8 +176,8 @@ public:
 	size_t addInstr(Instruction instr)
 	{
 		import std.range: empty, back;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
-		loger.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
+		log.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
+		log.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
 
 		return _codeObjStack.back.addInstr(instr, _currentLocation.lineIndex);
 	}
@@ -193,8 +193,8 @@ public:
 	void setInstrArg(size_t index, size_t arg)
 	{
 		import std.range: empty, back;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
-		loger.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
+		log.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
+		log.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
 
 		return _codeObjStack.back.setInstrArg( index, arg );
 	}
@@ -202,8 +202,8 @@ public:
 	size_t getInstrCount()
 	{
 		import std.range: empty, back;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
-		loger.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
+		log.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
+		log.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
 
 		return _codeObjStack.back.getInstrCount();
 	}
@@ -212,9 +212,9 @@ public:
 	{
 		import std.range: empty, back;
 		import std.digest.md: md5Of;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot add constant, because compiler code object stack is empty!");
-		loger.internalAssert(_codeObjStack.back, "Cannot add constant, because current compiler code object is null!");
-		loger.internalAssert(_codeObjStack.back._moduleObj, "Cannot add constant, because current module object is null!");
+		log.internalAssert(!_codeObjStack.empty, "Cannot add constant, because compiler code object stack is empty!");
+		log.internalAssert(_codeObjStack.back, "Cannot add constant, because current compiler code object is null!");
+		log.internalAssert(_codeObjStack.back._moduleObj, "Cannot add constant, because current module object is null!");
 		ModuleObject mod = _codeObjStack.back._moduleObj;
 		if( mod.name !in _moduleConstHashes ) {
 			_moduleConstHashes[mod.name] = null;
@@ -236,8 +236,8 @@ public:
 	ModuleObject currentModule() @property
 	{
 		import std.range: empty, back;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot get current module object, because compiler code object stack is empty!");
-		loger.internalAssert(_codeObjStack.back, "Cannot get current module object, because current compiler code object is null!");
+		log.internalAssert(!_codeObjStack.empty, "Cannot get current module object, because compiler code object stack is empty!");
+		log.internalAssert(_codeObjStack.back, "Cannot get current module object, because current compiler code object is null!");
 
 		return _codeObjStack.back._moduleObj;
 	}
@@ -245,7 +245,7 @@ public:
 	CodeObject currentCodeObject() @property
 	{
 		import std.range: empty, back;
-		loger.internalAssert(!_codeObjStack.empty, "Cannot get current code object, because compiler code object stack is empty!");
+		log.internalAssert(!_codeObjStack.empty, "Cannot get current code object, because compiler code object stack is empty!");
 
 		return _codeObjStack.back;
 	}
@@ -258,11 +258,11 @@ public:
 			return symb;
 		}
 
-		loger.internalAssert(_globalSymbolTable, `Compiler's global symbol table is null`);
+		log.internalAssert(_globalSymbolTable, `Compiler's global symbol table is null`);
 		symb = _globalSymbolTable.lookup(name);
 
 		if( !symb ) {
-			loger.error( `Cannot find symbol "` ~ name ~ `"` );
+			log.error( `Cannot find symbol "` ~ name ~ `"` );
 		}
 
 		return symb;
@@ -277,22 +277,22 @@ public:
 		{
 			// Initiate module object compilation on demand
 			IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
-			loger.internalAssert(moduleNode, `Module node is null`);
+			log.internalAssert(moduleNode, `Module node is null`);
 
-			loger.write(`Entering new code object`);
+			log.write(`Entering new code object`);
 			enterNewModuleCodeObject(moduleName);
-			loger.write(`Entering module scope`);
+			log.write(`Entering module scope`);
 			_symbolsCollector.enterModuleScope(moduleName);
-			loger.write(`Starting compiling module AST`);
+			log.write(`Starting compiling module AST`);
 			moduleNode.accept(this);
-			loger.write(`Finished compiling module AST`);
+			log.write(`Finished compiling module AST`);
 
 			scope(exit)
 			{
-				loger.write(`Exiting compiler scopes`);
+				log.write(`Exiting compiler scopes`);
 				_symbolsCollector.exitScope();
 				this.exitCodeObject();
-				loger.write(`Compiler scopes exited`);
+				log.write(`Compiler scopes exited`);
 			}
 		}
 		return _moduleObjCache.get(moduleName);
@@ -343,12 +343,12 @@ public:
 				{
 					IAssocArrayPair aaPair = cast(IAssocArrayPair) elem;
 					if( !aaPair )
-						loger.error("Expected assoc array pair!");
+						log.error("Expected assoc array pair!");
 
 					addInstr(OpCode.LoadConst, addConst( IvyData(aaPair.key) ));
 
 					if( !aaPair.value )
-						loger.error("Expected assoc array value!");
+						log.error("Expected assoc array value!");
 					aaPair.value.accept(this);
 
 					++aaLen;
@@ -356,7 +356,7 @@ public:
 				addInstr(OpCode.MakeAssocArray, aaLen);
 				return;
 			default:
-				loger.internalAssert(false, "Expected literal expression node!");
+				log.internalAssert(false, "Expected literal expression node!");
 				break;
 		}
 
@@ -365,15 +365,30 @@ public:
 
 	void _visit(INameExpression node)
 	{
-		size_t constIndex = addConst( IvyData(node.name) );
-		// Load name constant instruction
-		addInstr( OpCode.LoadName, constIndex );
+		import std.array: split;
+		import std.range: empty, front, popFront;
+
+		string[] varPath = split(node.name, '.');
+
+		// Load variable from execution frame...
+		addInstr(OpCode.LoadName, addConst( IvyData(varPath.front) ));
+		varPath.popFront(); // Drop var name
+
+		// If there is more parts in var path then treat them as attr getters
+		while( !varPath.empty )
+		{
+			// Load attr name const...
+			addInstr(OpCode.LoadConst, addConst( IvyData(varPath.front) ));
+			varPath.popFront(); // Drop attr name...
+
+			addInstr(OpCode.LoadAttr);
+		}
 	}
 
 	void _visit(IOperatorExpression node) { visit( cast(IExpression) node ); }
 	void _visit(IUnaryExpression node)
 	{
-		loger.internalAssert( node.expr, "Expression expected!" );
+		log.internalAssert( node.expr, "Expression expected!" );
 		node.expr.accept(this);
 
 		OpCode opcode;
@@ -383,7 +398,7 @@ public:
 			case Operator.UnaryMin: opcode = OpCode.UnaryMin; break;
 			case Operator.Not: opcode = OpCode.UnaryNot; break;
 			default:
-				loger.internalAssert( false, "Unexpected unary operator type!" );
+				log.internalAssert( false, "Unexpected unary operator type!" );
 		}
 
 		addInstr(opcode);
@@ -394,8 +409,8 @@ public:
 		import std.conv: to;
 
 		// Generate code that evaluates left and right parts of binary expression and get result on the stack
-		loger.internalAssert( node.leftExpr, "Left expr expected!" );
-		loger.internalAssert( node.rightExpr, "Right expr expected!" );
+		log.internalAssert( node.leftExpr, "Left expr expected!" );
+		log.internalAssert( node.rightExpr, "Right expr expected!" );
 
 		switch( node.operatorIndex )
 		{
@@ -433,7 +448,7 @@ public:
 			case Operator.LTEqual: opcode = OpCode.LTEqual; break;
 			case Operator.GTEqual: opcode = OpCode.GTEqual; break;
 			default:
-				loger.internalAssert( false, "Unexpected binary operator type: ", (cast(Operator) node.operatorIndex) );
+				log.internalAssert( false, "Unexpected binary operator type: ", (cast(Operator) node.operatorIndex) );
 		}
 
 		addInstr(opcode);
@@ -459,10 +474,10 @@ public:
 
 			Symbol symb = this.symbolLookup( node.name );
 			if( symb.kind != SymbolKind.DirectiveDefinition )
-				loger.error(`Expected directive definition symbol kind`);
+				log.error(`Expected directive definition symbol kind`);
 
 			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-			loger.internalAssert(dirSymbol, `Directive definition symbol is null`);
+			log.internalAssert(dirSymbol, `Directive definition symbol is null`);
 
 			DirAttrsBlock[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
 
@@ -470,7 +485,7 @@ public:
 			size_t stackItemsCount = 1;
 			bool isNoescape = false;
 
-			loger.write(`Entering directive attrs blocks loop`);
+			log.write(`Entering directive attrs blocks loop`);
 			while( !dirAttrBlocks.empty )
 			{
 				final switch( dirAttrBlocks.front.kind )
@@ -489,10 +504,10 @@ public:
 							}
 
 							if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
-								loger.error(`Unexpected named attribute "` ~ keyValueAttr.name ~ `"`);
+								log.error(`Unexpected named attribute "` ~ keyValueAttr.name ~ `"`);
 
 							if( keyValueAttr.name in argsSet )
-								loger.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
+								log.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
 
 							// Add name of named argument into stack
 							addInstr(OpCode.LoadConst, addConst( IvyData(keyValueAttr.name) ));
@@ -526,7 +541,7 @@ public:
 							}
 
 							if( exprAttrDefs.empty ) {
-								loger.error(`Got more positional arguments than expected!`);
+								log.error(`Got more positional arguments than expected!`);
 							}
 
 							exprAttr.accept(this);
@@ -550,7 +565,7 @@ public:
 					}
 					case DirAttrKind.IdentAttr:
 					{
-						loger.internalAssert( false );
+						log.internalAssert( false );
 						// TODO: We should take number of identifiers passed in directive definition
 						while( !attrRange.empty )
 						{
@@ -565,11 +580,11 @@ public:
 					}
 					case DirAttrKind.KwdAttr:
 					{
-						loger.internalAssert( false );
+						log.internalAssert( false );
 						DirAttrsBlock kwdDef = dirAttrBlocks.front;
 						INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression(`Expected keyword attribute`);
 						if( kwdDef.keyword != kwdAttr.name )
-							loger.error(`Expected "` ~ kwdDef.keyword ~ `" keyword attribute`);
+							log.error(`Expected "` ~ kwdDef.keyword ~ `" keyword attribute`);
 						break;
 					}
 					case DirAttrKind.BodyAttr:
@@ -578,10 +593,10 @@ public:
 				}
 				dirAttrBlocks.popFront();
 			}
-			loger.write(`Exited directive attrs blocks loop`);
+			log.write(`Exited directive attrs blocks loop`);
 
 			if( !attrRange.empty ) {
-				loger.error(`Not all directive attributes processed correctly. Seems that there are unexpected attributes or missing ;`);
+				log.error(`Not all directive attributes processed correctly. Seems that there are unexpected attributes or missing ;`);
 			}
 
 			// Add instruction to load directive object from context by name
@@ -602,13 +617,13 @@ public:
 	}
 
 	void _visit(ICompoundStatement node) {
-		loger.internalAssert( false, `Shouldn't fall into this!` );
+		log.internalAssert( false, `Shouldn't fall into this!` );
 	}
 
 	void _visit(ICodeBlockStatement node)
 	{
 		if( !node )
-			loger.error( "Code block statement node is null!" );
+			log.error( "Code block statement node is null!" );
 
 		if( node.isListBlock )
 		{
@@ -633,7 +648,7 @@ public:
 	void _visit(IMixedBlockStatement node)
 	{
 		if( !node )
-			loger.error( "Mixed block statement node is null!" );
+			log.error( "Mixed block statement node is null!" );
 
 		IvyData emptyArray = IvyData[].init;
 		addInstr(OpCode.LoadConst, addConst(emptyArray));

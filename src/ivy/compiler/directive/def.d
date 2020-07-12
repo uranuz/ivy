@@ -13,7 +13,7 @@ class DefCompiler: IDirectiveCompiler
 	{
 		auto stmtRange = statement[];
 		INameExpression defNameExpr = stmtRange.takeFrontAs!INameExpression("Expected name for directive definition");
-		compiler.loger.internalAssert(defNameExpr.name.length > 0, `Directive definition name shouldn't be empty!`);
+		compiler.log.internalAssert(defNameExpr.name.length > 0, `Directive definition name shouldn't be empty!`);
 
 		ICompoundStatement bodyStatement;
 		size_t stackItemsCount = 2; // CodeObject and it's name counted
@@ -39,7 +39,7 @@ class DefCompiler: IDirectiveCompiler
 						while( !attrsDefStmtAttrRange.empty )
 						{
 							auto res = compiler.analyzeValueAttr(attrsDefStmtAttrRange);
-							compiler.loger.internalAssert(res.isSet, `Check 3`);
+							compiler.log.internalAssert(res.isSet, `Check 3`);
 
 							if( res.defaultValueExpr )
 							{
@@ -64,7 +64,7 @@ class DefCompiler: IDirectiveCompiler
 						while( !attrsDefStmtAttrRange.empty )
 						{
 							auto res = compiler.analyzeValueAttr(attrsDefStmtAttrRange);
-							compiler.loger.internalAssert(res.isSet, `Check 4`);
+							compiler.log.internalAssert(res.isSet, `Check 4`);
 
 							if( res.defaultValueExpr ) {
 								res.defaultValueExpr.accept(compiler);
@@ -80,22 +80,22 @@ class DefCompiler: IDirectiveCompiler
 						break;
 					}
 					case "def.names": case "def.kwd": {
-						compiler.loger.error(`Not implemented yet!`);
+						compiler.log.error(`Not implemented yet!`);
 						break;
 					}
 					case "def.body": {
 						if( bodyStatement )
-							compiler.loger.error("Multiple body statements are not allowed!!!");
+							compiler.log.error("Multiple body statements are not allowed!!!");
 
 						auto res = compiler.analyzeDirBody(attrsDefStmtAttrRange);
 						bodyStatement = res.statement;
 
 						Symbol symb = compiler.symbolLookup(defNameExpr.name);
 						if( symb.kind != SymbolKind.DirectiveDefinition )
-							compiler.loger.error(`Expected directive definition symbol kind`);
+							compiler.log.error(`Expected directive definition symbol kind`);
 
 						DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-						compiler.loger.internalAssert(dirSymbol, `Directive definition symbol is null`);
+						compiler.log.internalAssert(dirSymbol, `Directive definition symbol is null`);
 
 						size_t codeObjIndex;
 						// Compilation of CodeObject itself
@@ -135,7 +135,7 @@ class DefCompiler: IDirectiveCompiler
 						break;
 					}
 					default: {
-						compiler.loger.error(`Unexpected directive attribute definition statement "` ~ attrDefStmt.name ~ `"`);
+						compiler.log.error(`Unexpected directive attribute definition statement "` ~ attrDefStmt.name ~ `"`);
 						break;
 					}
 				}
@@ -145,6 +145,6 @@ class DefCompiler: IDirectiveCompiler
 		}
 
 		// Check wheter dir body was found at all
-		compiler.loger.internalAssert(bodyStatement, `Directive definition body is null`);
+		compiler.log.internalAssert(bodyStatement, `Directive definition body is null`);
 	}
 }

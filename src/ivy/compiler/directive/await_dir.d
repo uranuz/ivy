@@ -8,7 +8,7 @@ class AwaitCompiler: IDirectiveCompiler
 	{
 		auto stmtRange = stmt[];
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected node as "await" argument!`);
+			compiler.log.error(`Expected node as "await" argument!`);
 
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
@@ -16,7 +16,7 @@ class AwaitCompiler: IDirectiveCompiler
 		compiler.addInstr(OpCode.Await);
 
 		if( !stmtRange.empty ) {
-			compiler.loger.error(`Expected end of "await" directive. Maybe ';' is missing`);
+			compiler.log.error(`Expected end of "await" directive. Maybe ';' is missing`);
 		}
 	}
 }

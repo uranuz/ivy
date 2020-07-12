@@ -8,8 +8,8 @@ class ScopeDirInterpreter: INativeDirectiveInterpreter
 
 	override void interpret(Interpreter interp)
 	{
-		interp.loger.internalAssert(interp.independentFrame, `Current frame is null!`);
-		interp._stack ~= interp.independentFrame._dataDict;
+		interp.log.internalAssert(interp.independentFrame, `Current frame is null!`);
+		interp._stack.push(interp.independentFrame._dataDict);
 	}
 
 	private __gshared DirAttrsBlock[] _attrBlocks = [

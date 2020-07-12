@@ -56,9 +56,13 @@ struct ExecStack
 		this._stack.popBackN(count);
 	}
 
-	void opOpAssign(string op : "~", T)(auto ref T arg) {
-		this._stack ~= arg;
+	void push(T)(auto ref T arg) {
+		this._stack ~= IvyData(arg);
 	}
+
+	//void opOpAssign(string op : "~", T)(auto ref T arg) {
+	//	this._stack ~= arg;
+	//}
 
 	import std.traits: isIntegral;
 

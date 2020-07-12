@@ -21,7 +21,7 @@ mixin template DefAnalyzeMixin()
 			res.attr.name = kwPair.name;
 			res.defaultValueExpr = cast(IExpression) kwPair.value;
 			if( !res.defaultValueExpr )
-				loger.error(`Expected attribute default value expression!`);
+				log.error(`Expected attribute default value expression!`);
 			res.isSet = true;
 
 			attrRange.popFront(); // Skip named attribute
@@ -45,11 +45,11 @@ mixin template DefAnalyzeMixin()
 					attrRange.popFront(); // Skip `as` keyword
 
 					if( attrRange.empty )
-						loger.error(`Expected attr type definition, but got end of attrs range!`);
+						log.error(`Expected attr type definition, but got end of attrs range!`);
 
 					auto attrTypeExpr = cast(ILiteralExpression) attrRange.front;
 					if( !attrTypeExpr || attrTypeExpr.literalType != LiteralType.String )
-						loger.error(`Expected string literal as attr type definition!`);
+						log.error(`Expected string literal as attr type definition!`);
 
 					res.attr.typeName = attrTypeExpr.toStr(); // Getting type of attribute as string (for now)
 
@@ -89,12 +89,12 @@ mixin template DefAnalyzeMixin()
 		}
 
 		if( attrsDefStmtAttrRange.empty )
-			loger.error("Unexpected end of def.body directive!");
+			log.error("Unexpected end of def.body directive!");
 
 		// Getting body AST for statement just for check if it is there
 		res.statement = cast(ICompoundStatement) attrsDefStmtAttrRange.front;
 		if( !res.statement )
-			loger.error("Expected compound statement as directive body statement");
+			log.error("Expected compound statement as directive body statement");
 
 		attrsDefStmtAttrRange.popFront(); // Need to consume body statement to behave correctly
 

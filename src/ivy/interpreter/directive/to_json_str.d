@@ -12,7 +12,7 @@ class ToJSONStrDirInterpreter: INativeDirectiveInterpreter
 	{
 		IvyData val = IvyData(interp.getValue("value").toJSONString());
         val.escapeState = NodeEscapeState.Safe;
-        interp._stack ~= val;
+        interp._stack.push(val);
 	}
 
 	private __gshared DirAttrsBlock[] _attrBlocks = [

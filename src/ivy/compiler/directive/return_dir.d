@@ -21,7 +21,7 @@ class ReturnCompiler: IDirectiveCompiler
 		}
 
 		if( !stmtRange.empty ) {
-			compiler.loger.error(`Expected end of "return" directive. Maybe ';' is missing`);
+			compiler.log.error(`Expected end of "return" directive. Maybe ';' is missing`);
 		}
 
 		compiler.addInstr(OpCode.Return); // Add Return instruction that goes to the end of code object

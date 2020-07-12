@@ -9,17 +9,17 @@ class SliceCompiler: IDirectiveCompiler
 		auto stmtRange = stmt[];
 
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected node as "slice"s "aggregate" argument!`);
+			compiler.log.error(`Expected node as "slice"s "aggregate" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected node as "slice"s "begin" argument!`);
+			compiler.log.error(`Expected node as "slice"s "begin" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		if( stmtRange.empty )
-			compiler.loger.error(`Expected node as "slice"s "end" argument!`);
+			compiler.log.error(`Expected node as "slice"s "end" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
@@ -27,8 +27,8 @@ class SliceCompiler: IDirectiveCompiler
 
 		if( !stmtRange.empty )
 		{
-			compiler.loger.write(`SliceCompiler. At end. stmtRange.front.kind: `, stmtRange.front.kind);
-			compiler.loger.error(`Expected end of "slice" directive. Maybe ';' is missing`);
+			compiler.log.write(`SliceCompiler. At end. stmtRange.front.kind: `, stmtRange.front.kind);
+			compiler.log.error(`Expected end of "slice" directive. Maybe ';' is missing`);
 		}
 	}
 }

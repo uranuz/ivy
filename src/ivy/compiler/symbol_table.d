@@ -76,7 +76,7 @@ public:
 		}
 	}
 
-	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this);
 	}
 
@@ -86,29 +86,29 @@ public:
 
 	Symbol lookup(string name)
 	{
-		loger.write(`SymbolTableFrame: Starting compiler symbol lookup: `, name);
+		log.write(`SymbolTableFrame: Starting compiler symbol lookup: `, name);
 
 		if( Symbol* symb = name in _symbols ) {
-			loger.write(`SymbolTableFrame: Symbol: `, name, ` found in frame`);
+			log.write(`SymbolTableFrame: Symbol: `, name, ` found in frame`);
 			return *symb;
 		}
 
-		loger.write(`SymbolTableFrame: Couldn't find symbol in frame: `, name);
+		log.write(`SymbolTableFrame: Couldn't find symbol in frame: `, name);
 
 		// We need to try to look in module symbol table
 		if( Symbol symb = moduleLookup(name) ) {
-			loger.write(`SymbolTableFrame: Symbol found in imported modules: `, name);
+			log.write(`SymbolTableFrame: Symbol found in imported modules: `, name);
 			return symb;
 		}
 
-		loger.write(`SymbolTableFrame: Couldn't find symbol in imported modules: `, name);
+		log.write(`SymbolTableFrame: Couldn't find symbol in imported modules: `, name);
 
 		if( !_moduleFrame ) {
-			loger.write(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope failed, because _moduleFrame is null`);
+			log.write(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope failed, because _moduleFrame is null`);
 			return null;
 		}
 
-		loger.write(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope!`);
+		log.write(`SymbolTableFrame: Attempt to find symbol: `, name, ` in module scope!`);
 		return _moduleFrame.lookup(name);
 	}
 
@@ -119,7 +119,7 @@ public:
 		import std.range: take, drop;
 		import std.array: array;
 
-		loger.write(`SymbolTableFrame: Attempt to perform imported modules lookup for symbol: `, name);
+		log.write(`SymbolTableFrame: Attempt to perform imported modules lookup for symbol: `, name);
 
 		auto splittedName = splitter(name, ".").array;
 		for( size_t i = 1; i <= splittedName.length; ++i )
@@ -150,7 +150,7 @@ public:
 
 	SymbolTableFrame newChildFrame(size_t sourceIndex)
 	{
-		loger.internalAssert(sourceIndex !in _childFrames, `Child frame already exists!`);
+		log.internalAssert(sourceIndex !in _childFrames, `Child frame already exists!`);
 
 		// For now consider if this frame has no module frame - so it is module frame itself
 		SymbolTableFrame child = new SymbolTableFrame(_moduleFrame? _moduleFrame: this, _logerMethod);

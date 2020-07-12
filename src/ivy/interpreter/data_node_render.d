@@ -87,9 +87,6 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 		case String:
 			_writeStr!renderType(sink, node);
 			break;
-		case DateTime:
-			_writeStr!renderType(sink, node.dateTime.toISOExtString());
-			break;
 		case Array:
 			enum bool asArray = ![DataRenderType.Text, DataRenderType.HTML].canFind(renderType);
 			static if( asArray ) sink.put("[");
@@ -120,35 +117,14 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 			sink.put("}");
 			break;
 		case ClassNode:
-			import std.conv: text;
-			if( node.classNode )
-			{
-				IvyData serialized = node.classNode.__serialize__();
-				if( serialized.isUndef ) {
-					_writeStr!renderType(sink, "[[class node]]");
-				} else {
-					renderDataNode!renderType(sink, serialized, maxRecursion - 1);
-				}
-			} else {
-				_writeStr!renderType(sink, "[[class node (null)]]");
-			}
+			renderDataNode!renderType(sink, node.classNode.__serialize__(), maxRecursion - 1);
 			break;
 		case CodeObject:
 			import std.conv: text;
-			_writeStr!renderType(
-				sink,
-				node.codeObject?
-				"[[code object, size: " ~ node.codeObject._instrs.length.text ~ "]]":
-				"[[code object (null)]]"
-			);
+			_writeStr!renderType(sink, "[[code object, size: " ~ node.codeObject._instrs.length.text ~ "]]");
 			break;
 		case Callable:
-			_writeStr!renderType(
-				sink,
-				node.callable?
-				"[[callable object, " ~ node.callable._kind.to!string ~ ", " ~ node.callable._name ~ "]]":
-				"[[callable object (null)]]"
-			);
+			_writeStr!renderType(sink, "[[callable object, " ~ node.callable._kind.to!string ~ ", " ~ node.callable._name ~ "]]");
 			break;
 		case ExecutionFrame:
 			_writeStr!renderType(sink, "[[execution frame]]");

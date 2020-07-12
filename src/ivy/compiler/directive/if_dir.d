@@ -23,7 +23,7 @@ class IfCompiler: IDirectiveCompiler
 
 		while( !stmtRange.empty )
 		{
-			compiler.loger.write(`IfCompiler, stmtRange.front: `, stmtRange.front);
+			compiler.log.write(`IfCompiler, stmtRange.front: `, stmtRange.front);
 			INameExpression keywordExpr = stmtRange.takeFrontAs!INameExpression("'elif' or 'else' keyword expected");
 			if( keywordExpr.name == "elif" )
 			{
@@ -36,12 +36,12 @@ class IfCompiler: IDirectiveCompiler
 			{
 				elseBody = stmtRange.takeFrontAs!IExpression("'else' body statement expected");
 				if( !stmtRange.empty )
-					compiler.loger.error("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
+					compiler.log.error("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
 				break;
 			}
 			else
 			{
-				compiler.loger.error("'elif' or 'else' keyword expected");
+				compiler.log.error("'elif' or 'else' keyword expected");
 			}
 		}
 
@@ -91,6 +91,6 @@ class IfCompiler: IDirectiveCompiler
 		}
 
 		if( !stmtRange.empty )
-			compiler.loger.error(`Expected end of "if" directive. Maybe ';' is missing`);
+			compiler.log.error(`Expected end of "if" directive. Maybe ';' is missing`);
 	}
 }

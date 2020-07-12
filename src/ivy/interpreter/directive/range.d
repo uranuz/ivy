@@ -14,13 +14,13 @@ class RangeDirInterpreter: INativeDirectiveInterpreter
 		IvyData end = interp.getValue("end");
 
 		if( begin.type !=  IvyDataType.Integer ) {
-			interp.loger.error(`Expected integer as 'begin' argument!`);
+			interp.log.error(`Expected integer as 'begin' argument!`);
 		}
 		if( end.type !=  IvyDataType.Integer ) {
-			interp.loger.error(`Expected integer as 'end' argument!`);
+			interp.log.error(`Expected integer as 'end' argument!`);
 		}
 
-		interp._stack ~= IvyData(new IntegerRange(begin.integer, end.integer));
+		interp._stack.push(new IntegerRange(begin.integer, end.integer));
 	}
 
 	private __gshared DirAttrsBlock[] _attrBlocks = [

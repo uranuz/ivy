@@ -11,19 +11,19 @@ class FloatCtorDirInterpreter: INativeDirectiveInterpreter
 		switch(value.type)
 		{
 			case IvyDataType.Boolean:
-				interp._stack ~= IvyData(value.boolean? 1.0: 0.0);
+				interp._stack.push(value.boolean? 1.0: 0.0);
 				break;
 			case IvyDataType.Integer:
-				interp._stack ~= IvyData(value.integer.to!double);
+				interp._stack.push(value.integer.to!double);
 				break;
 			case IvyDataType.Floating:
-				interp._stack ~= value;
+				interp._stack.push(value);
 				break;
 			case IvyDataType.String:
-				interp._stack ~= IvyData(value.str.to!double);
+				interp._stack.push(value.str.to!double);
 				break;
 			default:
-				interp.loger.error(`Cannot convert value of type: `, value.type, ` to integer`);
+				interp.log.error(`Cannot convert value of type: `, value.type, ` to integer`);
 				break;
 		}
 	}

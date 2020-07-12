@@ -5,7 +5,7 @@ import ivy.interpreter.directive.utils;
 class StrCtorDirInterpreter: INativeDirectiveInterpreter
 {
 	override void interpret(Interpreter interp) {
-		interp._stack ~= IvyData(interp.getValue("value").toString());
+		interp._stack.push(interp.getValue("value").toString());
 	}
 
 	private __gshared DirAttrsBlock[] _attrBlocks = [

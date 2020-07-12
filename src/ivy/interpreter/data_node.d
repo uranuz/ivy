@@ -24,14 +24,58 @@ interface IClassNode
 	size_t length() @property;
 }
 
+class NotImplClassNode: IClassNode
+{
+protected:
+	string _getClassName() {
+		return typeid(this).name;
+	}
+	enum string notImplMixin = `throw new PropertyNotImplException(_getClassName(), __FUNCTION__);`;
+
+public:
+	override {
+		IvyNodeRange opSlice() {
+			mixin(notImplMixin);
+		}
+		IClassNode opSlice(size_t, size_t) {
+			mixin(notImplMixin);
+		}
+		IvyData opIndex(IvyData) {
+			mixin(notImplMixin);
+		}
+		IvyData __getAttr__(string) {
+			mixin(notImplMixin);
+		}
+		void __setAttr__(IvyData, string) {
+			mixin(notImplMixin);
+		}
+		IvyData __serialize__() {
+			mixin(notImplMixin);
+		}
+		size_t length() @property {
+			//mixin(notImplMixin);
+			return 0; // Add trivial implementation
+		}
+	}
+}
+
 class DataNodeException: IvyException
 {
-	this(string msg, int line = 0, int pos = 0) {
-		super(msg);
+public:
+	@nogc @safe this(string msg, int line = 0, int pos = 0, Throwable next = null) pure nothrow {
+		super(msg, file, line, next);
 	}
-	this(string msg, string file, size_t line)
-	{
-		super(msg, file, line);
+
+	@nogc @safe this(string msg, string file, size_t line, Throwable next = null) pure nothrow	{
+		super(msg, file, line, next);
+	}
+}
+
+class PropertyNotImplException: DataNodeException
+{
+public:
+	@safe this(string nodeKind, string prop, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow {
+		super(`Property "` ~ prop ~ `" is not implemented for node kind "` ~ nodeKind ~ `"`, file, line, next);
 	}
 }
 
@@ -41,7 +85,6 @@ enum IvyDataType: ubyte {
 	Boolean,
 	Integer,
 	Floating,
-	DateTime,
 	String,
 	Array,
 	AssocArray,
@@ -62,7 +105,6 @@ public alias IvyData = TIvyData!string;
 
 struct TIvyData(S)
 {
-	import std.datetime: SysTime;
 	import std.exception: enforce;
 	import std.traits;
 	import std.conv: text;
@@ -76,7 +118,6 @@ struct TIvyData(S)
 			bool boolean;
 			ptrdiff_t integer;
 			double floating;
-			SysTime dateTime;
 			// This is workaround of problem that IvyData is value type
 			// and array with it's length copied, and length is not shared between instances.
 			// So we put array item into another GC array with 1 item, so it becomes fully reference type
@@ -131,16 +172,6 @@ struct TIvyData(S)
 		assign(val);
 	}
 
-	SysTime dateTime() @property
-	{
-		enforce!DataNodeException(type == IvyDataType.DateTime, "IvyData is not DateTime");
-		return storage.dateTime;
-	}
-
-	void dateTime(SysTime val) @property {
-		assign(val);
-	}
-
 	ref String str() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.String, "IvyData is not string");
@@ -173,8 +204,10 @@ struct TIvyData(S)
 		assign(val);
 	}
 
-	IClassNode classNode() @property {
+	IClassNode classNode() @property
+	{
 		enforce!DataNodeException(type == IvyDataType.ClassNode, "IvyData is not class node");
+		enforce!DataNodeException(storage.classNode !is null, "Detected null class node");
 		return storage.classNode;
 	}
 
@@ -185,6 +218,7 @@ struct TIvyData(S)
 	CodeObject codeObject() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.CodeObject, "IvyData is not code object");
+		enforce!DataNodeException(storage.codeObject !is null, "Detected null code object");
 		return storage.codeObject;
 	}
 
@@ -195,6 +229,7 @@ struct TIvyData(S)
 	CallableObject callable() @property
 	{
 		enforce!DataNodeException( type == IvyDataType.Callable, "IvyData is not callable object");
+		enforce!DataNodeException(storage.callable !is null, "Detected null callable object");
 		return storage.callable;
 	}
 
@@ -205,6 +240,7 @@ struct TIvyData(S)
 	ExecutionFrame execFrame() @property
 	{
 		enforce!DataNodeException( type == IvyDataType.ExecutionFrame, "IvyData is not a execution frame");
+		enforce!DataNodeException(storage.execFrame !is null, "Detected null execution frame");
 		return storage.execFrame;
 	}
 
@@ -215,6 +251,7 @@ struct TIvyData(S)
 	IvyNodeRange dataRange() @property
 	{
 		enforce!DataNodeException( type == IvyDataType.DataNodeRange, "IvyData is not a data node range");
+		enforce!DataNodeException(storage.dataRange !is null, "Detected null data node range");
 		return storage.dataRange;
 	}
 
@@ -225,6 +262,7 @@ struct TIvyData(S)
 	AsyncResult asyncResult() @property
 	{
 		enforce!DataNodeException( type == IvyDataType.AsyncResult, "IvyData is not an async result");
+		enforce!DataNodeException(storage.asyncResult !is null, "Detected null async result");
 		return storage.asyncResult;
 	}
 
@@ -232,16 +270,8 @@ struct TIvyData(S)
 		assign(val);
 	}
 
-	IvyDataType type() @property
-	{
-		if( typeTag == IvyDataType.ClassNode && storage.classNode is null ) {
-			return IvyDataType.Null;
-		}
+	IvyDataType type() @property {
 		return typeTag;
-	}
-
-	bool empty() @property {
-		return isUndef || isNull || (type == IvyDataType.ClassNode && storage.classNode[].empty);
 	}
 
 	bool isUndef() @property {
@@ -249,24 +279,93 @@ struct TIvyData(S)
 	}
 
 	bool isNull() @property {
-		return type == IvyDataType.Null || (type == IvyDataType.ClassNode && storage.classNode is null);
+		return type == IvyDataType.Null;
+	}
+
+	bool empty() @property
+	{
+		import std.conv: text;
+		final switch(this.type)
+		{
+			case IvyDataType.Undef:
+			case IvyDataType.Null:
+				return true;
+			case IvyDataType.Integer:
+			case IvyDataType.Floating:
+			case IvyDataType.Boolean:
+				// Considering numbers just non-empty there. Not try to interpret 0 or 0.0 as logical false,
+				// because in many cases they could be treated as significant values
+				// Boolean is not empty too, because we cannot say what value should be treated as empty
+				return false;
+			case IvyDataType.String:
+				return !this.str.length;
+			case IvyDataType.Array:
+				return !this.array.length;
+			case IvyDataType.AssocArray:
+				return !this.assocArray.length;
+			case IvyDataType.ClassNode:
+				return !this.classNode.length;
+			case IvyDataType.DataNodeRange:
+				return this.dataRange.empty;
+			case IvyDataType.CodeObject:
+				return !this.codeObject.getInstrCount();
+			case IvyDataType.Callable:
+			case IvyDataType.ExecutionFrame:
+			case IvyDataType.AsyncResult:
+			case IvyDataType.ModuleObject:
+				return false;
+		}
+	}
+
+	bool toBoolean() {
+		return this.type == IvyDataType.Boolean? this.boolean: !this.empty;
 	}
 
 	size_t length() @property
 	{
-		switch( this.type ) with(IvyDataType)
+		import std.conv: text;
+		final switch(this.type)
 		{
-			case Undef, Null: return 0; // Return 0, but not error for convenience
-			case String: return this.str.length;
-			case Array: return this.array.length;
-			case AssocArray: return this.assocArray.length;
-			case CodeObject: return this.codeObject.getInstrCount();
-			default: throw new Exception(`Getting length property not yet implemeted for type: ` ~ this.type.text);
+			case IvyDataType.Undef:
+			case IvyDataType.Null:
+				return 0; // Return 0, but not error for convenience
+			case IvyDataType.Integer:
+			case IvyDataType.Floating:
+			case IvyDataType.Boolean:
+				break; // Error. Has no length
+			case IvyDataType.String:
+				return this.str.length;
+			case IvyDataType.Array:
+				return this.array.length;
+			case IvyDataType.AssocArray:
+				return this.assocArray.length;
+			case IvyDataType.ClassNode:
+				return this.classNode.length;
+			case IvyDataType.CodeObject:
+				return this.codeObject.getInstrCount();
+			case IvyDataType.Callable:
+			case IvyDataType.ExecutionFrame:
+			case IvyDataType.DataNodeRange:
+			case IvyDataType.AsyncResult:
+			case IvyDataType.ModuleObject:
+				break; // Error. Has no length
 		}
+		throw new DataNodeException(`No "length" property for type: ` ~ this.type.text);
 	}
 
 	private void assign(T)(auto ref T arg)
 	{
+		import trifle.traits: isUnsafelyNullable;
+		static if( isUnsafelyNullable!T )
+		{
+			// Replace all unsafe null values with null type
+			if( arg is null )
+			{
+				typeTag = IvyDataType.Null;
+				return;
+			}
+		}
+
 		static if( is(T : typeof(null)) )
 		{
 			typeTag = IvyDataType.Null;
@@ -285,11 +384,6 @@ struct TIvyData(S)
 		{
 			typeTag = IvyDataType.Floating;
 			storage.floating = arg;
-		}
-		else static if( is( T : SysTime ) )
-		{
-			typeTag = IvyDataType.DateTime;
-			storage.dateTime = arg;
 		}
 		else static if( is(T : string) )
 		{
@@ -378,11 +472,12 @@ struct TIvyData(S)
 			_escapeState = arg.escapeState;
 			final switch(typeTag)
 			{
-				case IvyDataType.Undef: case IvyDataType.Null:  break;
+				case IvyDataType.Undef:
+				case IvyDataType.Null:
+					break;
 				case IvyDataType.Boolean: storage.boolean = arg.boolean; break;
 				case IvyDataType.Integer: storage.integer = arg.integer; break;
 				case IvyDataType.Floating: storage.floating = arg.floating; break;
-				case IvyDataType.DateTime: storage.dateTime = arg.dateTime; break;
 				case IvyDataType.String: storage.str = arg.storage.str; break;
 				case IvyDataType.Array: storage.array = arg.storage.array; break;
 				case IvyDataType.AssocArray: storage.assocArray = arg.assocArray; break;
@@ -406,9 +501,9 @@ struct TIvyData(S)
 
 	void opIndexAssign(T)(auto ref T value, size_t index)
 	{
-		enforce!DataNodeException( type == IvyDataType.Array, "IvyData is not an array");
+		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not an array");
 		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
-		enforce!DataNodeException( index < storage.array[0].length , "IvyData array index is out of range");
+		enforce!DataNodeException(index < storage.array[0].length , "IvyData array index is out of range");
 
 		storage.array[0][index] = value;
 	}
@@ -420,7 +515,7 @@ struct TIvyData(S)
 			[IvyDataType.Array, IvyDataType.ClassNode].canFind(type),
 			"IvyData is not an array or class node, but is: " ~ type.text);
 		if( type == IvyDataType.ClassNode ) {
-			return storage.classNode is null? MIvyData(): storage.classNode[MIvyData(index)];
+			return storage.classNode[MIvyData(index)];
 		}
 		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
 		enforce!DataNodeException(index < storage.array[0].length, "IvyData array index is out of range");
@@ -434,7 +529,7 @@ struct TIvyData(S)
 		import std.conv: text, to;
 		enforce!DataNodeException(
 			[IvyDataType.Array, IvyDataType.String].canFind(type),
-			"Cannot append to IvyData that is not array or string, got: " ~ this.type.text ~ ", value is: " ~ (type == IvyDataType.Callable?  (this.callable is null? `null callable`: `some callable`): `not really cakkable` ) );
+			"Cannot append to IvyData that is not array or string, got: " ~ this.type.text);
 
 		if( type != IvyDataType.Array )
 			this = (MIvyData[]).init;
@@ -478,7 +573,7 @@ struct TIvyData(S)
 			[IvyDataType.AssocArray, IvyDataType.ClassNode].canFind(type),
 			"IvyData is not a dict or class node, but is: " ~ type.text);
 		if( type == IvyDataType.ClassNode ) {
-			return storage.classNode is null? MIvyData(): storage.classNode[MIvyData(key)];
+			return storage.classNode[MIvyData(key)];
 		}
 		
 		enforce!DataNodeException(key in storage.assocArray, "IvyData dict has no such key");
@@ -511,15 +606,16 @@ struct TIvyData(S)
 		if( rhs.type != this.type ) {
 			return false;
 		}
-		switch( this.type ) with(IvyDataType)
+		switch( this.type )
 		{
-			case Undef, Null: return true; // Undef and Null values are equal to each other
-			case Boolean: return this.boolean == rhs.boolean;
-			case Integer: return this.integer == rhs.integer;
-			case Floating: return this.floating == rhs.floating;
-			case DateTime: return this.dateTime == rhs.dateTime;
-			case String: return this.str == rhs.str;
-			case Array:
+			case IvyDataType.Undef:
+			case IvyDataType.Null:
+				return true; // Undef and Null values are equal to each other
+			case IvyDataType.Boolean: return this.boolean == rhs.boolean;
+			case IvyDataType.Integer: return this.integer == rhs.integer;
+			case IvyDataType.Floating: return this.floating == rhs.floating;
+			case IvyDataType.String: return this.str == rhs.str;
+			case IvyDataType.Array:
 			{
 				if( this.array.length != rhs.array.length ) {
 					return false;
@@ -532,7 +628,7 @@ struct TIvyData(S)
 				}
 				return true; // All equal - fantastic!
 			}
-			case AssocArray:
+			case IvyDataType.AssocArray:
 			{
 				if( this.assocArray.length != rhs.assocArray.length ) {
 					return false;
@@ -551,7 +647,7 @@ struct TIvyData(S)
 				}
 				return true; // All keys exist and values are equal - fantastic!
 			}
-			case CodeObject: return this.codeObject == rhs.codeObject;
+			case IvyDataType.CodeObject: return this.codeObject == rhs.codeObject;
 			default: throw new Exception(`Cannot compare data nodes of type: ` ~ this.type.text);
 		}
 	}
@@ -616,14 +712,14 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 		case IvyDataType.Boolean:
 		case IvyDataType.Integer:
 		case IvyDataType.Floating:
-		case IvyDataType.DateTime:
 			// These types of nodes are value types, so make plain copy
 
 		case IvyDataType.String:
 			// String is not a value type, but they are immutable in D implementation,
 			// so we only get new slice of existing string
 
-		case IvyDataType.CodeObject: case IvyDataType.Callable:
+		case IvyDataType.CodeObject:
+		case IvyDataType.Callable:
 			// We don't do deeper copy of code object or callable, because it should be used as constant
 			return node;
 		case IvyDataType.Array:

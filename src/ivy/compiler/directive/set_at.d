@@ -23,7 +23,7 @@ public:
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
 		if( !stmtRange.empty )
-			compiler.loger.error(`Expected end of "setat" directive after index expression. Maybe ';' is missing. `
+			compiler.log.error(`Expected end of "setat" directive after index expression. Maybe ';' is missing. `
 				~ `Info: multiple index expressions are not supported yet.`);
 	}
 }

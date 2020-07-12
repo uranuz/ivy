@@ -21,6 +21,9 @@ class SetCompiler : IDirectiveCompiler
 public:
 	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
 	{
+		import std.array: split;
+		import std.range: empty, front, popFront;
+
 		auto stmtRange = statement[];
 
 		while( !stmtRange.empty )
@@ -28,18 +31,49 @@ public:
 			IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
 
 			if( !kwPair.value )
-				compiler.loger.error("Expected value for 'set' directive");
+				compiler.log.error("Expected value for 'set' directive");
 
-			kwPair.value.accept(compiler); //Evaluating expression
+			if( kwPair.name.empty )
+				compiler.log.error("Expected variable name for 'set' directive");
+			// Split full path to attr by dots...
+			string[] varPath = split(kwPair.name, '.');
+			string varName = varPath.front;
+			varPath.popFront(); // Drop var name
+			if( varPath.empty )
+			{
+				// If it is just variable setter without attributes, then just set variable in execution frame
+				kwPair.value.accept(compiler); // Evaluating expression
+				compiler.addInstr(OpCode.StoreGlobalName, compiler.addConst( IvyData(varName) ));
+				continue; // And that's all...
+			}
 
-			compiler.addInstr(OpCode.StoreName, compiler.addConst( IvyData(kwPair.name) ));
+			// If there is more parts in var path, then we need to load variable from execution frame first
+			compiler.addInstr(OpCode.LoadName, compiler.addConst( IvyData(varName) ));
+
+			// Then try to do the same with all attr names in the path
+			while( !varPath.empty )
+			{
+				// Put attr name on the stack...
+				compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(varPath.front) ));
+				varPath.popFront(); // Drop attr name
+				if( !varPath.empty )
+				{
+					// This is one of the attrs in the chain. So we need to load it...
+					compiler.addInstr(OpCode.LoadAttr);
+					continue;
+				}
+				
+				// If this was the last attr in the chain, then set it...
+				kwPair.value.accept(compiler); // Evaluating expression
+				compiler.addInstr(OpCode.StoreAttr);
+			}
 		}
 
 		// For now we expect that directive should return some value on the stack
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
 		if( !stmtRange.empty )
-			compiler.loger.error("Expected end of directive after key-value pair. Maybe ';' is missing");
+			compiler.log.error("Expected end of directive after key-value pair. Maybe ';' is missing");
 	}
 
 }

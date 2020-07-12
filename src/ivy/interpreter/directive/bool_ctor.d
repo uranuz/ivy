@@ -4,10 +4,8 @@ import ivy.interpreter.directive.utils;
 
 class BoolCtorDirInterpreter: INativeDirectiveInterpreter
 {
-	override void interpret(Interpreter interp)
-	{
-		auto value = interp.getValue("value");
-		interp._stack ~= IvyData(interp.evalAsBoolean(value));
+	override void interpret(Interpreter interp) {
+		interp._stack.push(interp.getValue("value").toBoolean());
 	}
 
 	private __gshared DirAttrsBlock[] _attrBlocks = [

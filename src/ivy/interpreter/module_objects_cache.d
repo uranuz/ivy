@@ -36,9 +36,8 @@ public:
 		string result;
 		static immutable OpCode[] instrsWhereArgRefsConst = [
 			OpCode.LoadConst,
+			OpCode.StoreGlobalName,
 			OpCode.StoreName,
-			OpCode.StoreLocalName,
-			OpCode.StoreNameWithParents,
 			OpCode.LoadName
 		];
 

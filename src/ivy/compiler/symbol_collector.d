@@ -60,7 +60,7 @@ public:
 		}
 	}
 
-	LogerProxy loger(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
+	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
 		return LogerProxy(func, file, line, this);
 	}
 
@@ -113,10 +113,10 @@ public:
 							while( !attrsDefStmtAttrRange.empty )
 							{
 								auto res = analyzeValueAttr(attrsDefStmtAttrRange);
-								loger.internalAssert(res.isSet, `Check 1`);
+								log.internalAssert(res.isSet, `Check 1`);
 
 								if( res.attr.name in namedAttrs )
-									loger.error(`Named attribute "`, res.attr.name, `" already defined in directive definition`);
+									log.error(`Named attribute "`, res.attr.name, `" already defined in directive definition`);
 
 								namedAttrs[res.attr.name] = res.attr;
 							}
@@ -130,10 +130,10 @@ public:
 							while( !attrsDefStmtAttrRange.empty )
 							{
 								auto res = analyzeValueAttr(attrsDefStmtAttrRange);
-								loger.internalAssert(res.isSet, `Check 2`);
+								log.internalAssert(res.isSet, `Check 2`);
 
 								if( exprAttrs.canFind!( (it, needle) => it.name == needle )(res.attr.name) )
-									loger.error(`Named attribute "`, res.attr.name, `" already defined in directive definition`);
+									log.error(`Named attribute "`, res.attr.name, `" already defined in directive definition`);
 
 								exprAttrs ~= res.attr;
 							}
@@ -141,11 +141,11 @@ public:
 							attrBlocks ~= DirAttrsBlock(DirAttrKind.ExprAttr, exprAttrs);
 							break;
 						}
-						case "def.names", "def.kwd": loger.internalAssert(false, `Not implemented yet!`);
+						case "def.names", "def.kwd": log.internalAssert(false, `Not implemented yet!`);
 						case "def.body":
 						{
 							if( bodyStmt )
-								loger.error(`Multiple body statements are not allowed!`);
+								log.error(`Multiple body statements are not allowed!`);
 
 							auto res = analyzeDirBody(attrsDefStmtAttrRange);
 							bodyStmt = res.statement;
@@ -153,9 +153,9 @@ public:
 							attrBlocks ~= DirAttrsBlock(DirAttrKind.BodyAttr, res.attr);
 
 							if( _frameStack.empty )
-								loger.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
+								log.error(`Cannot store symbol, because fu** you.. Oops.. because symbol table frame stack is empty`);
 							if( !_frameStack.back )
-								loger.error(`Cannot store symbol, because symbol table frame is null`);
+								log.error(`Cannot store symbol, because symbol table frame is null`);
 							// Add directive definition into existing frame
 							_frameStack.back.add(new DirectiveDefinitionSymbol(dirNameExpr.name, attrBlocks));
 
@@ -187,19 +187,19 @@ public:
 				}
 
 				if( !defAttrsRange.empty )
-					loger.error(`Expected end of directive definition statement. Maybe ; is missing`);
+					log.error(`Expected end of directive definition statement. Maybe ; is missing`);
 				break;
 			}
 			case "import":
 			{
 				IAttributeRange attrRange = node[];
 				if( attrRange.empty )
-					loger.error(`Expected module name in import statement, but got end of directive`);
+					log.error(`Expected module name in import statement, but got end of directive`);
 
 				INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
 
 				if( !attrRange.empty )
-					loger.error(`Expected end of import directive, maybe ; is missing`);
+					log.error(`Expected end of import directive, maybe ; is missing`);
 
 				// Add imported module symbol table as local symbol
 				_frameStack.back.add(new ModuleSymbol(
@@ -212,12 +212,12 @@ public:
 			{
 				IAttributeRange attrRange = node[];
 				if( attrRange.empty )
-					loger.error(`Expected module name in import statement, but got end of directive`);
+					log.error(`Expected module name in import statement, but got end of directive`);
 
 				INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
 				INameExpression importKwdExpr = attrRange.takeFrontAs!INameExpression("Expected 'import' keyword!");
 				if( importKwdExpr.name != "import" )
-					loger.error("Expected 'import' keyword!");
+					log.error("Expected 'import' keyword!");
 
 				string[] symbolNames;
 				while( !attrRange.empty )
@@ -241,8 +241,8 @@ public:
 			default:
 				foreach( childNode; node[] )
 				{
-					loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
-					loger.internalAssert(childNode, `Child node is null`);
+					log.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
+					log.internalAssert(childNode, `Child node is null`);
 					childNode.accept(this);
 				}
 		}
@@ -253,7 +253,7 @@ public:
 	{
 		foreach( childNode; node[] )
 		{
-			loger.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind);
+			log.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind);
 			childNode.accept(this);
 		}
 
@@ -266,20 +266,20 @@ public:
 	{
 		import std.range: popBack, empty, back;
 		if( auto modFramePtr = moduleName in _moduleSymbols ) {
-			loger.internalAssert(*modFramePtr, "Cannot store imported symbols, because symbol table stack is null!");
+			log.internalAssert(*modFramePtr, "Cannot store imported symbols, because symbol table stack is null!");
 			return *modFramePtr;
 		} else {
 			// Try to open, parse and load symbols info from another module
 			IvyNode moduleTree = _moduleRepo.getModuleTree(moduleName);
 
 			if( !moduleTree )
-				loger.error(`Couldn't load module: `, moduleName);
+				log.error(`Couldn't load module: `, moduleName);
 
 			SymbolTableFrame moduleTable = new SymbolTableFrame(null, _logerMethod);
 			_moduleSymbols[moduleName] = moduleTable;
 			_frameStack ~= moduleTable;
 			scope(exit) {
-				loger.internalAssert(!_frameStack.empty, `Compiler directive collector frame stack is empty!`);
+				log.internalAssert(!_frameStack.empty, `Compiler directive collector frame stack is empty!`);
 				_frameStack.popBack();
 			}
 
@@ -300,22 +300,22 @@ public:
 
 	void enterModuleScope(string moduleName)
 	{
-		loger.write(`Enter method`);
+		log.write(`Enter method`);
 		if( SymbolTableFrame table = getModuleSymbols(moduleName) ) {
 			_frameStack ~= table;
 		} else {
-			loger.error(`Cannot enter module symbol table, because module "` ~ moduleName ~ `" not found!`);
+			log.error(`Cannot enter module symbol table, because module "` ~ moduleName ~ `" not found!`);
 		}
-		loger.write(`Exit method`);
+		log.write(`Exit method`);
 	}
 
 	void enterScope(size_t sourceIndex)
 	{
 		import std.range: empty, back;
-		loger.internalAssert(!_frameStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty`);
+		log.internalAssert(!_frameStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty`);
 
 		SymbolTableFrame childFrame = _frameStack.back.getChildFrame(sourceIndex);
-		loger.internalAssert(childFrame, `Cannot enter child symbol table frame, because it's null`);
+		log.internalAssert(childFrame, `Cannot enter child symbol table frame, because it's null`);
 
 		_frameStack ~= childFrame;
 	}
@@ -323,7 +323,7 @@ public:
 	void exitScope()
 	{
 		import std.range: empty, popBack;
-		loger.internalAssert(!_frameStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!");
+		log.internalAssert(!_frameStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!");
 
 		_frameStack.popBack();
 	}
@@ -331,18 +331,18 @@ public:
 	Symbol symbolLookup(string name)
 	{
 		import std.range: empty, back;
-		loger.internalAssert(!_frameStack.empty, `Cannot look for symbol, because symbol table stack is empty`);
-		loger.internalAssert(_frameStack.back, `Cannot look for symbol, current symbol table frame is null`);
+		log.internalAssert(!_frameStack.empty, `Cannot look for symbol, because symbol table stack is empty`);
+		log.internalAssert(_frameStack.back, `Cannot look for symbol, current symbol table frame is null`);
 
 		Symbol symb = _frameStack.back.lookup(name);
 		debug {
-			loger.write(`symbolLookup, _frameStack symbols:`);
+			log.write(`symbolLookup, _frameStack symbols:`);
 			foreach( lvl, table; _frameStack[] ) {
-				loger.write(`	symbols lvl`, lvl, `: `, table._symbols);
+				log.write(`	symbols lvl`, lvl, `: `, table._symbols);
 				if( table._moduleFrame ) {
-					loger.write(`	module symbols lvl`, lvl, `: `, table._moduleFrame._symbols);
+					log.write(`	module symbols lvl`, lvl, `: `, table._moduleFrame._symbols);
 				} else {
-					loger.write(`	module frame lvl`, lvl, ` is null`);
+					log.write(`	module frame lvl`, lvl, ` is null`);
 				}
 			}
 		}
