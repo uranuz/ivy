@@ -141,7 +141,6 @@ public:
 							attrBlocks ~= DirAttrsBlock(DirAttrKind.ExprAttr, exprAttrs);
 							break;
 						}
-						case "def.names", "def.kwd": log.internalAssert(false, `Not implemented yet!`);
 						case "def.body":
 						{
 							if( bodyStmt )

@@ -27,7 +27,7 @@ enum size_t _stackBlockHeaderCheckMask = 0b1000;
 enum size_t _stackBlockHeaderTypeMask = 0b111;
 
 
-enum DirAttrKind { NamedAttr, ExprAttr, IdentAttr, KwdAttr, BodyAttr };
+enum DirAttrKind { NamedAttr, ExprAttr, BodyAttr };
 
 static this()
 {
@@ -46,8 +46,6 @@ struct DirAttrsBlock
 		union {
 			DirValueAttr[string] namedAttrs;
 			DirValueAttr[] exprAttrs;
-			string[] names;
-			string keyword;
 			DirBodyAttr bodyAttr;
 		}
 	}
@@ -69,22 +67,6 @@ struct DirAttrsBlock
 
 		_kind = attrKind;
 		_storage.exprAttrs = attrs;
-	}
-
-	this( DirAttrKind attrKind, string[] names )
-	{
-		assert( attrKind == DirAttrKind.IdentAttr, `Expected IdentAttr kind for attr block` );
-
-		_kind = attrKind;
-		_storage.names = names;
-	}
-
-	this( DirAttrKind attrKind, string kwd )
-	{
-		assert( attrKind == DirAttrKind.KwdAttr, `Expected Keyword kind for attr block` );
-
-		_kind = attrKind;
-		_storage.keyword = kwd;
 	}
 
 	this( DirAttrKind attrKind, DirBodyAttr value )
@@ -128,26 +110,6 @@ struct DirAttrsBlock
 		return _storage.exprAttrs;
 	}
 
-	void names(string[] names) @property {
-		_storage.names = names;
-		_kind = DirAttrKind.IdentAttr;
-	}
-
-	string[] names() @property {
-		assert( _kind == DirAttrKind.IdentAttr, `Directive attrs block is not of IdentAttr kind` );
-		return _storage.names;
-	}
-
-	void keyword(string value) @property {
-		_storage.keyword = value;
-		_kind = DirAttrKind.KwdAttr;
-	}
-
-	string keyword() @property {
-		assert( _kind == DirAttrKind.KwdAttr, `Directive attrs block is not of KwdAttr kind` );
-		return _storage.keyword;
-	}
-
 	void bodyAttr(DirBodyAttr value) @property {
 		_storage.bodyAttr = value;
 		_kind = DirAttrKind.BodyAttr;
@@ -165,8 +127,6 @@ struct DirAttrsBlock
 		{
 			case NamedAttr:
 			case ExprAttr:
-			case IdentAttr:
-			case KwdAttr:
 			case BodyAttr:
 				return `<` ~ _kind.to!string ~ ` attrs block>`;
 		}

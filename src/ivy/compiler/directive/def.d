@@ -79,10 +79,6 @@ class DefCompiler: IDirectiveCompiler
 						++stackItemsCount; // We should count args block header
 						break;
 					}
-					case "def.names": case "def.kwd": {
-						compiler.log.error(`Not implemented yet!`);
-						break;
-					}
 					case "def.body": {
 						if( bodyStatement )
 							compiler.log.error("Multiple body statements are not allowed!!!");

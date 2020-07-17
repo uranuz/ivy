@@ -221,16 +221,6 @@ JSONValue toStdJSON(IvyData con)
 						jBlock["exprAttrs"] = block;
 						break;
 					}
-					case DirAttrKind.IdentAttr:
-					{
-						jBlock["names"] = attrBlock.names;
-						break;
-					}
-					case DirAttrKind.KwdAttr:
-					{
-						jBlock["keyword"] = attrBlock.keyword;
-						break;
-					}
 					case DirAttrKind.BodyAttr:
 					{
 						jBlock["bodyAttr"] = [

@@ -563,30 +563,6 @@ public:
 						++stackItemsCount; // We should count args block header
 						break;
 					}
-					case DirAttrKind.IdentAttr:
-					{
-						log.internalAssert( false );
-						// TODO: We should take number of identifiers passed in directive definition
-						while( !attrRange.empty )
-						{
-							IExpression identAttr = cast(INameExpression) attrRange.front;
-							if( !identAttr ) {
-								break;
-							}
-
-							attrRange.popFront();
-						}
-						break;
-					}
-					case DirAttrKind.KwdAttr:
-					{
-						log.internalAssert( false );
-						DirAttrsBlock kwdDef = dirAttrBlocks.front;
-						INameExpression kwdAttr = attrRange.takeFrontAs!INameExpression(`Expected keyword attribute`);
-						if( kwdDef.keyword != kwdAttr.name )
-							log.error(`Expected "` ~ kwdDef.keyword ~ `" keyword attribute`);
-						break;
-					}
 					case DirAttrKind.BodyAttr:
 						isNoescape = dirAttrBlocks.front.bodyAttr.isNoescape;
 						break;
