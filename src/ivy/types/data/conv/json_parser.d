@@ -1,8 +1,4 @@
-/// This module serves to parse JSON data directly into Ivy internal data format
-module ivy.json;
-
-import ivy.interpreter.data_node;
-
+module ivy.types.data.conv.json_parse;
 
 import trifle.location: LocationConfig;
 
@@ -13,6 +9,13 @@ public:
 	{
 		super(msg, file, line, next);
 	}
+}
+
+/// Interface method to parse JSON string into ivy internal data format
+auto parseIvyJSON(S)(S src)
+{
+	auto parser = JSONParser!(S)(src);
+	return parser.parseValue();
 }
 
 struct JSONParser(S = string, LocationConfig c = LocationConfig.init)
@@ -199,91 +202,4 @@ public:
 
 		return IvyData();
 	}
-}
-
-/// Interface method to parse JSON string into ivy internal data format
-auto parseIvyJSON(S)(S src)
-{
-	auto parser = JSONParser!(S)(src);
-	return parser.parseValue();
-}
-
-import std.json: JSONType, JSONValue;
-IvyData toIvyJSON(ref JSONValue src)
-{
-	final switch( src.type )
-	{
-		case JSONType.null_:
-			return IvyData(null);
-		case JSONType.true_:
-			return IvyData(true);
-		case JSONType.false_:
-			return IvyData(false);
-		case JSONType.integer:
-			return IvyData(cast(ptrdiff_t) src.integer);
-		case JSONType.uinteger:
-			return IvyData(cast(ptrdiff_t) src.uinteger);
-		case JSONType.float_:
-			return IvyData(src.floating);
-		case JSONType.string:
-			return IvyData(src.str);
-		case JSONType.array:
-		{
-			IvyData[] nodeArray;
-			nodeArray.length = src.array.length;
-			foreach( size_t i, val; src.array ) {
-				nodeArray[i] = val.toIvyJSON;
-			}
-			return IvyData(nodeArray);
-		}
-		case JSONType.object:
-		{
-			IvyData[string] nodeAA;
-			foreach( string key, val; src.object ) {
-				nodeAA[key] = val.toIvyJSON;
-			}
-			return IvyData(nodeAA);
-		}
-	}
-	assert(false, `Shouldn't be reached!`);
-}
-
-import std.exception: enforce;
-JSONValue toStdJSON(ref IvyData src)
-{
-	switch( src.type )
-	{
-		case IvyDataType.Undef: case IvyDataType.Null:
-			return JSONValue(null);
-		case IvyDataType.Boolean:
-			return JSONValue(src.boolean);
-		case IvyDataType.Integer:
-			return JSONValue(src.integer);
-		case IvyDataType.Floating:
-			return JSONValue(src.floating);
-		case IvyDataType.String:
-			return JSONValue(src.str);
-		case IvyDataType.Array:
-		{
-			JSONValue[] nodeArray;
-			nodeArray.length = src.array.length;
-			foreach( size_t i, val; src.array ) {
-				nodeArray[i] = val.toStdJSON;
-			}
-			return JSONValue(nodeArray);
-		}
-		case IvyDataType.AssocArray:
-		{
-			JSONValue[string] nodeAA;
-			foreach( string key, val; src.assocArray ) {
-				if( val.type != IvyDataType.Undef ) {
-					nodeAA[key] = val.toStdJSON;
-				}
-			}
-			return JSONValue(nodeAA);
-		}
-		default: break;
-	}
-	enforce(false, `Conversion is not implemented yet!`);
-	assert(false);
 }

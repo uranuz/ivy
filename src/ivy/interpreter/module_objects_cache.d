@@ -1,7 +1,7 @@
 module ivy.interpreter.module_objects_cache;
 
-import ivy.module_object: ModuleObject;
-import ivy.interpreter.data_node: IvyDataType;
+import ivy.types.module_object: ModuleObject;
+import ivy.types.data: IvyDataType;
 import ivy.bytecode: OpCode;
 
 class ModuleObjectsCache
@@ -15,8 +15,8 @@ public:
 		return _moduleObjects.get(moduleName, null);
 	}
 
-	void add(ModuleObject moduleObj) {
-		_moduleObjects[moduleObj.name] = moduleObj;
+	void add(ModuleObject moduleObject) {
+		_moduleObjects[moduleObject.symbol.name] = moduleObject;
 	}
 
 	void clearCache() {

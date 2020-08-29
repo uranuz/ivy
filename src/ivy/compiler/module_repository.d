@@ -107,17 +107,16 @@ public:
 		_moduleTrees[moduleName] = parser.parse();
 	}
 
-	IvyNode getModuleTree(string name)
+	IvyNode getModuleTree(string moduleName)
 	{
-		if( name !in _moduleTrees ) {
-			loadModuleFromFile( name );
+		IvyNode node = _moduleTrees.get(moduleName, null);
+		if( node is null ) {
+			loadModuleFromFile(moduleName);
 		}
 
-		if( name in _moduleTrees ) {
-			return _moduleTrees[name];
-		} else {
-			return null;
-		}
+		node = _moduleTrees.get(moduleName, null);
+		log.internalAssert(node !is null, `Unable to get tree for module: `, moduleName);
+		return node;
 	}
 
 	/// Clears parsed tree when we no longer need it

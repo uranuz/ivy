@@ -2,8 +2,12 @@ module ivy.interpreter.directive.float_ctor;
 
 import ivy.interpreter.directive.utils;
 
-class FloatCtorDirInterpreter: INativeDirectiveInterpreter
+class FloatCtorDirInterpreter: BaseDirectiveInterpreter
 {
+	shared static this() {
+		_symbol = new DirectiveSymbol(`float`, [DirAttr("value", IvyAttrType.Any)]);
+	}
+
 	override void interpret(Interpreter interp)
 	{
 		import std.conv: to;
@@ -27,13 +31,4 @@ class FloatCtorDirInterpreter: INativeDirectiveInterpreter
 				break;
 		}
 	}
-
-	private __gshared DirAttrsBlock[] _attrBlocks = [
-		DirAttrsBlock(DirAttrKind.ExprAttr, [
-			DirValueAttr("value", "any")
-		]),
-		DirAttrsBlock(DirAttrKind.BodyAttr)
-	];
-
-	mixin BaseNativeDirInterpreterImpl!("float");
 }

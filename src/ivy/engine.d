@@ -1,20 +1,20 @@
 module ivy.engine;
 
-import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
-import ivy.interpreter.directive.standard_factory: makeStandardInterpreterDirFactory;
-import ivy.engine_config: IvyConfig;
-import ivy.compiler.module_repository: CompilerModuleRepository;
-import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
-import ivy.compiler.compiler: ByteCodeCompiler;
-import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-import ivy.programme: ExecutableProgramme;
-import ivy.loger: LogInfo, LogInfoType;
-
 /// Dump-simple in-memory cache for compiled programmes
 class IvyEngine
 {
+	import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
+	import ivy.interpreter.directive.standard_factory: makeStandardInterpreterDirFactory;
+	import ivy.engine_config: IvyConfig;
+	import ivy.compiler.module_repository: CompilerModuleRepository;
+	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
+	import ivy.compiler.compiler: ByteCodeCompiler;
+	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
+	import ivy.programme: ExecutableProgramme;
+	import ivy.loger: LogInfo, LogInfoType;
+
 private:
-	public IvyConfig _config;
+	IvyConfig _config;
 	CompilerModuleRepository _moduleRepo;
 	CompilerSymbolsCollector _symbolsCollector;
 	ByteCodeCompiler _compiler;
@@ -26,33 +26,13 @@ private:
 public:
 	this(IvyConfig config)
 	{
-		assert(!!config.importPaths.length, `List of compiler import paths must not be empty!`);
+		import std.exception: enforce;
+
+		enforce(!!config.importPaths.length, `List of compiler import paths must not be empty!`);
 
 		_mutex = new Mutex();
 		_config = config;
 		_initObjects();
-	}
-
-	void _initObjects()
-	{
-		if( _config.compilerFactory is null ) {
-			_config.compilerFactory = makeStandardDirCompilerFactory();
-		}
-		if( _config.directiveFactory is null ) {
-			_config.directiveFactory = makeStandardInterpreterDirFactory();
-		}
-		
-		_moduleRepo = new CompilerModuleRepository(_config.importPaths, _config.fileExtension, _config.parserLoger);
-		_symbolsCollector = new CompilerSymbolsCollector(_moduleRepo, _config.compilerLoger);
-		_moduleObjCache = new ModuleObjectsCache();
-		_compiler = new ByteCodeCompiler(
-			_moduleRepo,
-			_symbolsCollector,
-			_config.compilerFactory,
-			_config.directiveFactory,
-			_moduleObjCache,
-			_config.compilerLoger
-		);
 	}
 
 	/// Generate programme object or get existing from cache (if cache enabled)
@@ -93,4 +73,29 @@ public:
 		_moduleObjCache.clearCache();
 		_compiler.clearCache();
 	}
+
+private:
+	void _initObjects()
+	{
+		if( _config.compilerFactory is null ) {
+			_config.compilerFactory = makeStandardDirCompilerFactory();
+		}
+		if( _config.directiveFactory is null ) {
+			_config.directiveFactory = makeStandardInterpreterDirFactory();
+		}
+		
+		_moduleRepo = new CompilerModuleRepository(_config.importPaths, _config.fileExtension, _config.parserLoger);
+		_symbolsCollector = new CompilerSymbolsCollector(_moduleRepo, _config.compilerFactory, _config.compilerLoger);
+		_moduleObjCache = new ModuleObjectsCache();
+		_compiler = new ByteCodeCompiler(
+			_moduleRepo,
+			_symbolsCollector,
+			_config.compilerFactory,
+			_config.directiveFactory.symbols,
+			_moduleObjCache,
+			_config.compilerLoger
+		);
+	}
+
+	
 }

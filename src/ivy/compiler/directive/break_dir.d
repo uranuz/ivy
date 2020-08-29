@@ -3,8 +3,9 @@ module ivy.compiler.directive.break_dir;
 import ivy.compiler.directive.utils;
 import ivy.compiler.compiler: JumpKind;
 
-class BreakCompiler: IDirectiveCompiler
+class BreakCompiler: BaseDirectiveCompiler
 {
+public:
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		import std.range: empty, back;

@@ -3,12 +3,12 @@ module ivy.compiler.directive.at;
 import ivy.compiler.directive.utils;
 import ivy.ast.iface: IvyNode;
 
-class AtCompiler : IDirectiveCompiler
+class AtCompiler: BaseDirectiveCompiler
 {
 public:
-	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
-		auto stmtRange = statement[];
+		auto stmtRange = stmt[];
 
 		IvyNode aggregate = stmtRange.takeFrontAs!IvyNode(`Expected "at" aggregate argument`);
 		IvyNode indexValue = stmtRange.takeFrontAs!IvyNode(`Expected "at" index value`);

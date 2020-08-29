@@ -2,27 +2,32 @@ module ivy.interpreter.directive.factory;
 
 class InterpreterDirectiveFactory
 {
-	import ivy.interpreter.iface: INativeDirectiveInterpreter;
-	import ivy.compiler.symbol_table: Symbol;
+	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
+	import ivy.types.symbol.iface: ICallableSymbol;
+
+	import std.exception: enforce;
 private:
-	INativeDirectiveInterpreter[string] _dirInterps;
+	IDirectiveInterpreter[string] _dirInterps;
 
 public:
 	this() {}
 
-	INativeDirectiveInterpreter get(string name) {
+	IDirectiveInterpreter get(string name) {
 		return _dirInterps.get(name, null);
 	}
 
-	void add(INativeDirectiveInterpreter dirInterp) {
-		_dirInterps[dirInterp.symbol.name] = dirInterp;
+	void add(IDirectiveInterpreter dirInterp)
+	{
+		string name = dirInterp.symbol.name;
+		enforce(name !in _dirInterps, `Directive interpreter with name "` ~ name ~ `" already added`);
+		_dirInterps[name] = dirInterp;
 	}
 
-	INativeDirectiveInterpreter[string] interps() @property {
+	IDirectiveInterpreter[string] interps() @property {
 		return _dirInterps;
 	}
 
-	Symbol[] symbols() @property
+	ICallableSymbol[] symbols() @property
 	{
 		import std.algorithm: map;
 		import std.array: array;

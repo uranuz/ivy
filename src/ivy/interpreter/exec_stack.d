@@ -1,10 +1,10 @@
 module ivy.interpreter.exec_stack;
 
-import ivy.interpreter.data_node: IvyData;
-import ivy.interpreter.common: IvyInterpretException;
-
 struct ExecStack
 {
+	import ivy.types.data: IvyData;
+	import ivy.interpreter.exception: IvyInterpretException;
+
 	import std.exception: enforce;
 
 	IvyData[] _stack;

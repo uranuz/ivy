@@ -3,8 +3,9 @@ module ivy.compiler.directive.continue_dir;
 import ivy.compiler.directive.utils;
 import ivy.compiler.compiler: JumpKind;
 
-class ContinueCompiler: IDirectiveCompiler
+class ContinueCompiler: BaseDirectiveCompiler
 {
+public:
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		import std.range: empty, back;

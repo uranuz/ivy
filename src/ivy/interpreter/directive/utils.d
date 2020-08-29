@@ -1,7 +1,11 @@
 module ivy.interpreter.directive.utils;
 
-public import ivy.interpreter.directive.dir_mixin: BaseNativeDirInterpreterImpl;
+public import ivy.interpreter.directive.iface: IDirectiveInterpreter;
+public import ivy.interpreter.directive.base: BaseDirectiveInterpreter;
 public import ivy.interpreter.interpreter: Interpreter;
-public import ivy.interpreter.iface: INativeDirectiveInterpreter;
-public import ivy.interpreter.data_node: IvyData, IvyDataType;
-public import ivy.directive_stuff: DirAttrsBlock, DirAttrKind, DirValueAttr;
+
+public import ivy.types.data: IvyData, IvyDataType, NodeEscapeState;
+
+public import ivy.types.symbol.directive: DirectiveSymbol;
+public import ivy.types.symbol.dir_attr: DirAttr, IvyAttrType;
+public import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;

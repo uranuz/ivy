@@ -22,7 +22,7 @@ import ivy.ast.iface: IKeyValueAttribute, INameExpression;
 		d: "Example2" as str
 	}
 +/
-class VarCompiler: IDirectiveCompiler
+class VarCompiler: BaseDirectiveCompiler
 {
 public:
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)

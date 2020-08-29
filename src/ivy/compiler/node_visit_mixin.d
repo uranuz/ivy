@@ -3,6 +3,8 @@ module ivy.compiler.node_visit_mixin;
 // Mixin used to get approximate current position of compiler
 mixin template NodeVisitMixin()
 {
+	import ivy.ast.iface;
+	
 	import trifle.location: ExtendedLocation;
 	import std.algorithm: map;
 	import std.string: join;

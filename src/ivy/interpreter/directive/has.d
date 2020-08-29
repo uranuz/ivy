@@ -2,12 +2,20 @@ module ivy.interpreter.directive.has;
 
 import ivy.interpreter.directive.utils;
 
-class HasDirInterpreter: INativeDirectiveInterpreter
+class HasDirInterpreter: BaseDirectiveInterpreter
 {
+	shared static this()
+	{
+		_symbol = new DirectiveSymbol(`has`, [
+			DirAttr("collection", IvyAttrType.Any),
+			DirAttr("key", IvyAttrType.Any)
+		]);
+	}
+	
 	override void interpret(Interpreter interp)
 	{
-		import std.conv: to;
 		import std.algorithm: canFind;
+
 		IvyData collection = interp.getValue("collection");
 		IvyData key = interp.getValue("key");
 		switch(collection.type)
@@ -26,14 +34,4 @@ class HasDirInterpreter: INativeDirectiveInterpreter
 				break;
 		}
 	}
-
-	private __gshared DirAttrsBlock[] _attrBlocks = [
-		DirAttrsBlock(DirAttrKind.ExprAttr, [
-			DirValueAttr("collection", "any"),
-			DirValueAttr("key", "any")
-		]),
-		DirAttrsBlock(DirAttrKind.BodyAttr)
-	];
-
-	mixin BaseNativeDirInterpreterImpl!("has");
 }

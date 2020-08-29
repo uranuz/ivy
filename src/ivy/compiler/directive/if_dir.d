@@ -3,9 +3,10 @@ module ivy.compiler.directive.if_dir;
 import ivy.compiler.directive.utils;
 import ivy.ast.iface: INameExpression, IExpression;
 
-class IfCompiler: IDirectiveCompiler
+class IfCompiler: BaseDirectiveCompiler
 {
-	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
+public:
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		import std.typecons: Tuple;
 		import std.range: back, empty;
@@ -14,7 +15,7 @@ class IfCompiler: IDirectiveCompiler
 		IfSect[] ifSects;
 		IExpression elseBody;
 
-		auto stmtRange = statement[];
+		auto stmtRange = stmt[];
 
 		IExpression condExpr = stmtRange.takeFrontAs!IExpression("Conditional expression expected" );
 		IExpression bodyStmt = stmtRange.takeFrontAs!IExpression("'If' directive body statement expected");

@@ -2,8 +2,12 @@ module ivy.interpreter.directive.int_ctor;
 
 import ivy.interpreter.directive.utils;
 
-class IntCtorDirInterpreter: INativeDirectiveInterpreter
+class IntCtorDirInterpreter: BaseDirectiveInterpreter
 {
+	shared static this() {
+		_symbol = new DirectiveSymbol(`int`, [DirAttr("value", "any")]);
+	}
+	
 	override void interpret(Interpreter interp)
 	{
 		import std.conv: to;
@@ -25,12 +29,5 @@ class IntCtorDirInterpreter: INativeDirectiveInterpreter
 		}
 	}
 
-	private __gshared DirAttrsBlock[] _attrBlocks = [
-		DirAttrsBlock( DirAttrKind.ExprAttr, [
-			DirValueAttr("value", "any")
-		]),
-		DirAttrsBlock(DirAttrKind.BodyAttr)
-	];
 
-	mixin BaseNativeDirInterpreterImpl!("int");
 }

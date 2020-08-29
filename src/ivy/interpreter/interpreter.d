@@ -1,27 +1,25 @@
 module ivy.interpreter.interpreter;
 
-
-import ivy.directive_stuff;
-import ivy.code_object: CodeObject;
-import ivy.module_object: ModuleObject;
-import ivy.interpreter.data_node;
-import ivy.interpreter.data_node_types;
-import ivy.interpreter.execution_frame;
-import ivy.interpreter.exec_stack;
-import ivy.interpreter.common;
-import ivy.interpreter.iface: INativeDirectiveInterpreter;
-import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
-import ivy.interpreter.async_result: AsyncResult, AsyncResultState;
-import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
-
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyInterpreterDebug;
 
-import ivy.bytecode;
 
 class Interpreter
 {
+	import ivy.types.code_object: CodeObject;
+	import ivy.types.module_object: ModuleObject;
+	import ivy.types.callable_object: CallableObject;
+	import ivy.types.data: IvyDataType, IvyData;
+	import ivy.interpreter.execution_frame: ExecutionFrame;
+	import ivy.interpreter.exec_stack: ExecStack;
+	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
+	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
+	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
+	import ivy.types.data.async_result: AsyncResult, AsyncResultState;
+	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.bytecode: Instruction, OpCode;
+	import ivy.types.symbol.dir_attr: DirAttr;
+
 public:
 	alias LogerMethod = void delegate(LogInfo);
 
@@ -63,26 +61,24 @@ public:
 
 		log.write(`Passed dataDict: `, dataDict);
 
-		CallableObject rootCallableObj = new CallableObject(
-			"__main__", moduleObjCache.get(mainModuleName).mainCodeObject, CallableKind.Module
-		);
+		CallableObject rootCallableObj = new CallableObject(moduleObjCache.get(mainModuleName).mainCodeObject);
 
-		IvyData globalDataDict;
-		globalDataDict["_ivyMethod"] = "__global__"; // Allocating dict
-		_globalFrame = new ExecutionFrame(null, null, globalDataDict, _logerMethod, false);
+		//IvyData globalDataDict;
+		//globalDataDict["_ivyMethod"] = "__global__"; // Allocating dict
+		_globalFrame = new ExecutionFrame(null, null, _logerMethod);
 		_moduleFrames["__global__"] = _globalFrame; // We need to add entry point module frame to storage manually
-		log.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
+		//log.write(`_globalFrame._dataDict: `, _globalFrame._dataDict);
 
-		dataDict["_ivyMethod"] = "__main__"; // Allocating a dict if it's not
-		dataDict["_ivyModule"] = mainModuleName;
-		newFrame(rootCallableObj, null, dataDict, false); // Create entry point module frame
+		//dataDict["_ivyMethod"] = "__main__"; // Allocating a dict if it's not
+		//dataDict["_ivyModule"] = mainModuleName;
+		newFrame(rootCallableObj, null); // Create entry point module frame
 		this._stack.addStackBlock();
 		_moduleFrames[mainModuleName] = this._frameStack.back; // We need to add entry point module frame to storage manually
 
 		this._addDirInterpreters(directiveFactory.interps);
 	}
 
-	private void _addNativeDirInterp(string name, INativeDirectiveInterpreter dirInterp)
+	private void _addNativeDirInterp(string name, IDirectiveInterpreter dirInterp)
 	{
 		log.internalAssert(name.length && dirInterp, `Directive name is empty or direxecInterp is null!`);
 
@@ -91,7 +87,7 @@ public:
 	}
 
 	// Method used to set custom global directive interpreters
-	void _addDirInterpreters(INativeDirectiveInterpreter[string] dirInterps)
+	void _addDirInterpreters(IDirectiveInterpreter[string] dirInterps)
 	{
 		foreach( name, dirInterp; dirInterps ) {
 			this._addNativeDirInterp(name, dirInterp);
@@ -113,7 +109,10 @@ public:
 	else
 		enum isDebugMode = false;
 
-	static struct LogerProxy {
+	static struct LogerProxy
+	{
+		import ivy.interpreter.exception: IvyInterpretException;
+
 		mixin LogerProxyImpl!(IvyInterpretException, isDebugMode);
 		Interpreter interp;
 
@@ -126,7 +125,7 @@ public:
 			import std.conv: text;
 
 			// Put name of module and line where event occured
-			msg = "Ivy module: " ~ interp.currentModuleName() ~ ":" ~ interp.currentInstrLine().text
+			msg = "Ivy module: " ~ interp.currentModule.symbol.name ~ ":" ~ interp.currentInstrLine().text
 				~ ", OpCode: " ~ interp.currentOpCode().text ~ "\n" ~ msg;
 
 			debug {
@@ -151,7 +150,7 @@ public:
 					getShortFuncName(func),
 					file,
 					line,
-					interp.currentModuleName(),
+					interp.currentModule.symbol.name,
 					interp.currentInstrLine()
 				));
 			}
@@ -159,44 +158,43 @@ public:
 		}
 	}
 
-	ModuleObject currentModule()
+	ModuleObject currentModule() @property
 	{
-		if( CodeObject codeObj = currentCodeObject ) {
-			return codeObj._moduleObj;
+		if( CodeObject codeObject = this.currentCodeObject ) {
+			return codeObject.moduleObject;
 		}
 		return null;
 	}
 
+	CallableObject currentCallable() @property {
+		return this.currentFrame.callable;
+	}
+
 	CodeObject currentCodeObject()
 	{
-		import std.range: empty, back;
-		if(
-			this._frameStack.empty
-			|| (this._frameStack.back is null)
-			|| (this._frameStack.back._callableObj is null)
-		) {
-			return null;
+		CallableObject callable = this.currentCallable;
+		if( !callable.isNative ) {
+			return callable.codeObject;
 		}
-		return this._frameStack.back._callableObj._codeObj;
+		return null;
 	}
 
-	CallableObject[] callableStack() {
+	CallableObject[] callableStack()
+	{
 		import std.algorithm: map;
 		import std.array: array;
-		return this._frameStack.map!( (frame) => frame._callableObj )().array();
+		return this._frameStack.map!( (frame) => frame.callable )().array();
 	}
 
-	string[] callStackInfo() {
+	string[] callStackInfo()
+	{
 		string[] res;
-		foreach( callable; this.callableStack() ) {
-			if( callable is null ) {
-				res ~= `<null callable>`;
-			} else if( callable._codeObj ) {
-				res ~= `Module: ` ~ callable._codeObj._moduleObj.fileName ~ `, Directive: ` ~ callable._name;
-			} else if( callable._dirInterp ) {
-				res ~= `Directive interp: ` ~ callable._name;
+		foreach( callable; this.callableStack() )
+		{
+			if( callable.isNative ) {
+				res ~= `Directive interp: ` ~ callable.symbol.name;
 			} else {
-				res ~= `Broken Callable`;
+				res ~= `Module: ` ~ callable.codeObject.moduleObject.fileName ~ `, Directive: ` ~ callable.symbol.name;
 			}
 		}
 		return res;
@@ -204,25 +202,17 @@ public:
 
 	size_t currentInstrLine()
 	{
-		if( CodeObject codeObj = this.currentCodeObject ) {
-			return codeObj.getInstrLine(this._pk);
+		if( CodeObject codeObject = this.currentCodeObject ) {
+			return codeObject.getInstrLine(this._pk);
 		}
 		return 0;
 	}
 
-	string currentModuleName()
-	{
-		if( ModuleObject modObj = this.currentModule ) {
-			return modObj.fileName;
-		}
-		return null;
-	}
-
 	OpCode currentOpCode()
 	{
-		if( CodeObject codeObj = this.currentCodeObject ) {
-			if( this._pk < codeObj._instrs.length ) {
-				return cast(OpCode) codeObj._instrs[this._pk].opcode;
+		if( CodeObject codeObject = this.currentCodeObject ) {
+			if( this._pk < codeObject._instrs.length ) {
+				return cast(OpCode) codeObject._instrs[this._pk].opcode;
 			}
 		}
 		return OpCode.InvalidCode;
@@ -262,17 +252,16 @@ public:
 		return this._frameStack.back;
 	}
 
-	void newFrame(CallableObject callableObj, ExecutionFrame modFrame, IvyData dataDict, bool isNoscope)
+	void newFrame(CallableObject callable, ExecutionFrame modFrame)
 	{
-		this._frameStack ~= new ExecutionFrame(callableObj, modFrame, dataDict, _logerMethod, isNoscope);
-		log.write(`Enter new execution frame for callable: `, callableObj._name, ` with dataDict: `, dataDict, `, and modFrame `, (modFrame? `is not null`: `is null`));
+		this._frameStack ~= new ExecutionFrame(callable, modFrame, this._logerMethod);
+		log.write(`Enter new execution frame for callable: `, callable.symbol.name);
 	}
 
 	void removeFrame()
 	{
 		import std.range: empty, back, popBack;
 		log.internalAssert(!this._frameStack.empty, `Execution frame stack is empty!`);
-		log.write(`Exit execution frame for callable: `, this._frameStack.back._callableObj._name, ` with dataDict: `, this._frameStack.back._dataDict);
 		this._stack.removeStackBlock();
 		this._frameStack.popBack();
 	}
@@ -357,15 +346,10 @@ public:
 
 	IvyData getModuleConst( size_t index )
 	{
-		import std.range: back, empty;
-		import std.conv: text;
-		log.internalAssert(!this._frameStack.empty, `this._frameStack is empty`);
-		log.internalAssert(this._frameStack.back, `this._frameStack.back is null`);
-		log.internalAssert(this._frameStack.back._callableObj, `this._frameStack.back._callableObj is null`);
-		log.internalAssert(this._frameStack.back._callableObj._codeObj, `this._frameStack.back._callableObj._codeObj is null`);
-		log.internalAssert(this._frameStack.back._callableObj._codeObj._moduleObj, `this._frameStack.back._callableObj._codeObj._moduleObj is null`);
+		ModuleObject moduleObject = this.currentModule;
+		log.internalAssert(moduleObject !is null, `Unable to get current module object`);
 
-		return this._frameStack.back._callableObj._codeObj._moduleObj.getConst(index);
+		return moduleObject.getConst(index);
 	}
 
 	IvyData getModuleConstCopy( size_t index )
@@ -375,14 +359,10 @@ public:
 
 	AsyncResult execLoop() 
 	{
-		import std.range: empty, back, popBack;
-
-		log.internalAssert(!this._frameStack.empty, `this._frameStack is empty`);
-		log.internalAssert(this._frameStack.back, `this._frameStack.back is null`);
-		log.internalAssert(this._frameStack.back._callableObj, `this._frameStack.back._callableObj is null`);
-		log.internalAssert(this._frameStack.back._callableObj._codeObj, `this._frameStack.back._callableObj._codeObj is null`);
+		CodeObject codeObject = this.currentCodeObject;
+		log.internalAssert(codeObject !is null, `Expected current code object to run`);
 		this._pk = 0;
-		this._codeRange = this._frameStack.back._callableObj._codeObj._instrs[];
+		this._codeRange = codeObject._instrs[];
 		AsyncResult fResult = new AsyncResult;
 
 		try {
@@ -401,9 +381,9 @@ public:
 		import std.typecons: tuple;
 
 		execution_loop:
-		while( this._pk <= _codeRange.length )
+		while( this._pk <= this._codeRange.length )
 		{
-			if( this._pk >= _codeRange.length ) // Ended with this code object
+			if( this._pk >= this._codeRange.length ) // Ended with this code object
 			{
 				log.write("this._stack on code object end: ", this._stack);
 				log.write("this._frameStack on code object end: ", this._frameStack);
@@ -420,12 +400,14 @@ public:
 				IvyData result = this._stack.popBack();
 				this.removeFrame(); // Exit out of this frame
 
-				log.internalAssert(this._stack.back.type == IvyDataType.Integer, "Expected integer as instruction pointer, but got: ", this._stack.back.type);
-				this._pk = cast(size_t) this._stack.back.integer;
-				this._stack.popBack(); // Drop return address
+				IvyData instrNode = this._stack.popBack();
+				log.internalAssert(instrNode.type == IvyDataType.Integer, "Expected integer as instruction pointer");
+				this._pk = cast(size_t) instrNode.integer;
 
-				log.internalAssert(!this._frameStack.back._callableObj._codeObj._instrs.empty, "Code object to return is empty!");
-				this._codeRange = this._frameStack.back._callableObj._codeObj._instrs[]; // Set old instruction range back
+				CodeObject codeObject = this.currentCodeObject;
+				log.internalAssert(codeObject !is null && !codeObject._instrs.empty, `Expected non-empty code object`);
+
+				this._codeRange = codeObject._instrs[]; // Set old instruction range back
 				this._stack.push(result); // Get result back
 				continue;
 			} // if
@@ -434,7 +416,11 @@ public:
 			switch( instr.opcode )
 			{
 				// Base arithmetic operations execution
-				case OpCode.Add, OpCode.Sub, OpCode.Mul, OpCode.Div, OpCode.Mod:
+				case OpCode.Add:
+				case OpCode.Sub:
+				case OpCode.Mul:
+				case OpCode.Div:
+				case OpCode.Mod:
 				{
 					// Right value was evaluated last so it goes first in the stack
 					IvyData rightVal = this._stack.popBack();
@@ -472,7 +458,10 @@ public:
 				}
 
 				// Comparision operations
-				case OpCode.LT, OpCode.GT, OpCode.LTEqual, OpCode.GTEqual:
+				case OpCode.LT:
+				case OpCode.GT:
+				case OpCode.LTEqual:
+				case OpCode.GTEqual:
 				{
 					import std.conv: to;
 					// Right value was evaluated last so it goes first in the stack
@@ -519,7 +508,8 @@ public:
 				}
 
 				// Shallow equality comparision
-				case OpCode.Equal, OpCode.NotEqual:
+				case OpCode.Equal:
+				case OpCode.NotEqual:
 				{
 					// Right value was evaluated last so it goes first in the stack
 					IvyData rightVal = this._stack.popBack();
@@ -546,6 +536,7 @@ public:
 					switch( aggr.type )
 					{
 						case IvyDataType.String:
+						{
 							log.internalAssert(indexValue.type == IvyDataType.Integer,
 								"Cannot execute LoadSubscr instruction. Index value for string aggregate must be integer!", indexValue);
 
@@ -557,23 +548,31 @@ public:
 							log.internalAssert(endIndex <= aggr.str.length, `String slice end index must be less or equal to str length`);
 							this._stack.push(aggr.str[startIndex..endIndex]);
 							break;
+						}
 						case IvyDataType.Array:
+						{
 							log.internalAssert(indexValue.type == IvyDataType.Integer,
 								"Cannot execute LoadSubscr instruction. Index value for array aggregate must be integer!");
 							log.internalAssert(indexValue.integer < aggr.array.length, `Array index must be less than array length`);
 							this._stack.push(aggr.array[indexValue.integer]);
 							break;
+						}
 						case IvyDataType.AssocArray:
+						{
 							log.internalAssert(indexValue.type == IvyDataType.String,
 								"Cannot execute LoadSubscr instruction. Index value for assoc array aggregate must be string!");
 							log.internalAssert(indexValue.str in aggr.assocArray,
 								`Assoc array key "`, indexValue.str, `" must be present in assoc array`);
 							this._stack.push(aggr.assocArray[indexValue.str]);
 							break;
+						}
 						case IvyDataType.ClassNode:
+						{
 							this._stack.push(aggr.classNode[indexValue]);
 							break;
-						case IvyDataType.Callable: {
+						}
+						case IvyDataType.Callable:
+						{
 							log.internalAssert(indexValue.type == IvyDataType.String,
 								"Cannot execute LoadSubscr instruction. Index value for callable aggregate must be string!");
 							if( indexValue.str == `moduleName` ) {
@@ -944,18 +943,18 @@ public:
 					if( moduleName !in this._moduleFrames )
 					{
 						// Run module here
-						ModuleObject modObject = this._moduleObjCache.get(moduleName);
-						log.internalAssert(modObject, `Cannot execute ImportModule instruction, because module object "`, moduleName,`" is null!` );
-						CodeObject codeObject = modObject.mainCodeObject;
-						log.internalAssert(codeObject, `Cannot execute ImportModule instruction, because main code object for module "`, moduleName, `" is null!` );
+						ModuleObject moduleObject = this._moduleObjCache.get(moduleName);
+						log.internalAssert(moduleObject, `Cannot execute ImportModule instruction, because module object "`, moduleName,`" is null!` );
+						CodeObject codeObject = moduleObject.mainCodeObject;
+						log.internalAssert(codeObject !is null, `Cannot execute ImportModule instruction, because main code object for module "`, moduleName, `" is null!` );
 
-						CallableObject callableObj = new CallableObject(moduleName, codeObject, CallableKind.Module);
+						CallableObject callable = new CallableObject(codeObject);
 
 						IvyData dataDict = [
 							"_ivyMethod": moduleName,
 							"_ivyModule": moduleName
 						];
-						this.newFrame(callableObj, null, dataDict, false); // Create entry point module frame
+						this.newFrame(callable, null, dataDict, false); // Create entry point module frame
 						this._moduleFrames[moduleName] = this._frameStack.back; // We need to store module frame into storage
 
 						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreGlobalName)
@@ -984,26 +983,24 @@ public:
 
 				case OpCode.FromImport:
 				{
-					import std.algorithm: map;
-					import std.array: array;
+					IvyData importListNode = this._stack.popBack();
+					IvyData modFrameNode = this._stack.popBack();
 
-					log.internalAssert(this._stack.back.type == IvyDataType.Array, "Cannot execute FromImport instruction. Expected list of symbol names");
-					string[] symbolNames = this._stack.back.array.map!( it => it.str ).array;
-					this._stack.popBack();
+					log.internalAssert(importListNode.type == IvyDataType.Array, "Cannot execute FromImport instruction. Expected list of symbol names");
+					log.internalAssert(modFrameNode.type == IvyDataType.ExecutionFrame, "Cannot execute FromImport instruction. Expected execution frame argument");
+					ExecutionFrame moduleFrame = modFrameNode.execFrame;
 
-					log.internalAssert(this._stack.back.type == IvyDataType.ExecutionFrame, "Cannot execute FromImport instruction. Expected execution frame argument");
-
-					ExecutionFrame moduleFrame = this._stack.back.execFrame;
-					this._stack.popBack();
-
-					foreach( name; symbolNames ) {
-						setValue( name, moduleFrame.getValue(name) );
+					foreach( name; importListNode.array ) {
+						this.setValue(name, moduleFrame.getValue(name));
 					}
 					break;
 				}
 
 				case OpCode.GetDataRange:
 				{
+					import ivy.types.data.range.array: ArrayRange;
+					import ivy.types.data.range.assoc_array: AssocArrayRange;
+					
 					import std.range: empty, back, popBack;
 					import std.algorithm: canFind;
 					log.write(`GetDataRange begin this._stack: `, this._stack);
@@ -1082,7 +1079,10 @@ public:
 					continue execution_loop; // Skip _pk increment
 				}
 
-				case OpCode.JumpIfTrue, OpCode.JumpIfFalse, OpCode.JumpIfTrueOrPop, OpCode.JumpIfFalseOrPop:
+				case OpCode.JumpIfTrue:
+				case OpCode.JumpIfFalse:
+				case OpCode.JumpIfTrueOrPop:
+				case OpCode.JumpIfFalseOrPop:
 				{
 					import std.algorithm: canFind;
 
@@ -1141,299 +1141,118 @@ public:
 
 				case OpCode.LoadDirective:
 				{
-					import std.conv: text;
-					
-					size_t stackArgCount = instr.arg;
-					log.internalAssert(stackArgCount > 1, "Directive load must have at least 2 items in stack!");
-					log.internalAssert(stackArgCount <= this._stack.length, "Not enough arguments in execution stack");
+					import ivy.types.call_spec: CallSpec;
 
-					IvyData varNameNode = this._stack.popBack();
+					CallSpec callSpec = CallSpec(instr.arg);
+					log.internalAssert(callSpec.posAttrsCount == 0, `Positional default attribute values are not expected`);
+
 					IvyData codeObjNode = this._stack.popBack();
-
-					log.internalAssert(varNameNode.type == IvyDataType.String, `Expected String as directive name`);
-					log.internalAssert(codeObjNode.type == IvyDataType.CodeObject, `Expected CodeObject`, codeObjNode, `   `, varNameNode);
+					log.internalAssert(codeObjNode.type == IvyDataType.CodeObject, `Expected CodeObject to load`);
 					
-					CodeObject codeObj = codeObjNode.codeObject;
+					CodeObject codeObject = codeObjNode.codeObject;
 
-					if( stackArgCount > 2 )
+					// Get dict of default attr values from stack if exists
+					// We shall not check for odd values here, because we believe compiler can handle it
+					IvyData[string] defaults = callSpec.hasKwAttrs? this._stack.popBack().assocArray: null;
+
+					/*
+					IvyData[string] defaults;
+					foreach( size_t num; 0 .. callSpec.posAttrsCount )
 					{
-						size_t stackArgsProcessed = 2;
-						foreach( ref attrBlock; codeObj._attrBlocks )
-						{
-							size_t blockArgCount;
-							DirAttrKind blockType;
-							switch( attrBlock.kind ) {
-								case DirAttrKind.NamedAttr: case DirAttrKind.ExprAttr:
-									IvyData blockHeader = this._stack.popBack(); // Get block header
-									++stackArgsProcessed;
-									log.internalAssert(blockHeader.type == IvyDataType.Integer, `Expected integer as arguments block header!`);
-									blockArgCount = blockHeader.integer >> _stackBlockHeaderSizeOffset;
-									blockType = cast(DirAttrKind)(blockHeader.integer & _stackBlockHeaderTypeMask);
-									// Bit between block size part and block type must always be zero
-									log.internalAssert((blockHeader.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted`);
-									break;
-								default: break;
-							}
-
-							
-							switch( attrBlock.kind )
-							{
-								case DirAttrKind.NamedAttr: {
-									bool[string] passedArgs;
-									
-									foreach( k; 0..blockArgCount )
-									{
-										IvyData attrValueNode = this._stack.popBack(); ++stackArgsProcessed;
-
-										IvyData attrNameNode = this._stack.popBack(); ++stackArgsProcessed;
-										log.internalAssert(attrNameNode.type == IvyDataType.String, "Named attribute name must be string!");
-										log.internalAssert(attrNameNode.str !in passedArgs, "Duplicate named argument detected!");
-										log.internalAssert(attrNameNode.str in attrBlock.namedAttrs, "Unexpected argument detected!");
-
-										attrBlock.namedAttrs[attrNameNode.str].defaultValue = attrValueNode;
-										passedArgs[attrNameNode.str] = true;
-									}
-									log.internalAssert(passedArgs.length == blockArgCount, `Processed and required default arguments doesn't match!`);
-									break;
-								}
-								case DirAttrKind.ExprAttr:
-								{
-									foreach( j; 0..blockArgCount )
-									{
-										// Set last items with default values from stack
-										attrBlock.exprAttrs[attrBlock.exprAttrs.length - 1 - j].defaultValue = this._stack.popBack();
-										++stackArgsProcessed;
-									}
-									break;
-								}
-								default: break;
-							}
-						}
-						log.internalAssert(stackArgsProcessed == stackArgCount, `Processed and required stack arguments doesn't match!`, ` processed`, stackArgsProcessed, ` required: `, stackArgCount);
+						// Passing over callable symbol attrs that match positions of stack args (in reverse order)
+						DirAttr attr = attrSymbols[callSpec.posAttrsCount - num - 1];
+						defaults[attr.name] = this._stack.back();
 					}
 
-					this.setValue(
-						varNameNode.str,
-						IvyData(new CallableObject(
-							varNameNode.str,
-							codeObjNode.codeObject
-						))
-					); // Put this directive in context
+					if( kwAttrs )
+					{
+						foreach( size_t idx; callSpec.posAttrsCount .. attrSymbols.length )
+						{
+							DirAttr attr = attrSymbols[idx];
+							if( IvyData* valPtr = attr.name in kwArgs ) {
+								defaults[attr.name] = *valPtr;
+							}
+						}
+					}
+					*/
+
+					this.setValue(codeObject.symbol.name, IvyData(new CallableObject(codeObject, defaults))); // Put this directive in context
 					this._stack.push(IvyData()); // We should return something
 					break;
 				}
 
 				case OpCode.RunCallable:
 				{
-					import std.range: empty, popBack, back;
-
+					import ivy.types.call_spec: CallSpec;
+					
 					log.write("RunCallable stack on init: : ", this._stack);
-
-					size_t stackArgCount = instr.arg;
-					log.internalAssert(stackArgCount > 0, "Call must at least have 1 arguments in stack!");
-					log.write("RunCallable stackArgCount: ", stackArgCount );
-					log.internalAssert(stackArgCount <= this._stack.length, "Not enough arguments in execution stack");
-					log.write("RunCallable this._stack: ", this._stack);
+					CallSpec callSpec = CallSpec(instr.arg);
 
 					IvyData callableNode = this._stack.popBack();
-					log.write("RunCallable callable type: ", callableNode.type);
-					log.internalAssert(callableNode.type == IvyDataType.Callable, `Expected Callable operand`);
+					log.internalAssert(callableNode.type == IvyDataType.Callable, `Expected callable object to run, but got: `, callableNode);
 
-					CallableObject callableObj = callableNode.callable;
-					log.internalAssert(callableObj, `Callable object is null!`);
-					log.write("RunCallable name: ", callableObj._name);
+					CallableObject callable = callableNode.callable;
+					DirAttr[] attrSymbols = callable.symbol.attrs;
+					size_t callableAttrCount = attrSymbols.length;
 
-					DirAttrsBlock[] attrBlocks = callableObj.attrBlocks;
-					log.write("RunCallable callableObj.attrBlocks: ", attrBlocks);
-
-					log.write("RunCallable creating execution frame...");
-					IvyData dataDict = [
-						"_ivyMethod": callableObj._name,
-						"_ivyModule": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
-					]; // Allocating scope at the same time
-					newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
-
-					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
+					IvyData[string] kwAttrs;
+					if( callSpec.hasKwAttrs )
 					{
-						size_t stackArgsProcessed = 0;
-						foreach( attrBlock; callableObj.attrBlocks )
+						IvyData kwAttrsNode = this._stack.popBack();
+						log.internalAssert(kwAttrsNode.type == IvyDataType.AssocArray, `Expected assoc array of keyword attributes`);
+						kwAttrs = kwAttrsNode.assocArray;
+					}
+
+					this.log.internalAssert(
+						stackAttrCount > callableAttrCount,
+						"Attrs count passed through execution stack: ",
+						stackAttrCount,
+						" is more than callable`s attrs count: ",
+						callableAttrCount,
+						", but should be less or equal"
+					);
+
+					log.internalAssert(
+						stackAttrCount <= this._stack.length,
+						"Not enough items in execution stack. Required: ",
+						stackAttrCount,
+						", but got: ",
+						this._stack.length
+					);
+
+					log.write("RunCallable name: ", callable.symbol.name);
+					this.newFrame(callable, this._getModuleFrame(callable));
+
+					foreach( size_t num; 0..callableAttrCount )
+					{
+						// Проходим по символам аттрибутов с конца
+						size_t attrIndex = callableAttrCount - num - 1;
+						DirAttr attr = attrSymbols[attrIndex];
+						if( attrIndex < stackAttrCount )
 						{
-							// Getting args block metainfo
-							size_t blockArgCount;
-							DirAttrKind blockType;
-							switch( attrBlock.kind ) {
-								case DirAttrKind.NamedAttr: case DirAttrKind.ExprAttr:
-									IvyData blockHeader = this._stack.popBack(); // Get block header
-									++stackArgsProcessed;
-									log.internalAssert(blockHeader.type == IvyDataType.Integer, `Expected integer as arguments block header!`);
-									blockArgCount = blockHeader.integer >> _stackBlockHeaderSizeOffset;
-									log.write("blockArgCount: ", blockArgCount);
-									blockType = cast(DirAttrKind)( blockHeader.integer & _stackBlockHeaderTypeMask );
-									// Bit between block size part and block type must always be zero
-									log.internalAssert( (blockHeader.integer & _stackBlockHeaderCheckMask) == 0, `Seeems that stack is corrupted` );
-									log.write("blockType: ", blockType);
-									break;
-								default: break;
-							}
-
-							switch( attrBlock.kind )
-							{
-								case DirAttrKind.NamedAttr:
-								{
-									bool[string] passedArgs;
-									
-									foreach( k; 0..blockArgCount )
-									{
-										IvyData attrValueNode = this._stack.popBack(); ++stackArgsProcessed;
-										log.write(`RunCallable debug, this._stack is: `, this._stack);
-
-										IvyData attrNameNode = this._stack.popBack(); ++stackArgsProcessed;
-										log.internalAssert(attrNameNode.type == IvyDataType.String, "Named attribute name must be string!");
-										log.internalAssert(attrNameNode.str !in passedArgs, "Duplicate named argument detected!");
-										log.internalAssert(attrNameNode.str in attrBlock.namedAttrs, "Unexpected argument detected!");
-
-										this.setValue(attrNameNode.str, attrValueNode);
-										passedArgs[attrNameNode.str] = true;
-									}
-
-									foreach( attrName, namedAttr; attrBlock.namedAttrs )
-									{
-										if( attrName in passedArgs ) {
-											continue; // Attribute already passes to directive
-										}
-										// Do deep copy of default value
-										this.setValue(attrName, deeperCopy(namedAttr.defaultValue));
-									}
-									break;
-								}
-								case DirAttrKind.ExprAttr:
-								{
-									foreach( j; 0..attrBlock.exprAttrs.length )
-									{
-										size_t backIndex = attrBlock.exprAttrs.length - 1 - j;
-										auto exprAttr = attrBlock.exprAttrs[backIndex];
-										if( backIndex < blockArgCount )
-										{
-											IvyData attrValue = this._stack.popBack(); ++stackArgsProcessed;
-											this.setValue(exprAttr.name, attrValue);
-										}
-										else
-										{
-											this.setValue(exprAttr.name, exprAttr.defaultValue);
-										}
-									}
-									break;
-								}
-								default: break;
-							}
+							// Индекс аттрибута меньше числа аттрибутов в стеке
+							// Т.е. значение следует брать из стека
+							this.setValue(attr.name, this._stack.popBack());
+						}
+						else
+						{
+							// Иначе нужно пытаться получить значение по-умолчанию
+							auto defValPtr = attr.name in callable.defaults;
+							this.log.internalAssert(
+								defValPtr !is null,
+								`Expected value for attr: `,
+								attr.name,
+								`, that has no default value`
+							);
+							this.setValue(attr.name, deeperCopy(*defValPtr));
 						}
 					}
+
+
 					log.write("this._stack after parsing all arguments: ", this._stack);
-
-					if( callableObj._codeObj )
-					{
-						this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
-						this._stack.addStackBlock();
-						this._codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
-						this._pk = 0;
-						continue execution_loop; // Skip _pk increment
+					if( this._doCall(callable) ) {
+						continue execution_loop;
 					}
-					else
-					{
-						log.internalAssert(callableObj._dirInterp, `Callable object expected to have non null code object or native directive interpreter object!`);
-						this._stack.addStackBlock();
-						callableObj._dirInterp.interpret(this); // Run native directive interpreter
-
-						// Else we expect to have result of directive on the stack
-						log.internalAssert(this._stack.length, "Stack should contain 1 item empty now!");
-
-						// If frame stack contains last frame - it means that we nave done with programme
-						if( this._frameStack.length == exitFrames ) {
-							fResult.resolve(this._stack.back());
-							return;
-						}
-						IvyData result = this._stack.popBack();
-						this.removeFrame(); // Drop frame from stack after end of execution
-						this._stack.push(result); // Get result back
-					}
-
-					break;
-				}
-
-				case OpCode.Call:
-				{
-					import std.algorithm: canFind;
-					IvyData args = this._stack.popBack();
-					log.internalAssert(
-						[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].canFind(args.type),
-						`Expected assoc array with arguments, or undef, or null`);
-
-					IvyData callableNode = this._stack.popBack();
-					log.internalAssert(
-						callableNode.type == IvyDataType.Callable,
-						`Expected callable in order to be called. Do you mind?`);
-
-					CallableObject callableObj = callableNode.callable;
-
-					IvyData dataDict = [
-						"_ivyMethod": callableObj._name,
-						"_ivyModule": (callableObj._codeObj? callableObj._codeObj._moduleObj.name: null)
-					]; // Allocating scope at the same time
-					newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope);
-
-					// Put params into stack
-					foreach( attrBlock; callableObj.attrBlocks )
-					{
-						switch( attrBlock.kind )
-						{
-							case DirAttrKind.NamedAttr:
-							{
-								foreach( attrName, namedAttr; attrBlock.namedAttrs )
-								{
-									if( args.type == IvyDataType.AssocArray )
-									{
-										if( auto valuePtr = attrName in args ) {
-											this.setValue(attrName, *valuePtr);
-											continue;
-										}
-									}
-									
-									this.setValue(attrName, deeperCopy(namedAttr.defaultValue));
-								}
-								break;
-							}
-							case DirAttrKind.ExprAttr:
-							{
-								foreach( j, exprAttr; attrBlock.exprAttrs )
-								{
-									if( args.type == IvyDataType.AssocArray )
-									{
-										if( auto valuePtr = exprAttr.name in args ) {
-											this.setValue(exprAttr.name, *valuePtr);
-											continue;
-										}
-									}
-									// Do deep copy of default value if parameter not found in args
-									this.setValue(exprAttr.name, deeperCopy(exprAttr.defaultValue));
-								}
-
-								// TODO: Implement default values for positional argument
-								break;
-							}
-							default: break;
-						}
-					}
-
-					if( callableObj._codeObj ) {
-						this._stack.push(this._pk+1); // Put next instruction index on the stack to return at
-						this._stack.addStackBlock();
-						this._codeRange = callableObj._codeObj._instrs[]; // Set new instruction range to execute
-						this._pk = 0;
-						continue execution_loop; // Skip _pk increment
-					} else {
-						log.internalAssert(false, `Unimplemented yet, sorry...`);
-					}
-
 					break;
 				}
 
@@ -1466,38 +1285,29 @@ public:
 
 				case OpCode.MakeArray:
 				{
-					size_t arrayLen = instr.arg;
 					IvyData[] newArray;
-					newArray.length = arrayLen; // Preallocating is good ;)
-					log.write("MakeArray this._stack: ", this._stack);
-					log.write("MakeArray arrayLen: ", arrayLen);
-					for( size_t i = arrayLen; i > 0; --i ) {
+					newArray.length = instr.arg; // Preallocating is good ;)
+					for( size_t i = instr.arg; i > 0; --i ) {
 						// We take array items from the tail, so we must consider it!
 						newArray[i-1] = this._stack.popBack();
 					}
 					this._stack.push(newArray);
-
 					break;
 				}
 
 				case OpCode.MakeAssocArray:
 				{
-					size_t aaLen = instr.arg;
-					IvyData[string] newAssocArray;
-					newAssocArray[`__mentalModuleMagic_0451__`] = 451;
-					newAssocArray.remove(`__mentalModuleMagic_0451__`);
-
-					for( size_t i = 0; i < aaLen; ++i )
+					IvyData[string] res;
+					for( size_t i = 0; i < instr.arg; ++i )
 					{
-						IvyData val = this._stack.back;
-						this._stack.popBack();
+						IvyData val = this._stack.popBack();
+						IvyData key = this._stack.popBack();
 
-						log.internalAssert(this._stack.back.type == IvyDataType.String, `Expected string as assoc array key`);
+						log.internalAssert(key.type == IvyDataType.String, `Expected string as assoc array key`);
 
-						newAssocArray[this._stack.back.str] = val;
-						this._stack.popBack();
+						res[key.str] = val;
 					}
-					this._stack.push(newAssocArray);
+					this._stack.push(res);
 					break;
 				}
 
@@ -1519,11 +1329,41 @@ public:
 		log.internalAssert(false, `Failed to get result of execution`);
 	} // void execLoop()
 
-	ExecutionFrame _getModuleFrame(CallableObject callableObj)
+	ExecutionFrame _getModuleFrame(CallableObject callable)
 	{
-		ExecutionFrame moduleFrame = _moduleFrames.get(callableObj.moduleName, null);
-		log.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callableObj._name, ` does not exist!` );
+		ExecutionFrame moduleFrame = _moduleFrames.get(callable.moduleName, null);
+		log.internalAssert( moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callable.symbol.name, ` does not exist!` );
 		return moduleFrame;
+	}
+
+	bool _doCall(CallableObject callable)
+	{
+		if( !callable.isNative )
+		{
+			this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
+			this._stack.addStackBlock();
+			this._codeRange = callable.codeObject._instrs[]; // Set new instruction range to execute
+			this._pk = 0;
+			return true; // Skip _pk increment
+		}
+		else
+		{
+			this._stack.addStackBlock();
+			callable.dirInterp.interpret(this); // Run native directive interpreter
+
+			// Else we expect to have result of directive on the stack
+			log.internalAssert(this._stack.length, "Stack should contain 1 item empty now!");
+
+			// If frame stack contains last frame - it means that we nave done with programme
+			if( this._frameStack.length == exitFrames ) {
+				fResult.resolve(this._stack.back());
+				return;
+			}
+			IvyData result = this._stack.popBack();
+			this.removeFrame(); // Drop frame from stack after end of execution
+			this._stack.push(result); // Get result back
+			return false;
+		}
 	}
 
 	AsyncResult runModuleDirective(string name, IvyData args = IvyData())
@@ -1558,7 +1398,7 @@ public:
 		return fResult;
 	}
 
-	DirValueAttr[string] getDirAttrs(string name, string[] attrNames = null)
+	DirAttr[string] getDirAttrs(string name, string[] attrNames = null)
 	{
 		import std.range: empty;
 		import std.algorithm: canFind;
@@ -1566,34 +1406,17 @@ public:
 
 		IvyData callableNode = frame.getValue(name);
 		log.internalAssert(callableNode.type == IvyDataType.Callable, `Expected Callable!`);
-		CallableObject callableObj = callableNode.callable;
-		DirValueAttr[string] res;
+		CallableObject callable = callableNode.callable;
+		DirAttr[] attrs = callable.symbol.attrs;
+		DirAttr[string] res;
 
-		foreach( attrBlock; callableObj.attrBlocks )
+		foreach( attr; attrs )
 		{
-			switch( attrBlock.kind )
-			{
-				case DirAttrKind.NamedAttr:
-				{
-					foreach( attrName, namedAttr; attrBlock.namedAttrs )
-					{
-						if( attrNames.empty || attrNames.canFind(attrName) ) {
-							res[attrName] = namedAttr;
-						}
-					}
-					break;
-				}
-				case DirAttrKind.ExprAttr:
-				{
-					foreach( j, exprAttr; attrBlock.exprAttrs )
-					{
-						if( attrNames.empty || attrNames.canFind(exprAttr.name) ) {
-							res[exprAttr.name] = exprAttr;
-						}
-					}
-					break;
-				}
-				default: break;
+			if( !attrNames.empty && attrNames.canFind(attr.name) ) {
+				continue;
+			}
+			if( auto defValPtr = attr.name in callable.defaults ) {
+				res[attr.name] = defValPtr;
 			}
 		}
 

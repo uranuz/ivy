@@ -3,8 +3,9 @@ module ivy.compiler.directive.expr;
 import ivy.compiler.directive.utils;
 import ivy.ast.iface: INameExpression;
 
-class ExprCompiler: IDirectiveCompiler
+class ExprCompiler: BaseDirectiveCompiler
 {
+public:
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = stmt[];

@@ -2,8 +2,11 @@ module ivy.compiler.directive.return_dir;
 
 import ivy.compiler.directive.utils;
 
-class ReturnCompiler: IDirectiveCompiler
+class ReturnCompiler: BaseDirectiveCompiler
 {
+public:
+	override void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector) {}
+
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = stmt[];

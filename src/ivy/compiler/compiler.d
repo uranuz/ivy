@@ -1,54 +1,62 @@
 /// Module implements compilation of Ivy abstract syntax tree into bytecode
 module ivy.compiler.compiler;
 
-
-import ivy.bytecode;
-import ivy.code_object: CodeObject;
-import ivy.module_object: ModuleObject;
-import ivy.directive_stuff;
-import ivy.ast.iface;
-import ivy.ast.iface.visitor;
-import ivy.compiler.common;
-import ivy.compiler.symbol_table: Symbol, SymbolTableFrame, DirectiveDefinitionSymbol, SymbolKind;
-import ivy.compiler.module_repository: CompilerModuleRepository;
-import ivy.interpreter.data_node;
-import ivy.compiler.def_analyze_mixin: DefAnalyzeMixin;
-import ivy.compiler.directive.factory: DirectiveCompilerFactory;
-import ivy.compiler.node_visit_mixin: NodeVisitMixin;
-import ivy.compiler.errors: IvyCompilerException;
-import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
-import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
-import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
-import ivy.ast.consts: LiteralType, Operator;
-
 // If IvyTotalDebug is defined then enable compiler debug
 version(IvyTotalDebug) version = IvyCompilerDebug;
 
-enum JumpKind {
+import ivy.ast.iface.visitor: AbstractNodeVisitor;
+
+enum JumpKind
+{
 	Break = 1,
 	Continue = 0
 }
 
 class ByteCodeCompiler: AbstractNodeVisitor
 {
+	import ivy.ast.iface;
+	import ivy.ast.consts: LiteralType, Operator;
+
+	import ivy.bytecode: Instruction, OpCode;
+
+	import ivy.types.data: IvyData, NodeEscapeState;
+
+	import ivy.types.code_object: CodeObject;
+	import ivy.types.module_object: ModuleObject;
+
+	import ivy.types.symbol.iface: IIvySymbol, ICallableSymbol;
+	import ivy.types.symbol.directive: DirectiveSymbol;
+	import ivy.types.symbol.module_: ModuleSymbol;
+	import ivy.types.symbol.dir_attr: DirAttr;
+
+	import ivy.compiler.module_repository: CompilerModuleRepository;
+	import ivy.compiler.symbol_table: SymbolTableFrame;
+	import ivy.compiler.directive.factory: DirectiveCompilerFactory;
+	import ivy.compiler.node_visit_mixin: NodeVisitMixin;
+	import ivy.compiler.errors: IvyCompilerException;
+	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
+	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
+	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
+	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	
 public:
 	import std.typecons: Tuple;
 	alias LogerMethod = void delegate(LogInfo);
-	alias JumpTableItem = Tuple!(JumpKind, "jumpKind", size_t, "instrIndex");
 
-	mixin DefAnalyzeMixin;
+	static struct JumpTableItem
+	{
+		JumpKind jumpKind;
+		size_t instrIndex;
+	}
 
 private:
 	// Storage or factory containing compilers for certain directives
 	DirectiveCompilerFactory _compilerFactory;
 
-	InterpreterDirectiveFactory _directiveFactory;
-
 	// Dictionary maps module name to it's root symbol table frame
 	public CompilerSymbolsCollector _symbolsCollector;
 
-	// Storage for global compiler's symbols (INativeDirectiveInterpreter's info for now)
+	// Storage for global compiler's symbols (IDirectiveInterpreter's info for now)
 	SymbolTableFrame _globalSymbolTable;
 
 	// Compiler's storage for parsed module ASTs
@@ -74,7 +82,7 @@ public:
 		CompilerModuleRepository moduleRepo,
 		CompilerSymbolsCollector symbolsCollector,
 		DirectiveCompilerFactory compilerFactory,
-		InterpreterDirectiveFactory directiveFactory,
+		IIvySymbol[] globalSymbols,
 		ModuleObjectsCache moduleObjCache,
 		LogerMethod logerMethod = null
 	) {
@@ -84,17 +92,22 @@ public:
 		this.log.internalAssert(moduleRepo, `Expected module repository`);
 		this.log.internalAssert(symbolsCollector, `Expected symbols collector`);
 		this.log.internalAssert(compilerFactory, `Expected compiler factory`);
-		this.log.internalAssert(directiveFactory, `Expected directive factory`);
 		this.log.internalAssert(moduleObjCache, `Expected module objects cache`);
 
 		_moduleRepo = moduleRepo;
 		_symbolsCollector = symbolsCollector;
 		_compilerFactory = compilerFactory;
-		_directiveFactory = directiveFactory;
 		_moduleObjCache = moduleObjCache;
 
 		_globalSymbolTable = new SymbolTableFrame(null, _logerMethod);
-		_addGlobalSymbols();
+		_addGlobalSymbols(globalSymbols);
+	}
+
+	private void _addGlobalSymbols(IIvySymbol[] globalSymbols)
+	{
+		foreach(symb; globalSymbols) {
+			_globalSymbolTable.add(symb);
+		}
 	}
 
 	mixin NodeVisitMixin!();
@@ -132,155 +145,27 @@ public:
 		return LogerProxy(func, file, line, this);
 	}
 
-	private void _addGlobalSymbols()
+	/++
+		Run compilation starting from specified entry-point module
+	+/
+	void run(string moduleName)
 	{
-		foreach(symb; _directiveFactory.symbols) {
-			_globalSymbolTable.add(symb);
-		}
-	}
-
-	ModuleObject newModuleObject(string moduleName)
-	{
-		if( ModuleObject moduleObj = _moduleObjCache.get(moduleName) )
-			log.error(`Cannot create new module object "` ~ moduleName ~ `", because it already exists!`);
-
-		ModuleObject newModObj = new ModuleObject(moduleName, moduleName);
-		_moduleObjCache.add(newModObj);
-		return newModObj;
-	}
-
-	size_t enterNewModuleCodeObject(string moduleName)
-	{
-		import std.range: back, empty;
-		log.internalAssert(!moduleName.empty, "Expected module name!");
-		_codeObjStack ~= new CodeObject(moduleName, newModuleObject(moduleName));
-		return this.addConst( IvyData(_codeObjStack.back) );
-	}
-
-	size_t enterNewCodeObject(string name)
-	{
-		import std.range: back, empty;
-		log.internalAssert(!name.empty, "Expected code object name!");
-		_codeObjStack ~= new CodeObject(name, this.currentModule());
-		return this.addConst( IvyData(_codeObjStack.back) );
-	}
-
-	void exitCodeObject()
-	{
-		import std.range: empty, popBack;
-		log.internalAssert(!_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!");
-
-		_codeObjStack.popBack();
-	}
-
-	size_t addInstr(Instruction instr)
-	{
-		import std.range: empty, back;
-		log.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
-		log.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
-
-		return _codeObjStack.back.addInstr(instr, _currentLocation.lineIndex);
-	}
-
-	size_t addInstr(OpCode opcode) {
-		return addInstr(Instruction(opcode));
-	}
-
-	size_t addInstr(OpCode opcode, size_t arg) {
-		return addInstr(Instruction(opcode, arg));
-	}
-
-	void setInstrArg(size_t index, size_t arg)
-	{
-		import std.range: empty, back;
-		log.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
-		log.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
-
-		return _codeObjStack.back.setInstrArg( index, arg );
-	}
-
-	size_t getInstrCount()
-	{
-		import std.range: empty, back;
-		log.internalAssert(!_codeObjStack.empty, "Cannot add instruction, because compiler code object stack is empty!");
-		log.internalAssert(_codeObjStack.back, "Cannot add instruction, because current compiler code object is null!");
-
-		return _codeObjStack.back.getInstrCount();
-	}
-
-	size_t addConst(IvyData value)
-	{
-		import std.range: empty, back;
-		import std.digest.md: md5Of;
-		log.internalAssert(!_codeObjStack.empty, "Cannot add constant, because compiler code object stack is empty!");
-		log.internalAssert(_codeObjStack.back, "Cannot add constant, because current compiler code object is null!");
-		log.internalAssert(_codeObjStack.back._moduleObj, "Cannot add constant, because current module object is null!");
-		ModuleObject mod = _codeObjStack.back._moduleObj;
-		if( mod.name !in _moduleConstHashes ) {
-			_moduleConstHashes[mod.name] = null;
-		}
-		ubyte[16] valHash = md5Of(value.toString());
-		if( valHash !in _moduleConstHashes[mod.name] ) {
-			_moduleConstHashes[mod.name][valHash] = null;
-		}
-		foreach( size_t constIndex; _moduleConstHashes[mod.name][valHash] ) {
-			if( mod._consts[constIndex] == value ) {
-				return constIndex; // Constant is already here. Return it's index
-			}
-		}
-		size_t newIndex = _codeObjStack.back._moduleObj.addConst(value);
-		_moduleConstHashes[mod.name][valHash] ~= newIndex;
-		return newIndex;
-	}
-
-	ModuleObject currentModule() @property
-	{
-		import std.range: empty, back;
-		log.internalAssert(!_codeObjStack.empty, "Cannot get current module object, because compiler code object stack is empty!");
-		log.internalAssert(_codeObjStack.back, "Cannot get current module object, because current compiler code object is null!");
-
-		return _codeObjStack.back._moduleObj;
-	}
-
-	CodeObject currentCodeObject() @property
-	{
-		import std.range: empty, back;
-		log.internalAssert(!_codeObjStack.empty, "Cannot get current code object, because compiler code object stack is empty!");
-
-		return _codeObjStack.back;
-	}
-
-	Symbol symbolLookup(string name)
-	{
-		Symbol symb = _symbolsCollector.symbolLookup(name);
-
-		if( symb ) {
-			return symb;
-		}
-
-		log.internalAssert(_globalSymbolTable, `Compiler's global symbol table is null`);
-		symb = _globalSymbolTable.lookup(name);
-
-		if( !symb ) {
-			log.error( `Cannot find symbol "` ~ name ~ `"` );
-		}
-
-		return symb;
+		getOrCompileModule(moduleName);
+		_clearTemporaries();
 	}
 
 	ModuleObject getOrCompileModule(string moduleName)
 	{
-		if( ModuleObject moduleObj = _moduleObjCache.get(moduleName) ) {
-			return moduleObj;
+		if( ModuleObject moduleObject = _moduleObjCache.get(moduleName) ) {
+			return moduleObject;
 		}
 		else
 		{
-			// Initiate module object compilation on demand
+			log.write(`Compiled module not found in cache, so try to compile`);
 			IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
-			log.internalAssert(moduleNode, `Module node is null`);
 
-			log.write(`Entering new code object`);
-			enterNewModuleCodeObject(moduleName);
+			log.write(`Entering new module object`);
+			enterNewModuleObject(cast(ModuleSymbol) this.symbolLookup(moduleName));
 			log.write(`Entering module scope`);
 			_symbolsCollector.enterModuleScope(moduleName);
 			log.write(`Starting compiling module AST`);
@@ -291,11 +176,129 @@ public:
 			{
 				log.write(`Exiting compiler scopes`);
 				_symbolsCollector.exitScope();
+				log.write(`Exited module scope`);
 				this.exitCodeObject();
-				log.write(`Compiler scopes exited`);
+				log.write(`Exited module object`);
 			}
 		}
 		return _moduleObjCache.get(moduleName);
+	}
+
+	size_t enterNewModuleObject(ModuleSymbol symbol)
+	{
+		log.internalAssert(symbol !is null, `Expected module symbol`);
+		if( _moduleObjCache.get(symbol.name) )
+			log.error(`Cannot create new module object "`, symbol.name, `", because it already exists!`);
+
+		ModuleObject moduleObject = new ModuleObject(symbol);
+		_moduleObjCache.add(moduleObject);
+		CodeObject mainCodeObject = moduleObject.mainCodeObject;
+		
+		_codeObjStack ~= mainCodeObject;
+		return this.addConst( IvyData(mainCodeObject) );
+	}
+
+	size_t enterNewCodeObject(DirectiveSymbol symbol)
+	{
+		CodeObject codeObject = new CodeObject(symbol, this.currentModule());
+		_codeObjStack ~= codeObject;
+		return this.addConst( IvyData(codeObject) );
+	}
+
+	void exitCodeObject()
+	{
+		import std.range: empty, popBack;
+		log.internalAssert(!_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!");
+
+		_codeObjStack.popBack();
+	}
+
+	ModuleObject currentModule() @property {
+		return this.currentCodeObject.moduleObject;
+	}
+
+	CodeObject currentCodeObject() @property
+	{
+		import std.range: empty, back;
+		log.internalAssert(!this._codeObjStack.empty, "Compiler code object stack is empty!");
+
+		return this._codeObjStack.back;
+	}
+
+	IIvySymbol symbolLookup(string name)
+	{
+		IIvySymbol symb = _symbolsCollector.symbolLookup(name);
+
+		if( symb ) {
+			return symb;
+		}
+
+		symb = _globalSymbolTable.lookup(name);
+
+		if( !symb ) {
+			log.error( `Cannot find symbol "` ~ name ~ `"` );
+		}
+
+		return symb;
+	}
+
+	size_t addInstr(Instruction instr) {
+		return this.currentCodeObject.addInstr(instr, _currentLocation.lineIndex);
+	}
+
+	size_t addInstr(OpCode opcode) {
+		return addInstr(Instruction(opcode));
+	}
+
+	size_t addInstr(OpCode opcode, size_t arg) {
+		return addInstr(Instruction(opcode, arg));
+	}
+
+	void setInstrArg(size_t index, size_t arg) {
+		this.currentCodeObject.setInstrArg(index, arg);
+	}
+
+	size_t getInstrCount() {
+		return this.currentCodeObject.getInstrCount();
+	}
+
+	size_t addConst(IvyData value)
+	{
+		import std.digest.md: md5Of;
+		ModuleObject mod = this.currentModule;
+		if( mod.name !in _moduleConstHashes ) {
+			_moduleConstHashes[mod.name] = null;
+		}
+		ubyte[16] valHash = md5Of(value.toString());
+		if( valHash !in _moduleConstHashes[mod.name] ) {
+			_moduleConstHashes[mod.name][valHash] = null;
+		}
+		foreach( size_t constIndex; _moduleConstHashes[mod.name][valHash] )
+		{
+			if( mod._consts[constIndex] == value ) {
+				return constIndex; // Constant is already here. Return it's index
+			}
+		}
+		size_t newIndex = mod.addConst(value);
+		_moduleConstHashes[mod.name][valHash] ~= newIndex;
+		return newIndex;
+	}
+
+	void clearCache()
+	{
+		_clearTemporaries();
+
+		// Clear dependency objects
+		_symbolsCollector.clearCache();
+		_moduleObjCache.clearCache();
+	}
+
+	void _clearTemporaries()
+	{
+		_moduleRepo.clearCache();
+		_moduleConstHashes.clear();
+		_jumpTableStack.length = 0;
+		_codeObjStack.length = 0;
 	}
 
 
@@ -306,7 +309,6 @@ public:
 
 	void _visit(ILiteralExpression node)
 	{
-		LiteralType litType;
 		size_t constIndex;
 		switch( node.literalType )
 		{
@@ -462,127 +464,77 @@ public:
 
 	void _visit(IDirectiveStatement node)
 	{
+		import ivy.types.call_spec: CallSpec;
+
 		import std.range: empty, front, popFront;
 
-		auto comp = _compilerFactory.get(node.name);
-		if( comp !is null ) {
+		if( auto comp = this._compilerFactory.get(node.name) ) {
 			comp.compile(node, this);
+			return;
 		}
-		else
+		auto attrRange = node[];
+
+		ICallableSymbol symb = cast(ICallableSymbol) this.symbolLookup(node.name);
+		log.internalAssert(symb, `Expected callable symbol`);
+
+		DirAttr[] attrs = symb.attrs[]; // Getting slice of list
+
+		bool[string] attrsSet;
+
+		size_t posAttrCount = 0;
+		size_t kwAttrCount = 0;
+
+		while( !attrRange.empty )
 		{
-			auto attrRange = node[];
-
-			Symbol symb = this.symbolLookup( node.name );
-			if( symb.kind != SymbolKind.DirectiveDefinition )
-				log.error(`Expected directive definition symbol kind`);
-
-			DirectiveDefinitionSymbol dirSymbol = cast(DirectiveDefinitionSymbol) symb;
-			log.internalAssert(dirSymbol, `Directive definition symbol is null`);
-
-			DirAttrsBlock[] dirAttrBlocks = dirSymbol.dirAttrBlocks[]; // Getting slice of list
-
-			// Keeps count of stack arguments actualy used by this call. First is directive object
-			size_t stackItemsCount = 1;
-			bool isNoescape = false;
-
-			log.write(`Entering directive attrs blocks loop`);
-			while( !dirAttrBlocks.empty )
+			if( IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front )
 			{
-				final switch( dirAttrBlocks.front.kind )
-				{
-					case DirAttrKind.NamedAttr:
-					{
-						size_t argCount = 0;
-						bool[string] argsSet;
+				log.internalAssert(posAttrCount == 0, `Keyword attributes cannot be before positional in directive call`);
+				DirAttr attr = symb.getAttr(keyValueAttr.name);
 
-						DirAttrsBlock namedAttrsDef = dirAttrBlocks.front;
-						while( !attrRange.empty )
-						{
-							IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front;
-							if( !keyValueAttr ) {
-								break; // We finished with key-value attributes
-							}
+				if( attr.name in attrsSet )
+					log.error(`Duplicate named attribute "` ~ attr.name ~ `" detected`);
 
-							if( keyValueAttr.name !in namedAttrsDef.namedAttrs )
-								log.error(`Unexpected named attribute "` ~ keyValueAttr.name ~ `"`);
+				// Add name of named argument into stack
+				addInstr(OpCode.LoadConst, addConst( IvyData(attr.name) ));
 
-							if( keyValueAttr.name in argsSet )
-								log.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
+				// Compile value expression (it should put result value on the stack)
+				keyValueAttr.value.accept(this);
 
-							// Add name of named argument into stack
-							addInstr(OpCode.LoadConst, addConst( IvyData(keyValueAttr.name) ));
-							++stackItemsCount;
-
-							// Compile value expression (it should put result value on the stack)
-							keyValueAttr.value.accept(this);
-							++stackItemsCount;
-
-							++argCount;
-							argsSet[keyValueAttr.name] = true;
-							attrRange.popFront();
-						}
-
-						// Add instruction to load value that consists of number of pairs in block and type of block
-						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.NamedAttr;
-						addInstr(OpCode.LoadConst, addConst( IvyData(blockHeader) ));
-						++stackItemsCount; // We should count args block header
-						break;
-					}
-					case DirAttrKind.ExprAttr:
-					{
-						size_t argCount = 0;
-
-						auto exprAttrDefs = dirAttrBlocks.front.exprAttrs[];
-						while( !attrRange.empty )
-						{
-							IExpression exprAttr = cast(IExpression) attrRange.front;
-							if( !exprAttr ) {
-								break; // We finished with positional attributes
-							}
-
-							if( exprAttrDefs.empty ) {
-								log.error(`Got more positional arguments than expected!`);
-							}
-
-							exprAttr.accept(this);
-							++stackItemsCount;
-							++argCount;
-
-							attrRange.popFront(); exprAttrDefs.popFront();
-						}
-
-						while( !exprAttrDefs.empty )
-						{
-							// TODO: Just skip positional args that has no default value - fix it in the future!
-							exprAttrDefs.popFront();
-						}
-
-						// Add instruction to load value that consists of number of positional arguments in block and type of block
-						size_t blockHeader = ( argCount << _stackBlockHeaderSizeOffset ) + DirAttrKind.ExprAttr;
-						addInstr(OpCode.LoadConst, addConst( IvyData(blockHeader) ));
-						++stackItemsCount; // We should count args block header
-						break;
-					}
-					case DirAttrKind.BodyAttr:
-						isNoescape = dirAttrBlocks.front.bodyAttr.isNoescape;
-						break;
-				}
-				dirAttrBlocks.popFront();
+				attrsSet[attr.name] = true;
+				attrRange.popFront();
+				++posAttrCount;
 			}
-			log.write(`Exited directive attrs blocks loop`);
+			else if( IExpression exprAttr = cast(IExpression) attrRange.front )
+			{
+				log.internalAssert(!attrs.empty, `No more attrs expected for directive call`);
 
-			if( !attrRange.empty ) {
-				log.error(`Not all directive attributes processed correctly. Seems that there are unexpected attributes or missing ;`);
+				attrsSet[attrs.front.name] = true;
+				attrs.popFront();
+
+				exprAttr.accept(this);
+				attrRange.popFront();
+
+				++kwAttrCount;
 			}
-
-			// Add instruction to load directive object from context by name
-			addInstr(OpCode.LoadName, addConst( IvyData(node.name) ));
-
-			// After all preparations add instruction to call directive
-			addInstr(OpCode.RunCallable, stackItemsCount);
-			if( isNoescape ) {
-				addInstr(OpCode.MarkForEscape, NodeEscapeState.Safe);
+			else
+			{
+				log.error(`Expected key-value pair or expression as directive attribute. Maybe there is missing semicolon ;`);
 			}
+		}
+
+		if( kwAttrCount > 0 )
+		{
+			// Put instruction to add keyword attribute if exists
+			addInstr(OpCode.MakeAssocArray, kwAttrCount);
+		}
+
+		// Add instruction to load directive object from context by name
+		addInstr(OpCode.LoadName, addConst( IvyData(node.name) ));
+
+		// After all preparations add instruction to call directive
+		addInstr(OpCode.RunCallable, CallSpec(posAttrCount, kwAttrCount > 0).encode());
+		if( symb.bodyAttrs.isNoscope ) {
+			addInstr(OpCode.MarkForEscape, NodeEscapeState.Safe);
 		}
 	}
 
@@ -639,30 +591,4 @@ public:
 		}
 	}
 
-	// Runs main compiler phase starting from main module
-	void run(string moduleName)
-	{
-		// Add core directives set:
-		_symbolsCollector.enterModuleScope(moduleName);
-		enterNewModuleCodeObject(moduleName);
-		_moduleRepo.getModuleTree(moduleName).accept(this);
-		_clearTemporaries();
-	}
-
-	void clearCache()
-	{
-		// Clear dependency objects
-		_symbolsCollector.clearCache();
-		_moduleObjCache.clearCache();
-
-		_clearTemporaries();
-	}
-
-	void _clearTemporaries()
-	{
-		_moduleRepo.clearCache();
-		_moduleConstHashes.clear();
-		_jumpTableStack.length = 0;
-		_codeObjStack.length = 0;
-	}
 }

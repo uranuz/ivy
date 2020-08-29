@@ -11,5 +11,3 @@ public import ivy.interpreter.directive.scope_dir: ScopeDirInterpreter;
 public import ivy.interpreter.directive.str_ctor: StrCtorDirInterpreter;
 public import ivy.interpreter.directive.typestr: TypeStrDirInterpreter;
 public import ivy.interpreter.directive.to_json_str: ToJSONStrDirInterpreter;
-
-public import ivy.interpreter.directive.dir_mixin: BaseNativeDirInterpreterImpl;

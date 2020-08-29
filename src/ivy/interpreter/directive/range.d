@@ -2,11 +2,17 @@ module ivy.interpreter.directive.range;
 
 import ivy.interpreter.directive.utils;
 
-import ivy.interpreter.data_node_types: IntegerRange;
+import ivy.types.data.range.integer: IntegerRange;
 
-class RangeDirInterpreter: INativeDirectiveInterpreter
+class RangeDirInterpreter: BaseDirectiveInterpreter
 {
-	import std.typecons: Tuple;
+	shared static this()
+	{
+		_symbol = new DirectiveSymbol(`range`, [
+			DirAttr("begin", IvyAttrType.Any),
+			DirAttr("end", IvyAttrType.Any)
+		]);
+	}
 
 	override void interpret(Interpreter interp)
 	{
@@ -22,14 +28,4 @@ class RangeDirInterpreter: INativeDirectiveInterpreter
 
 		interp._stack.push(new IntegerRange(begin.integer, end.integer));
 	}
-
-	private __gshared DirAttrsBlock[] _attrBlocks = [
-		DirAttrsBlock(DirAttrKind.ExprAttr, [
-			DirValueAttr("begin", "any"),
-			DirValueAttr("end", "any")
-		]),
-		DirAttrsBlock(DirAttrKind.BodyAttr)
-	];
-
-	mixin BaseNativeDirInterpreterImpl!("range");
 }

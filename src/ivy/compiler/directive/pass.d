@@ -3,7 +3,7 @@ module ivy.compiler.directive.pass;
 import ivy.compiler.directive.utils;
 
 // Produces OpCode.Nop
-class PassCompiler : IDirectiveCompiler
+class PassCompiler : BaseDirectiveCompiler
 {
 public:
 	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler) {

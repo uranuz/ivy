@@ -1,15 +1,52 @@
 module ivy.compiler.directive.from_import;
 
 import ivy.compiler.directive.utils;
-import ivy.ast.iface: INameExpression;
 
 /// Compiles module into module object and saves it into dictionary
 class FromImportCompiler: IDirectiveCompiler
 {
+	import ivy.ast.iface:
+		INameExpression,
+		IAttributeRange;
+	import ivy.compiler.symbol_table: SymbolTableFrame;
+	import ivy.types.symbol.iface: IIvySymbol;
+
 public:
-	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
+	override void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector)
 	{
-		auto stmtRange = statement[];
+		import std.range: back;
+
+		IAttributeRange attrRange = stmt[];
+		if( attrRange.empty )
+			collector.log.error(`Expected module name in import statement, but got end of directive`);
+
+		INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
+		INameExpression importKwdExpr = attrRange.takeFrontAs!INameExpression("Expected 'import' keyword!");
+		if( importKwdExpr.name != "import" )
+			collector.log.error("Expected 'import' keyword!");
+
+		string[] symbolNames;
+		while( !attrRange.empty )
+		{
+			INameExpression symbolNameExpr = attrRange.takeFrontAs!INameExpression("Expected imported symbol name");
+			symbolNames ~= symbolNameExpr.name;
+		}
+
+		SymbolTableFrame moduleTable = collector.getModuleSymbols(moduleNameExpr.name);
+
+		foreach( symbolName; symbolNames )
+		{
+			// As long as variables currently shall be imported in runtime only and there is no compile-time
+			// symbols for it, so import symbol that currently exists
+			if( IIvySymbol importedSymbol = moduleTable.localLookup(symbolName) ) {
+				collector._frameStack.back.add(importedSymbol);
+			}
+		}
+	}
+
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
+	{
+		auto stmtRange = stmt[];
 
 		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
 

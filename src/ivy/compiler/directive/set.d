@@ -16,15 +16,15 @@ import ivy.ast.iface: IKeyValueAttribute;
 			c: { s: 10, k: "Example2" }
 	#}
 +/
-class SetCompiler : IDirectiveCompiler
+class SetCompiler : BaseDirectiveCompiler
 {
 public:
-	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		import std.array: split;
 		import std.range: empty, front, popFront;
 
-		auto stmtRange = statement[];
+		auto stmtRange = stmt[];
 
 		while( !stmtRange.empty )
 		{

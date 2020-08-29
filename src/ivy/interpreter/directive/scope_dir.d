@@ -2,21 +2,19 @@ module ivy.interpreter.directive.scope_dir;
 
 import ivy.interpreter.directive.utils;
 
-class ScopeDirInterpreter: INativeDirectiveInterpreter
+class ScopeDirInterpreter: BaseDirectiveInterpreter
 {
-	import std.typecons: Tuple;
+	shared static this()
+	{
+		DirBodyAttrs bodyAttrs;
+		bodyAttrs.isNoscope = true;
+		bodyAttrs.isNoescape = false;
+		_symbol = new DirectiveSymbol(`scope`, null, bodyAttrs);
+	}
 
 	override void interpret(Interpreter interp)
 	{
 		interp.log.internalAssert(interp.independentFrame, `Current frame is null!`);
 		interp._stack.push(interp.independentFrame._dataDict);
 	}
-
-	private __gshared DirAttrsBlock[] _attrBlocks = [
-		DirAttrsBlock(DirAttrKind.BodyAttr,
-			Tuple!(bool, "isNoscope", bool, "isNoescape")(true, false)
-		)
-	];
-
-	mixin BaseNativeDirInterpreterImpl!("scope");
 }

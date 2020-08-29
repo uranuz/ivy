@@ -2,8 +2,9 @@ module ivy.compiler.directive.insert;
 
 import ivy.compiler.directive.utils;
 
-class InsertCompiler: IDirectiveCompiler
+class InsertCompiler: BaseDirectiveCompiler
 {
+public:
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = stmt[];

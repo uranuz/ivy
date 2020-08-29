@@ -3,12 +3,12 @@ module ivy.compiler.directive.set_at;
 import ivy.compiler.directive.utils;
 import ivy.ast.iface: IExpression;
 
-class SetAtCompiler : IDirectiveCompiler
+class SetAtCompiler : BaseDirectiveCompiler
 {
 public:
-	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
-		auto stmtRange = statement[];
+		auto stmtRange = stmt[];
 
 		IExpression aggregate = stmtRange.takeFrontAs!IExpression(`Expected expression as "at" aggregate argument`);
 		IExpression assignedValue = stmtRange.takeFrontAs!IExpression(`Expected expression as "at" value to assign`);

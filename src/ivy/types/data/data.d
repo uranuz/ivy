@@ -1,114 +1,22 @@
-module ivy.interpreter.data_node;
-
-import ivy.exception: IvyException;
-import ivy.code_object: CodeObject;
-import ivy.interpreter.data_node_types: CallableObject;
-import ivy.interpreter.data_node_render: renderDataNode, DataRenderType;
-import ivy.interpreter.async_result: AsyncResult;
-
-interface IvyNodeRange
-{
-	bool empty() @property;
-	IvyData front();
-	void popFront();
-}
-
-interface IClassNode
-{
-	IvyNodeRange opSlice();
-	IClassNode opSlice(size_t, size_t);
-	IvyData opIndex(IvyData);
-	IvyData __getAttr__(string);
-	void __setAttr__(IvyData, string);
-	IvyData __serialize__();
-	size_t length() @property;
-}
-
-class NotImplClassNode: IClassNode
-{
-protected:
-	string _getClassName() {
-		return typeid(this).name;
-	}
-	enum string notImplMixin = `throw new PropertyNotImplException(_getClassName(), __FUNCTION__);`;
-
-public:
-	override {
-		IvyNodeRange opSlice() {
-			mixin(notImplMixin);
-		}
-		IClassNode opSlice(size_t, size_t) {
-			mixin(notImplMixin);
-		}
-		IvyData opIndex(IvyData) {
-			mixin(notImplMixin);
-		}
-		IvyData __getAttr__(string) {
-			mixin(notImplMixin);
-		}
-		void __setAttr__(IvyData, string) {
-			mixin(notImplMixin);
-		}
-		IvyData __serialize__() {
-			mixin(notImplMixin);
-		}
-		size_t length() @property {
-			//mixin(notImplMixin);
-			return 0; // Add trivial implementation
-		}
-	}
-}
-
-class DataNodeException: IvyException
-{
-public:
-	@nogc @safe this(string msg, int line = 0, int pos = 0, Throwable next = null) pure nothrow {
-		super(msg, file, line, next);
-	}
-
-	@nogc @safe this(string msg, string file, size_t line, Throwable next = null) pure nothrow	{
-		super(msg, file, line, next);
-	}
-}
-
-class PropertyNotImplException: DataNodeException
-{
-public:
-	@safe this(string nodeKind, string prop, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow {
-		super(`Property "` ~ prop ~ `" is not implemented for node kind "` ~ nodeKind ~ `"`, file, line, next);
-	}
-}
-
-enum IvyDataType: ubyte {
-	Undef,
-	Null,
-	Boolean,
-	Integer,
-	Floating,
-	String,
-	Array,
-	AssocArray,
-	ClassNode,
-	CodeObject,
-	Callable,
-	ExecutionFrame,
-	DataNodeRange,
-	AsyncResult,
-	ModuleObject // Used for serialization
-}
-
-enum NodeEscapeState: ubyte {
-	Init, Safe, Unsafe
-}
+module ivy.types.data.data;
 
 public alias IvyData = TIvyData!string;
 
 struct TIvyData(S)
 {
-	import std.exception: enforce;
-	import std.traits;
-	import std.conv: text;
+	import ivy.types.data.consts: IvyDataType, NodeEscapeState;
+
+	import ivy.types.code_object: CodeObject;
+	import ivy.types.callable_object: CallableObject;
+	import ivy.types.data.async_result: AsyncResult;
+	import ivy.types.data.iface.class_node: IClassNode;
+	import ivy.types.data.iface.range: IvyDataRange;
+	import ivy.types.data.exception: DataNodeException;
+
 	import ivy.interpreter.execution_frame: ExecutionFrame;
+
+	import std.exception: enforce;
+	import std.conv: text;
 
 	alias String = S;
 	alias MIvyData = TIvyData!(S);
@@ -129,7 +37,7 @@ struct TIvyData(S)
 			CodeObject codeObject;
 			CallableObject callable;
 			ExecutionFrame execFrame;
-			IvyNodeRange dataRange;
+			IvyDataRange dataRange;
 			AsyncResult asyncResult;
 		}
 	}
@@ -248,14 +156,14 @@ struct TIvyData(S)
 		assign(val);
 	}
 
-	IvyNodeRange dataRange() @property
+	IvyDataRange dataRange() @property
 	{
 		enforce!DataNodeException( type == IvyDataType.DataNodeRange, "IvyData is not a data node range");
 		enforce!DataNodeException(storage.dataRange !is null, "Detected null data node range");
 		return storage.dataRange;
 	}
 
-	void dataRange(IvyNodeRange val) @property {
+	void dataRange(IvyDataRange val) @property {
 		assign(val);
 	}
 
@@ -356,6 +264,9 @@ struct TIvyData(S)
 	private void assign(T)(auto ref T arg)
 	{
 		import trifle.traits: isUnsafelyNullable;
+
+		import std.traits: isIntegral, isFloatingPoint, isArray;
+
 		static if( isUnsafelyNullable!T )
 		{
 			// Replace all unsafe null values with null type
@@ -456,7 +367,7 @@ struct TIvyData(S)
 			typeTag = IvyDataType.ExecutionFrame;
 			storage.execFrame = arg;
 		}
-		else static if( is( T : IvyNodeRange ) )
+		else static if( is( T : IvyDataRange ) )
 		{
 			typeTag = IvyDataType.DataNodeRange;
 			storage.dataRange = arg;
@@ -693,9 +604,12 @@ struct TIvyData(S)
 		return toSomeString!(DataRenderType.JSON);
 	}
 
+	import ivy.types.data.render: DataRenderType;
 	string toSomeString(DataRenderType kind)()
 	{
+		import ivy.types.data.render: renderDataNode;
 		import std.array: appender;
+
 		auto result = appender!string();
 		renderDataNode!kind(result, this);
 		return result.data;

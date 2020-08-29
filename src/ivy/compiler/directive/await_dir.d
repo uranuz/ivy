@@ -2,8 +2,9 @@ module ivy.compiler.directive.await_dir;
 
 import ivy.compiler.directive.utils;
 
-class AwaitCompiler: IDirectiveCompiler
+class AwaitCompiler: BaseDirectiveCompiler
 {
+public:
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = stmt[];

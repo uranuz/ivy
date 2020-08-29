@@ -1,4 +1,4 @@
-module ivy.code_object;
+module ivy.types.code_object;
 
 /** Debugging info */
 struct SourceMapItem
@@ -15,56 +15,75 @@ struct SourceMapItem
 class CodeObject
 {
 	import ivy.bytecode: Instruction;
-	import ivy.directive_stuff: DirAttrsBlock;
-	import ivy.interpreter.data_node: IvyData, IvyDataType, NodeEscapeState;
-	import ivy.module_object: ModuleObject;
+	import ivy.types.module_object: ModuleObject;
+	import ivy.types.symbol.iface: ICallableSymbol;
+	import ivy.types.symbol.module_: ModuleSymbol;
+	import ivy.types.symbol.directive: DirectiveSymbol;
+	import ivy.types.symbol.dir_attr: DirAttr;
 
-	string _name;
+	import std.exception: enforce;
+
+	ModuleObject _moduleObject; // Module object which contains this code object
 	Instruction[] _instrs; // Plain list of instructions
-	DirAttrsBlock[] _attrBlocks;
-	ModuleObject _moduleObj; // Module object which contains this code object
+	ICallableSymbol _symbol;
+	
 
 	SourceMapItem[] _sourceMap; // Debugging info (source map sorted by line)
 	SourceMapItem[] _revSourceMap; // Debugging info (source map sorted by startInstr)
 
 public:
-	this(string name, ModuleObject moduleObj)
-	{
-		assert(name.length > 0, `Expected code object name`);
-		assert(moduleObj !is null, `Expected module object`);
-		_name = name;
-		_moduleObj = moduleObj;
+	this(DirectiveSymbol symbol, ModuleObject moduleObject) {
+		_init(symbol, moduleObject);
 	}
 
-	string name() @property {
-		return _name;
+	this(ModuleSymbol symbol, ModuleObject moduleObject) {
+		_init(symbol, moduleObject);
+	}
+
+	private void _init(ICallableSymbol symbol, ModuleObject moduleObject)
+	{
+		this._symbol = symbol;
+		this._moduleObject = moduleObject;
+
+		enforce(this._symbol !is null, `Expected code object symbol`);
+		enforce(this._moduleObject !is null, `Expected module object`);
+	}
+
+	ICallableSymbol symbol() @property {
+		return this._symbol;
+	}
+
+	ModuleObject moduleObject() @property {
+		return this._moduleObject;
 	}
 
 	size_t addInstr(Instruction instr, size_t line)
 	{
-		size_t index = _instrs.length;
-		_instrs ~= instr;
-		_addSourceMapItem(line, index);
+		size_t index = this._instrs.length;
+		this._instrs ~= instr;
+		this._addSourceMapItem(line, index);
 		return index;
 	}
 
 	void setInstrArg(size_t index, size_t arg)
 	{
-		assert( index < _instrs.length, "Cannot set argument 0 of instruction, because instruction not exists!" );
-		_instrs[index].arg = arg;
+		enforce(
+			index < this._instrs.length,
+			"Cannot set argument 0 of instruction, because instruction not exists!");
+		this._instrs[index].arg = arg;
 	}
 
 	size_t getInstrCount() {
-		return _instrs.length;
+		return this._instrs.length;
 	}
 
 	// Get line where code object instruction is located
 	size_t getInstrLine(size_t instrIndex)
 	{
-		auto sMap = _checkRevSourceMap();
+		auto sMap = this._checkRevSourceMap();
 		auto lowerB = sMap.lowerBound(SourceMapItem(0, instrIndex));
-		if( lowerB.length < _revSourceMap.length ) {
-			return _revSourceMap[lowerB.length].line;
+		if( lowerB.length < this._revSourceMap.length ) {
+			return this._revSourceMap[lowerB.length].line;
 		}
 		return 0;
 	}
@@ -85,10 +104,10 @@ public:
 		auto trisectMap = sMap.trisect(SourceMapItem(line));
 		size_t afterPos = trisectMap[0].length + trisectMap[1].length;
 		if( trisectMap[1].length == 0 ) {
-			_sourceMap.insertInPlace(afterPos, SourceMapItem(line, instrIndex));
+			this._sourceMap.insertInPlace(afterPos, SourceMapItem(line, instrIndex));
 		} else if( trisectMap[1][0].startInstr > instrIndex ) {
 			// If we find some addre that goes before current at the line then patch it
-			_sourceMap[trisectMap[0].length].startInstr = instrIndex;
+			this._sourceMap[trisectMap[0].length].startInstr = instrIndex;
 		}
 	}
 
@@ -96,11 +115,12 @@ public:
 	{
 		import std.algorithm: sort;
 		import std.range: assumeSorted;
-		if( _revSourceMap.length == 0) {
-			_revSourceMap = _sourceMap.dup;
-			_revSourceMap.sort!_sourceMapByAddrPred();
+		if( this._revSourceMap.length == 0)
+		{
+			this._revSourceMap = this._sourceMap.dup;
+			this._revSourceMap.sort!_sourceMapByAddrPred();
 		}
-		return assumeSorted!_sourceMapByAddrPred(_revSourceMap);
+		return assumeSorted!_sourceMapByAddrPred(this._revSourceMap);
 	}
 
 	override bool opEquals(Object o)
@@ -110,7 +130,7 @@ public:
 			return false;
 
 		// Very shallow checks for equality, but think enough
-		if( this._name != rhs._name ) {
+		if( this.symbol.name != rhs.symbol.name ) {
 			return false;
 		}
 
@@ -118,11 +138,11 @@ public:
 		if( this._instrs.length != rhs._instrs.length ) {
 			return false;
 		}
-		if( (this._moduleObj is null) != (rhs._moduleObj is null) ) {
+		if( (this.moduleObject is null) != (rhs.moduleObject is null) ) {
 			return false;
 		}
 		// Must be from the same module
-		if( this._moduleObj && this._moduleObj._name != rhs._moduleObj._name ) {
+		if( this.moduleObject.symbol.name && this.moduleObject.symbol.name != rhs.moduleObject.symbol.name ) {
 			return false;
 		}
 		return true; // They are equal at the first look

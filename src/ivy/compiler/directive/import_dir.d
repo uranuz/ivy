@@ -1,13 +1,34 @@
 module ivy.compiler.directive.import_dir;
 
 import ivy.compiler.directive.utils;
-import ivy.ast.iface: INameExpression;
 
 /// Compiles module into module object and saves it into dictionary
 class ImportCompiler: IDirectiveCompiler
 {
+	import ivy.ast.iface:
+		IAttributeRange,
+		INameExpression;
+	import ivy.types.symbol.module_: ModuleSymbol;
+
 public:
-	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
+	override void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector)
+	{
+		import std.range: back;
+
+		IAttributeRange attrRange = stmt[];
+		if( attrRange.empty )
+			collector.log.error(`Expected module name in import statement, but got end of directive`);
+
+		INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
+
+		if( !attrRange.empty )
+			collector.log.error(`Expected end of import directive, maybe ; is missing`);
+
+		// Add imported module symbol table as local symbol
+		collector._frameStack.back.add(new ModuleSymbol(moduleNameExpr.name, stmt.location.fileName));
+	}
+
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		compiler.log.error(`"import" directive is not working yet. Use "from ... import ..." instead`);
 		/*

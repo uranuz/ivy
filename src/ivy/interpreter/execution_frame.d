@@ -1,9 +1,6 @@
 module ivy.interpreter.execution_frame;
 
 import ivy.exception: IvyException;
-import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
-import ivy.interpreter.data_node: IvyData, IvyDataType;
-import ivy.interpreter.data_node_types;
 
 class IvyExecutionFrameException: IvyException
 {
@@ -16,9 +13,17 @@ public:
 
 class ExecutionFrame
 {
+	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.types.data: IvyData, IvyDataType;
+	import ivy.types.callable_object: CallableObject;
+
+	import std.exception: enforce;
+
 	alias LogerMethod = void delegate(LogInfo);
-//private:
-	CallableObject _callableObj;
+private:
+	CallableObject _callable;
+
+	ExecutionFrame _moduleFrame;
 
 	/*
 		Type of _dataDict should be Undef or Null if directive call or something that represented
@@ -26,26 +31,28 @@ class ExecutionFrame
 		In other cases _dataDict should be of AssocArray type for storing local variables
 	*/
 	IvyData _dataDict;
-	bool _isNoscope = false;
-
-	ExecutionFrame _moduleFrame;
 
 	// Loger method for used to send error and debug messages
 	LogerMethod _logerMethod;
 
 public:
 	this(
-		CallableObject callableObj,
+		CallableObject callable,
 		ExecutionFrame modFrame,
-		IvyData dataDict,
-		LogerMethod logerMethod,
-		bool isNoscope
+		LogerMethod logerMethod
 	) {
-		_callableObj = callableObj;
-		_moduleFrame = modFrame;
-		_dataDict = dataDict;
-		_logerMethod = logerMethod;
-		_isNoscope = isNoscope;
+		this._callable = callable;
+		this._moduleFrame = modFrame;
+
+		enforce(this._callable !is null, `Expected callable object for exec frame`);
+		enforce(this._moduleFrame !is null, `Expected module frame for exec frame`);
+
+		this._dataDict = [
+			"_ivyMethod": this._callable.symbol.name,
+			"_ivyModule": (callable.isNative? null: this._callable.codeObject.moduleObject.symbol.name)
+		];
+
+		this._logerMethod = logerMethod;
 	}
 
 	version(IvyInterpreterDebug)
@@ -128,19 +135,17 @@ public:
 		}
 	}
 
-	bool hasOwnScope() @property
-	{
-		return !this._isNoscope;
+	bool hasOwnScope() @property {
+		return !this._callable.symbol.bodyAttrs.isNoscope;
 	}
 
-	CallableKind callableKind() @property
-	{
-		return this._callableObj._kind;
+	CallableObject callable() @property {
+		return this._callable;
 	}
 
 	override string toString()
 	{
-		return `<Exec frame for dir object "` ~ this._callableObj._name ~ `">`;
+		return `<Exec frame for dir object "` ~ this._callable.symbol.name ~ `">`;
 	}
 
 }

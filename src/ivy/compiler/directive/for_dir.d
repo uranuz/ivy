@@ -4,15 +4,15 @@ import ivy.compiler.directive.utils;
 import ivy.ast.iface: INameExpression, IExpression, ICompoundStatement;
 import ivy.compiler.compiler: JumpKind;
 
-class ForCompiler : IDirectiveCompiler
+class ForCompiler : BaseDirectiveCompiler
 {
 public:
-	override void compile(IDirectiveStatement statement, ByteCodeCompiler compiler)
+	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		import std.range: popBack, empty, back;
 		alias JumpTableItem = ByteCodeCompiler.JumpTableItem;
 		
-		auto stmtRange = statement[];
+		auto stmtRange = stmt[];
 		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("For loop variable name expected");
 
 		string varName = varNameExpr.name;

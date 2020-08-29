@@ -2,7 +2,7 @@ module ivy.compiler.directive.slice;
 
 import ivy.compiler.directive.utils;
 
-class SliceCompiler: IDirectiveCompiler
+class SliceCompiler: BaseDirectiveCompiler
 {
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{

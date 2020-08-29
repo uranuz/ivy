@@ -1,9 +1,11 @@
-module ivy.interpreter.async_result;
+module ivy.types.data.async_result;
 
-import ivy.interpreter.data_node: IvyData;
+import ivy.types.data: IvyData;
 
 enum AsyncResultState: ubyte {
-	pending, resolved, rejected
+	pending,
+	resolved,
+	rejected
 }
 
 class AsyncResult
@@ -78,6 +80,7 @@ class AsyncResult
 	AsyncResultState state() @property {
 		return _state;
 	}
+
 private:
 	CalbackMethod[] _callbacks;
 	ErrbackMethod[] _errbacks;

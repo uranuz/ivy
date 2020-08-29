@@ -1,13 +1,19 @@
-module ivy.interpreter.data_node_render;
-
-import ivy.interpreter.data_node: IvyDataType;
+module ivy.types.data.render;
 
 /// Варианты типов отрисовки узла данных в буфер:
-/// Text - для вывода пользователю в виде текста (не включает отображение значений внутренних типов данных)
-/// TextDebug - для вывода данных в виде текста в отладочном режиме (выводятся некоторые данные для узлов внутренних типов)
-/// JSON - вывод узлов, которые соответствуют типам в JSON в формате собственно JSON (остальные типы узлов выводим как null)
-/// JSONFull - выводим всё максимально в JSON, сериализуя узлы внутренних типов в JSON
-enum DataRenderType { Text, TextDebug, HTML, JSON, JSONFull, HTMLDebug }
+enum DataRenderType
+{
+	/// Text - для вывода пользователю в виде текста (не включает отображение значений внутренних типов данных)
+	Text,
+	/// TextDebug - для вывода данных в виде текста в отладочном режиме (выводятся некоторые данные для узлов внутренних типов)
+	TextDebug,
+	HTML,
+	/// JSON - вывод узлов, которые соответствуют типам в JSON в формате собственно JSON (остальные типы узлов выводим как null)
+	JSON,
+	/// JSONFull - выводим всё максимально в JSON, сериализуя узлы внутренних типов в JSON
+	JSONFull,
+	HTMLDebug
+}
 /// Думаю, нужен ещё флаг isPrettyPrint
 
 private void _writeStr(DataRenderType renderType, OutRange)(ref OutRange sink, string src)
@@ -30,10 +36,12 @@ private void _writeStr(DataRenderType renderType, OutRange)(ref OutRange sink, s
 }
 
 import std.traits: isInstanceOf;
-import ivy.interpreter.data_node: TIvyData, NodeEscapeState;
+import ivy.types.data: TIvyData, NodeEscapeState;
 private void _writeStr(DataRenderType renderType, OutRange, IvyData)(ref OutRange sink, IvyData strNode)
 	if( isInstanceOf!(TIvyData, IvyData) )
 {
+	import ivy.types.data: IvyDataType;
+
 	assert(strNode.type == IvyDataType.String);
 	if( strNode.escapeState == NodeEscapeState.Safe && renderType == DataRenderType.HTML ) {
 		_writeStr!(DataRenderType.Text)(sink, strNode.str);
@@ -51,15 +59,17 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 	auto ref IvyData node,
 	size_t maxRecursion = size_t.max
 ) {
+	import ivy.types.data: IvyDataType;
+
 	import std.range: put;
 	import std.conv: to;
 	import std.algorithm: canFind;
 
 	assert( maxRecursion, "Recursion is too deep!" );
 
-	final switch(node.type) with(IvyDataType)
+	final switch(node.type)
 	{
-		case Undef:
+		case IvyDataType.Undef:
 			static if( [DataRenderType.Text, DataRenderType.HTML].canFind(renderType) ) {
 				sink.put("");
 			} else static if( [DataRenderType.JSON, DataRenderType.JSONFull].canFind(renderType) ) {
@@ -68,26 +78,26 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 				sink.put("undef");
 			}
 			break;
-		case Null:
+		case IvyDataType.Null:
 			static if( [DataRenderType.Text, DataRenderType.HTML].canFind(renderType) ) {
 				sink.put("");
 			} else {
 				sink.put("null");
 			}
 			break;
-		case Boolean:
+		case IvyDataType.Boolean:
 			sink.put(node.boolean? "true" : "false");
 			break;
-		case Integer:
+		case IvyDataType.Integer:
 			sink.put(node.integer.to!string);
 			break;
-		case Floating:
+		case IvyDataType.Floating:
 			sink.put(node.floating.to!string);
 			break;
-		case String:
+		case IvyDataType.String:
 			_writeStr!renderType(sink, node);
 			break;
-		case Array:
+		case IvyDataType.Array:
 			enum bool asArray = ![DataRenderType.Text, DataRenderType.HTML].canFind(renderType);
 			static if( asArray ) sink.put("[");
 			foreach( i, ref el; node.array )
@@ -100,7 +110,7 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 			}
 			static if( asArray ) sink.put("]");
 			break;
-		case AssocArray:
+		case IvyDataType.AssocArray:
 			sink.put("{");
 			size_t i = 0;
 			foreach( ref key, ref val; node.assocArray )
@@ -116,26 +126,26 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 			}
 			sink.put("}");
 			break;
-		case ClassNode:
+		case IvyDataType.ClassNode:
 			renderDataNode!renderType(sink, node.classNode.__serialize__(), maxRecursion - 1);
 			break;
-		case CodeObject:
+		case IvyDataType.CodeObject:
 			import std.conv: text;
 			_writeStr!renderType(sink, "[[code object, size: " ~ node.codeObject._instrs.length.text ~ "]]");
 			break;
-		case Callable:
-			_writeStr!renderType(sink, "[[callable object, " ~ node.callable._kind.to!string ~ ", " ~ node.callable._name ~ "]]");
+		case IvyDataType.Callable:
+			_writeStr!renderType(sink, "[[callable object, " ~ node.callable.symbol.name ~ "]]");
 			break;
-		case ExecutionFrame:
+		case IvyDataType.ExecutionFrame:
 			_writeStr!renderType(sink, "[[execution frame]]");
 			break;
-		case DataNodeRange:
+		case IvyDataType.DataNodeRange:
 			_writeStr!renderType(sink, "[[data node range]]");
 			break;
-		case AsyncResult:
+		case IvyDataType.AsyncResult:
 			_writeStr!renderType(sink, "[[async result]]");
 			break;
-		case ModuleObject:
+		case IvyDataType.ModuleObject:
 			_writeStr!renderType(sink, "[[module object]]");
 			break;
 	}

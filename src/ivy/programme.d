@@ -1,34 +1,31 @@
 module ivy.programme;
 
 
-import ivy.module_object: ModuleObject;
-import ivy.compiler.compiler;
-import ivy.compiler.symbol_collector;
-import ivy.compiler.module_repository;
-import ivy.compiler.iface: IDirectiveCompiler;
-import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
-import ivy.interpreter.data_node;
-import ivy.interpreter.interpreter;
-import ivy.interpreter.directive;
-import ivy.interpreter.iface: INativeDirectiveInterpreter;
-import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
-import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-import ivy.engine: IvyEngine;
-import ivy.interpreter.async_result: AsyncResult, AsyncResultState;
-import ivy.loger: LogInfo;
-
-import std.typecons: Tuple;
-
-alias SaveStateResult = Tuple!(Interpreter, `interp`, AsyncResult, `asyncResult`);
-
-enum IVY_TYPE_FIELD = "_t";
-enum IVY_VALUE_FIELD = "_v";
-
 // Representation of programme ready for execution
 class ExecutableProgramme
 {
+	import ivy.types.module_object: ModuleObject;
+
+	import ivy.types.data: IvyData, IvyDataType;
+	import ivy.types.data.async_result: AsyncResult, AsyncResultState;
+
+	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
+	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
+	import ivy.interpreter.interpreter: Interpreter;
+	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
+
+	import ivy.engine: IvyEngine;
+
+	import ivy.loger: LogInfo;
+
 	alias LogerMethod = void delegate(LogInfo);
 private:
+	static struct SaveStateResult
+	{
+		Interpreter interp;
+		AsyncResult asyncResult;
+	}
+
 	ModuleObjectsCache _moduleObjCache;
 	InterpreterDirectiveFactory _directiveFactory;
 	string _mainModuleName;
@@ -41,14 +38,14 @@ public:
 		string mainModuleName,
 		LogerMethod logerMethod = null
 	) {
-		assert(moduleObjCache, `Expected module objects cache`);
-		assert(directiveFactory, `Expected directive factory`);
-		assert(mainModuleName.length, `Expected programme main module name`);
+		enforce(moduleObjCache !is null, `Expected module objects cache`);
+		enforce(directiveFactory !is null, `Expected directive factory`);
+		enforce(mainModuleName.length, `Expected programme main module name`);
 
-		_moduleObjCache = moduleObjCache;
-		_directiveFactory = directiveFactory;
-		_mainModuleName = mainModuleName;
-		_logerMethod = logerMethod;
+		this._moduleObjCache = moduleObjCache;
+		this._directiveFactory = directiveFactory;
+		this._mainModuleName = mainModuleName;
+		this._logerMethod = logerMethod;
 	}
 
 	/// Run programme main module with arguments passed as mainModuleScope parameter
@@ -133,13 +130,15 @@ public:
 	import std.json: JSONValue;
 	JSONValue toStdJSON()
 	{
+		import ivy.types.data.conv.ivy_to_std_json: toStdJSON2;
+		
 		JSONValue jProg = ["mainModuleName": _mainModuleName];
 		JSONValue[string] moduleObjects;
 		foreach( string modName, ModuleObject modObj; _moduleObjCache.moduleObjects )
 		{
 			JSONValue[] jConsts;
 			foreach( ref IvyData con; modObj._consts ) {
-				jConsts ~= .toStdJSON(con);
+				jConsts ~= toStdJSON2(con);
 			}
 			moduleObjects[modName] = [
 				"entryPointIndex": JSONValue(modObj._entryPointIndex),
@@ -153,105 +152,6 @@ public:
 	}
 }
 
-import std.json: JSONValue;
-JSONValue toStdJSON(IvyData con)
-{
-	final switch( con.type )
-	{
-		case IvyDataType.Undef: return JSONValue("undef");
-		case IvyDataType.Null: return JSONValue();
-		case IvyDataType.Boolean: return JSONValue(con.boolean);
-		case IvyDataType.Integer: return JSONValue(con.integer);
-		case IvyDataType.Floating: return JSONValue(con.floating);
-		case IvyDataType.String: return JSONValue(con.str);
-		/*
-		case IvyDataType.DateTime:
-			return JSONValue([
-				IVY_TYPE_FIELD: JSONValue(con.type),
-				IVY_VALUE_FIELD: JSONValue(con.dateTime.toISOExtString())
-			]);
-		*/
-		case IvyDataType.Array: {
-			JSONValue[] arr;
-			foreach( IvyData node; con.array ) {
-				arr ~= toStdJSON(node);
-			}
-			return JSONValue(arr);
-		}
-		case IvyDataType.AssocArray: {
-			JSONValue[string] arr;
-			foreach( string key, IvyData node; con.assocArray ) {
-				arr[key] ~= toStdJSON(node);
-			}
-			return JSONValue(arr);
-		}
-		case IvyDataType.CodeObject: {
-			JSONValue jCode = [
-				IVY_TYPE_FIELD: JSONValue(con.type),
-				"name": JSONValue(con.codeObject.name),
-				"moduleObj": JSONValue(con.codeObject._moduleObj._name),
-			];
-			JSONValue[] jInstrs;
-			foreach( instr; con.codeObject._instrs ) {
-				jInstrs ~= JSONValue([ JSONValue(instr.opcode), JSONValue(instr.arg) ]);
-			}
-			jCode["instrs"] = jInstrs;
-			JSONValue[] jAttrBlocks;
-			import ivy.directive_stuff: DirAttrKind;
-			foreach( ref attrBlock; con.codeObject._attrBlocks )
-			{
-				JSONValue jBlock = ["kind": attrBlock.kind];
-				final switch( attrBlock.kind )
-				{
-					case DirAttrKind.NamedAttr:
-					{
-						JSONValue[string] block;
-						foreach( key, va; attrBlock.namedAttrs ) {
-							block[key] = _valueAttrToStdJSON(va);
-						}
-						jBlock["namedAttrs"] = block;
-						break;
-					}
-					case DirAttrKind.ExprAttr:
-					{
-						JSONValue[] block;
-						foreach( va; attrBlock.exprAttrs ) {
-							block ~= _valueAttrToStdJSON(va);
-						}
-						jBlock["exprAttrs"] = block;
-						break;
-					}
-					case DirAttrKind.BodyAttr:
-					{
-						jBlock["bodyAttr"] = [
-							"isNoscope": attrBlock.bodyAttr.isNoscope,
-							"isNoescape": attrBlock.bodyAttr.isNoescape
-						];
-						break;
-					}
-				}
-				jAttrBlocks ~= jBlock;
-			}
-			jCode["attrBlocks"] = jAttrBlocks;
-			return jCode;
-		}
-		case IvyDataType.Callable:
-		case IvyDataType.ClassNode:
-		case IvyDataType.ExecutionFrame:
-		case IvyDataType.DataNodeRange:
-		case IvyDataType.AsyncResult:
-		case IvyDataType.ModuleObject: {
-			return JSONValue([IVY_TYPE_FIELD: con.type]);
-		}
-	}
-	assert(false);
-}
 
-JSONValue _valueAttrToStdJSON(VA)(auto ref VA va) {
-	return JSONValue([
-		"name": va.name,
-		"typeName": va.typeName
-	]);
-}
 
 
