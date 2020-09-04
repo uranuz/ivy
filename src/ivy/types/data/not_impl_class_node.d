@@ -6,6 +6,8 @@ class NotImplClassNode: IClassNode
 {
 	import ivy.types.data.iface.range: IvyDataRange;
 	import ivy.types.data: IvyData;
+	import ivy.types.data.exception: PropertyNotImplException;
+
 protected:
 	string _getClassName() {
 		return typeid(this).name;
@@ -33,7 +35,6 @@ public:
 			mixin(notImplMixin);
 		}
 		size_t length() @property {
-			//mixin(notImplMixin);
 			return 0; // Add trivial implementation
 		}
 	}

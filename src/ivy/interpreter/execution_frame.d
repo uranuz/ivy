@@ -19,7 +19,8 @@ class ExecutionFrame
 
 	import std.exception: enforce;
 
-	alias LogerMethod = void delegate(LogInfo);
+	alias enf = enforce!IvyExecutionFrameException;
+
 private:
 	CallableObject _callable;
 
@@ -30,108 +31,72 @@ private:
 		by this ExecutionFrame haven't it's own data scope and uses parent scope for data.
 		In other cases _dataDict should be of AssocArray type for storing local variables
 	*/
-	IvyData _dataDict;
-
-	// Loger method for used to send error and debug messages
-	LogerMethod _logerMethod;
+public IvyData _dataDict;
 
 public:
 	this(
 		CallableObject callable,
-		ExecutionFrame modFrame,
-		LogerMethod logerMethod
+		ExecutionFrame modFrame
 	) {
 		this._callable = callable;
 		this._moduleFrame = modFrame;
 
-		enforce(this._callable !is null, `Expected callable object for exec frame`);
-		enforce(this._moduleFrame !is null, `Expected module frame for exec frame`);
+		enf(this._callable !is null, `Expected callable object for exec frame`);
+		enf(this._moduleFrame !is null, `Expected module frame for exec frame`);
 
 		this._dataDict = [
 			"_ivyMethod": this._callable.symbol.name,
 			"_ivyModule": (callable.isNative? null: this._callable.codeObject.moduleObject.symbol.name)
 		];
-
-		this._logerMethod = logerMethod;
 	}
 
-	version(IvyInterpreterDebug)
-		enum isDebugMode = true;
-	else
-		enum isDebugMode = false;
-
-	static struct LogerProxy {
-		mixin LogerProxyImpl!(IvyExecutionFrameException, isDebugMode);
-		ExecutionFrame frame;
-
-		string sendLogInfo(LogInfoType logInfoType, string msg)
-		{
-			import ivy.loger: getShortFuncName;
-
-			if( frame._logerMethod !is null ) {
-				frame._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
-			}
-			return msg;
-		}
-	}
-
-	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
-		return LogerProxy(func, file, line, this);
-	}
-
-	IvyData* findValue(string varName)
+	/// Global execution frame constructor. Do not use it for any other purpose
+	this(bool isGlobal)
 	{
-		log.write(`Searching for local variable with name: `, varName);
+		enf(isGlobal, `Expected creation of global frame`);
+		this._dataDict = [
+			"_ivyMethod": "__global__"
+		];
+	}
 
+	IvyData* findValue(string varName) {
 		return varName in this._dataDict;
 	}
 
 	IvyData* findGlobalValue(string varName)
 	{
-		log.write(`Searching for variable with name: `, varName);
-
-		IvyData* res = this.findValue(varName);
-		if( res !is null ) {
+		if( IvyData* res = this.findValue(varName) ) {
 			return res;
 		}
 
 		if( this._moduleFrame is null ) {
 			return null;
 		}
-		log.write(`Searching for variable in module frame: `, varName);
-		return _moduleFrame.findGlobalValue(varName);
+		return this._moduleFrame.findGlobalValue(varName);
 	}
 
 	IvyData getValue(string varName)
 	{
 		IvyData* res = this.findValue(varName);
-		if( res is null ) {
-			log.error("Cannot find variable with name: " ~ varName );
-		}
+		enf(res !is null, "Cannot find variable with name: " ~ varName);
 		return *res;
 	}
 
 	void setValue(string varName, IvyData value)
 	{
-		IvyData* res = this.findValue(varName);
-		if( res is null ) {
-			log.write(`Set new variable with name: `, varName, ` with value: `, value);
-			this._dataDict[varName] = value;
-		} else {
-			log.write(`Change existing variable with name: `, varName, ` with new value: `, value);
+		if( IvyData* res = this.findValue(varName) ) {
 			(*res) = value;
+		} else {
+			this._dataDict[varName] = value;
 		}
 	}
 
 	void setGlobalValue(string varName, IvyData value)
 	{
-		IvyData* res = this.findGlobalValue(varName);
-		if( res is null ) {
-			log.write(`Set new variable with name: `, varName, ` with value: `, value);
-			this._dataDict[varName] = value;
-		} else {
-			log.write(`Change existing variable with name: `, varName, ` with new value: `, value);
+		if( IvyData* res = this.findGlobalValue(varName) ) {
 			(*res) = value;
+		} else {
+			this._dataDict[varName] = value;
 		}
 	}
 
@@ -139,12 +104,13 @@ public:
 		return !this._callable.symbol.bodyAttrs.isNoscope;
 	}
 
-	CallableObject callable() @property {
+	CallableObject callable() @property
+	{
+		enf(this._callable !is null, `No callable for global execution frame`);
 		return this._callable;
 	}
 
-	override string toString()
-	{
+	override string toString() {
 		return `<Exec frame for dir object "` ~ this._callable.symbol.name ~ `">`;
 	}
 

@@ -95,17 +95,15 @@ public:
 		for( size_t i = 1; i <= splittedName.length; ++i )
 		{
 			string namePart = splittedName[].take(i).join(".");
-			if( IIvySymbol* symb = namePart in _symbols )
-			{
-				ModuleSymbol modSymbol = cast(ModuleSymbol) *symb;
-				if( modSymbol is null )
-					continue;
-				string modSymbolName = splittedName[].drop(i).join(".");
-				
-				if( IIvySymbol childSymbol = modSymbol.symbolTable.lookup(modSymbolName) )
-					return childSymbol;
-			}
-
+			size_t* idxPtr = namePart in _namedChildFrames;
+			if( idxPtr is null )
+				continue;
+			SymbolTableFrame childFrame = _childFrames.get(*idxPtr, null);
+			if( childFrame is null )
+				continue;
+			string modSymbolName = splittedName[].drop(i).join(".");
+			if( IIvySymbol childSymbol = childFrame.lookup(modSymbolName) )
+				return childSymbol;
 		}
 		return null;
 	}
@@ -118,33 +116,35 @@ public:
 
 	SymbolTableFrame getChildFrame(size_t sourceIndex)
 	{
-		SymbolTableFrame child = _childFrames.get(sourceIndex, null);
+		SymbolTableFrame childFrame = _childFrames.get(sourceIndex, null);
 		log.internalAssert(childFrame !is null, `No child frame found with given source index: `, sourceIndex);
-		return child;
+		return childFrame;
 	}
 
 	SymbolTableFrame getChildFrame(string name)
 	{
 		size_t* sourceIndexPtr = name in _namedChildFrames;
-		log.internalAssert(childFrame !is null, `No child frame found with given name: `, name);
+		log.internalAssert(sourceIndexPtr !is null, `No child frame found with given name: `, name);
 		return getChildFrame(*sourceIndexPtr);
 	}
 
 	SymbolTableFrame newChildFrame(size_t sourceIndex, string name)
 	{
-		log.internalAssert(sourceIndex !in _childFrames, `Child frame already exists with given source index: `, sourceIndex);
+		log.internalAssert(
+			sourceIndex !in _childFrames,
+			`Child frame already exists with given source index: `, sourceIndex);
 
 		// For now consider if this frame has no module frame - so it is module frame itself
-		SymbolTableFrame child = new SymbolTableFrame(_moduleFrame? _moduleFrame: this, _logerMethod);
-		_childFrames[sourceIndex] = child;
+		SymbolTableFrame childFrame = new SymbolTableFrame(_moduleFrame? _moduleFrame: this, _logerMethod);
+		_childFrames[sourceIndex] = childFrame;
 
 		if( name.length )
 		{
 			log.internalAssert(name !in _namedChildFrames, `Child frame already exists with given name: `, name);
-			_namedChildFrames[name] = child;
+			_namedChildFrames[name] = sourceIndex;
 		}
 
-		return child;
+		return childFrame;
 	}
 
 	string toPrettyStr()

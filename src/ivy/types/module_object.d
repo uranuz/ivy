@@ -17,7 +17,7 @@ class ModuleObject
 
 public:
 	this(ModuleSymbol symbol) {
-		this._consts ~= new CodeObject(symbol, this);
+		this._consts ~= IvyData(new CodeObject(symbol, this));
 	}
 
 	ModuleSymbol symbol() @property

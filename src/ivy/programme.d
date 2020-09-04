@@ -26,35 +26,38 @@ private:
 		AsyncResult asyncResult;
 	}
 
+	string _mainModuleName;
 	ModuleObjectsCache _moduleObjCache;
 	InterpreterDirectiveFactory _directiveFactory;
-	string _mainModuleName;
 	LogerMethod _logerMethod;
 
 public:
 	this(
+		string mainModuleName,
 		ModuleObjectsCache moduleObjCache,
 		InterpreterDirectiveFactory directiveFactory,
-		string mainModuleName,
 		LogerMethod logerMethod = null
 	) {
+		import std.exception: enforce;
+
+		enforce(mainModuleName.length, `Expected programme main module name`);
 		enforce(moduleObjCache !is null, `Expected module objects cache`);
 		enforce(directiveFactory !is null, `Expected directive factory`);
-		enforce(mainModuleName.length, `Expected programme main module name`);
 
+		this._mainModuleName = mainModuleName;
 		this._moduleObjCache = moduleObjCache;
 		this._directiveFactory = directiveFactory;
-		this._mainModuleName = mainModuleName;
 		this._logerMethod = logerMethod;
 	}
 
-	/// Run programme main module with arguments passed as mainModuleScope parameter
-	AsyncResult run(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null) {
-		return runSaveState(mainModuleScope, extraGlobals).asyncResult;
+	/// Run programme main module
+	AsyncResult run(IvyData[string] extraGlobals = null) {
+		return runSaveState(extraGlobals).asyncResult;
 	}
 
-	IvyData runSync(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null) {
-		IvyData ivyRes = runSaveStateSync(mainModuleScope, extraGlobals)._stack.back();
+	IvyData runSync(IvyData[string] extraGlobals = null)
+	{
+		IvyData ivyRes = runSaveStateSync(extraGlobals)._stack.back();
 		if( ivyRes.type == IvyDataType.AsyncResult ) {
 			ivyRes.asyncResult.then(
 				(IvyData methodRes) => ivyRes = methodRes
@@ -63,24 +66,24 @@ public:
 		return ivyRes;
 	}
 
-	SaveStateResult runSaveState(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null)
+	SaveStateResult runSaveState(IvyData[string] extraGlobals = null)
 	{
 		import ivy.interpreter.interpreter: Interpreter;
+
 		Interpreter interp = new Interpreter(
+			_mainModuleName,
 			_moduleObjCache,
 			_directiveFactory,
-			_mainModuleName,
-			mainModuleScope,
 			_logerMethod
 		);
 		interp.addExtraGlobals(extraGlobals);
 		return SaveStateResult(interp, interp.execLoop());
 	}
 
-	Interpreter runSaveStateSync(IvyData mainModuleScope = IvyData(), IvyData[string] extraGlobals = null)
+	Interpreter runSaveStateSync(IvyData[string] extraGlobals = null)
 	{
 		import std.exception: enforce;
-		SaveStateResult moduleExecRes = runSaveState(mainModuleScope, extraGlobals);
+		SaveStateResult moduleExecRes = runSaveState(extraGlobals);
 		enforce(
 			moduleExecRes.asyncResult.state == AsyncResultState.resolved,
 			`Expected module execution async result resolved state`);
@@ -90,11 +93,10 @@ public:
 	AsyncResult runMethod(
 		string methodName,
 		IvyData methodParams = IvyData(),
-		IvyData[string] extraGlobals = null,
-		IvyData mainModuleScope = IvyData()
+		IvyData[string] extraGlobals = null
 	) {
 		AsyncResult fResult = new AsyncResult();
-		SaveStateResult moduleExecRes = runSaveState(mainModuleScope, extraGlobals);
+		SaveStateResult moduleExecRes = runSaveState(extraGlobals);
 		
 		moduleExecRes.asyncResult.then(
 			(IvyData modRes) {
@@ -108,12 +110,11 @@ public:
 	IvyData runMethodSync(
 		string methodName,
 		IvyData methodParams = IvyData(),
-		IvyData[string] extraGlobals = null,
-		IvyData mainModuleScope = IvyData()
+		IvyData[string] extraGlobals = null
 	) {
 		import std.exception: enforce;
 		AsyncResult asyncRes =
-			runSaveStateSync(mainModuleScope, extraGlobals)
+			runSaveStateSync(extraGlobals)
 			.runModuleDirective(methodName, methodParams);
 		enforce(
 			asyncRes.state == AsyncResultState.resolved,
@@ -131,8 +132,8 @@ public:
 	JSONValue toStdJSON()
 	{
 		import ivy.types.data.conv.ivy_to_std_json: toStdJSON2;
-		
-		JSONValue jProg = ["mainModuleName": _mainModuleName];
+		import ivy.types.data.conv.consts: IvySrlField;
+
 		JSONValue[string] moduleObjects;
 		foreach( string modName, ModuleObject modObj; _moduleObjCache.moduleObjects )
 		{
@@ -141,13 +142,15 @@ public:
 				jConsts ~= toStdJSON2(con);
 			}
 			moduleObjects[modName] = [
-				"entryPointIndex": JSONValue(modObj._entryPointIndex),
 				"consts": JSONValue(jConsts),
-				"fileName": JSONValue(modObj._fileName),
-				IVY_TYPE_FIELD: JSONValue(IvyDataType.ModuleObject)
+				"fileName": JSONValue(modObj.symbol.fileName),
+				IvySrlField.type: JSONValue(IvyDataType.ModuleObject)
 			];
 		}
-		jProg[`moduleObjects`] = moduleObjects;
+		JSONValue jProg = [
+			`mainModuleName`: JSONValue(this._mainModuleName),
+			`moduleObjects`: JSONValue(moduleObjects)
+		];
 		return jProg;
 	}
 }

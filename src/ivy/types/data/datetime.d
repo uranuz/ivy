@@ -19,7 +19,7 @@ enum DateTimeAttr: string
 // Хранит дату/время
 class IvyDateTime: NotImplClassNode
 {
-	import ivy.types.data: IvyData;
+	import ivy.types.data: IvyData, IvyDataType;
 	
 	import std.datetime: SysTime, Month;
 	import std.exception: enforce;
@@ -74,12 +74,15 @@ public:
 					enforce(false, `Cannot set DateTime attribute: ` ~ attrName);
 			}
 		}
-		IvyData __serialize__() {
-			return JSONValue([
-				IVY_TYPE_FIELD: JSONValue(con.type),
-				IVY_VALUE_FIELD: JSONValue(con.dateTime.toISOExtString())
+
+		IvyData __serialize__()
+		{
+			import ivy.types.data.conv.consts: IvySrlField, IvySrlFieldType;
+
+			return IvyData([
+				IvySrlField.type: IvyData(IvySrlFieldType.dateTime),
+				IvySrlField.value: IvyData(_dt.toISOExtString())
 			]);
-			return IvyData(_dt.toISOExtString());
 		}
 	}
 protected:

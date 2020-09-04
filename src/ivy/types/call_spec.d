@@ -13,8 +13,8 @@ private:
 public:
 	this(size_t encodedSpec)
 	{
-		this._posAttrsCount = spec >> 1;
-		this._hasKwAttrs = !!(1 & spec);
+		this._posAttrsCount = encodedSpec >> 1;
+		this._hasKwAttrs = !!(1 & encodedSpec);
 	}
 
 	this(size_t posAttrCount, bool hasKwAttrs)

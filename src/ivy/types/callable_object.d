@@ -64,4 +64,12 @@ public:
 	ref IvyData[string] defaults() @property {
 		return this._defaults;
 	}
+	
+	string moduleName() @property
+	{
+		if( this.isNative ) {
+			return "__global__";
+		}
+		return this.codeObject.moduleObject.symbol.name;
+	}
 }

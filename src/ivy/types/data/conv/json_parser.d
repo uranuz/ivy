@@ -23,6 +23,8 @@ struct JSONParser(S = string, LocationConfig c = LocationConfig.init)
 	import trifle.text_forward_range: TextForwardRange;
 	import trifle.quoted_string_range: QuotedStringRange;
 
+	import ivy.types.data.data: TIvyData;
+
 	alias String = S;
 	alias SourceRange = TextForwardRange!(String, c);
 	alias Char = SourceRange.Char;

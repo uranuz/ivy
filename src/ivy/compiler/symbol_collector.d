@@ -20,12 +20,18 @@ private:
 	CompilerModuleRepository _moduleRepo;
 	DirectiveCompilerFactory _compilerFactory;
 	SymbolTableFrame[string] _moduleSymbols;
+	SymbolTableFrame _globalSymbolTable;
+
 public SymbolTableFrame[] _frameStack;
 	LogerMethod _logerMethod;
 
 public:
-	this(CompilerModuleRepository moduleRepo, DirectiveCompilerFactory compilerFactory, LogerMethod logerMethod = null)
-	{
+	this(
+		CompilerModuleRepository moduleRepo,
+		DirectiveCompilerFactory compilerFactory,
+		IIvySymbol[] globalSymbols,
+		LogerMethod logerMethod = null
+	) {
 		import std.exception: enforce;
 
 		_moduleRepo = moduleRepo;
@@ -34,6 +40,16 @@ public:
 
 		enforce(_moduleRepo !is null, `Expected compiler module repository`);
 		enforce(_compilerFactory !is null, `Expected directive compiler factory`);
+
+		_globalSymbolTable = new SymbolTableFrame(null, _logerMethod);
+		_addGlobalSymbols(globalSymbols);
+	}
+
+	private void _addGlobalSymbols(IIvySymbol[] globalSymbols)
+	{
+		foreach(symb; globalSymbols) {
+			_globalSymbolTable.add(symb);
+		}
 	}
 
 	version(IvyCompilerDebug)
@@ -139,6 +155,16 @@ public:
 					log.write(`	module frame lvl`, lvl, ` is null`);
 				}
 			}
+		}
+
+		if( symb ) {
+			return symb;
+		}
+
+		symb = _globalSymbolTable.lookup(name);
+
+		if( !symb ) {
+			log.error( `Cannot find symbol "` ~ name ~ `"` );
 		}
 
 		return symb;

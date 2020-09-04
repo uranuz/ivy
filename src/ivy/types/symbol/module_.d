@@ -34,7 +34,7 @@ public:
 		}
 
 		DirAttr getAttr(string attrName) {
-			enforce(false, `Module symbol has no attributes`);
+			assert(false, `Module symbol has no attributes`);
 		}
 
 		DirBodyAttrs bodyAttrs() @property {

@@ -56,9 +56,6 @@ private:
 	// Dictionary maps module name to it's root symbol table frame
 	public CompilerSymbolsCollector _symbolsCollector;
 
-	// Storage for global compiler's symbols (IDirectiveInterpreter's info for now)
-	SymbolTableFrame _globalSymbolTable;
-
 	// Compiler's storage for parsed module ASTs
 	CompilerModuleRepository _moduleRepo;
 
@@ -82,7 +79,6 @@ public:
 		CompilerModuleRepository moduleRepo,
 		CompilerSymbolsCollector symbolsCollector,
 		DirectiveCompilerFactory compilerFactory,
-		IIvySymbol[] globalSymbols,
 		ModuleObjectsCache moduleObjCache,
 		LogerMethod logerMethod = null
 	) {
@@ -98,16 +94,6 @@ public:
 		_symbolsCollector = symbolsCollector;
 		_compilerFactory = compilerFactory;
 		_moduleObjCache = moduleObjCache;
-
-		_globalSymbolTable = new SymbolTableFrame(null, _logerMethod);
-		_addGlobalSymbols(globalSymbols);
-	}
-
-	private void _addGlobalSymbols(IIvySymbol[] globalSymbols)
-	{
-		foreach(symb; globalSymbols) {
-			_globalSymbolTable.add(symb);
-		}
 	}
 
 	mixin NodeVisitMixin!();
@@ -225,21 +211,8 @@ public:
 		return this._codeObjStack.back;
 	}
 
-	IIvySymbol symbolLookup(string name)
-	{
-		IIvySymbol symb = _symbolsCollector.symbolLookup(name);
-
-		if( symb ) {
-			return symb;
-		}
-
-		symb = _globalSymbolTable.lookup(name);
-
-		if( !symb ) {
-			log.error( `Cannot find symbol "` ~ name ~ `"` );
-		}
-
-		return symb;
+	IIvySymbol symbolLookup(string name) {
+		return _symbolsCollector.symbolLookup(name);
 	}
 
 	size_t addInstr(Instruction instr) {

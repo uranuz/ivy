@@ -59,9 +59,9 @@ public:
 		}
 
 		return new ExecutableProgramme(
+			moduleName,
 			this._moduleObjCache,
 			this._config.directiveFactory,
-			moduleName,
 			_config.interpreterLoger
 		);
 	}
@@ -77,6 +77,8 @@ public:
 private:
 	void _initObjects()
 	{
+		import ivy.types.symbol.iface: IIvySymbol;
+
 		if( _config.compilerFactory is null ) {
 			_config.compilerFactory = makeStandardDirCompilerFactory();
 		}
@@ -84,14 +86,22 @@ private:
 			_config.directiveFactory = makeStandardInterpreterDirFactory();
 		}
 		
-		_moduleRepo = new CompilerModuleRepository(_config.importPaths, _config.fileExtension, _config.parserLoger);
-		_symbolsCollector = new CompilerSymbolsCollector(_moduleRepo, _config.compilerFactory, _config.compilerLoger);
+		_moduleRepo = new CompilerModuleRepository(
+			_config.importPaths,
+			_config.fileExtension,
+			_config.parserLoger
+		);
+		_symbolsCollector = new CompilerSymbolsCollector(
+			_moduleRepo,
+			_config.compilerFactory,
+			cast(IIvySymbol[]) _config.directiveFactory.symbols,
+			_config.compilerLoger
+		);
 		_moduleObjCache = new ModuleObjectsCache();
 		_compiler = new ByteCodeCompiler(
 			_moduleRepo,
 			_symbolsCollector,
 			_config.compilerFactory,
-			_config.directiveFactory.symbols,
 			_moduleObjCache,
 			_config.compilerLoger
 		);

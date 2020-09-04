@@ -5,9 +5,14 @@ import ivy.types.data: IvyData, IvyDataType;
 
 JSONValue toStdJSON(ref IvyData src)
 {
+	import ivy.types.data.conv.ivy_to_std_json: toStdJSON2;
+
+	import std.exception: enforce;
+
 	final switch( src.type )
 	{
-		case IvyDataType.Undef: case IvyDataType.Null:
+		case IvyDataType.Undef:
+		case IvyDataType.Null:
 			return JSONValue(null);
 		case IvyDataType.Boolean:
 			return JSONValue(src.boolean);
@@ -36,15 +41,23 @@ JSONValue toStdJSON(ref IvyData src)
 			}
 			return JSONValue(nodeAA);
 		}
+		case IvyDataType.ClassNode:
+			return src.classNode.__serialize__().toStdJSON2();
+		case IvyDataType.CodeObject:
+		case IvyDataType.Callable:
+		case IvyDataType.ExecutionFrame:
+		case IvyDataType.DataNodeRange:
+		case IvyDataType.ModuleObject:
+		case IvyDataType.AsyncResult:
+			enforce(false, `Cannot serialize type`);
 	}
 	assert(false, `This should never happen`);
 }
 
-enum IVY_TYPE_FIELD = "_t";
-enum IVY_VALUE_FIELD = "_v";
-
 JSONValue toStdJSON2(IvyData con)
 {
+	import ivy.types.data.conv.consts: IvySrlField;
+
 	final switch( con.type )
 	{
 		case IvyDataType.Undef: return JSONValue("undef");
@@ -68,53 +81,39 @@ JSONValue toStdJSON2(IvyData con)
 			return JSONValue(arr);
 		}
 		case IvyDataType.CodeObject: {
+			import ivy.types.code_object: CodeObject;
+			import ivy.types.symbol.iface: ICallableSymbol;
+			import ivy.types.symbol.dir_attr: DirAttr;
+
+			CodeObject codeObject = con.codeObject;
+			ICallableSymbol dirSymbol = codeObject.symbol;
+
 			JSONValue jCode = [
-				IVY_TYPE_FIELD: JSONValue(con.type),
-				"name": JSONValue(con.codeObject.symbol.name),
-				"moduleObject": JSONValue(con.codeObject.moduleObject.symbol.name),
+				IvySrlField.type: JSONValue(con.type),
+				"name": JSONValue(dirSymbol.name),
+				"moduleObject": JSONValue(codeObject.moduleObject.symbol.name),
 			];
+
 			JSONValue[] jInstrs;
-			foreach( instr; con.codeObject._instrs ) {
+			foreach( instr; codeObject._instrs ) {
 				jInstrs ~= JSONValue([ JSONValue(instr.opcode), JSONValue(instr.arg) ]);
 			}
 			jCode["instrs"] = jInstrs;
-			JSONValue[] jAttrBlocks;
-			import ivy.directive_stuff: DirAttrKind;
-			foreach( ref attrBlock; con.codeObject._attrBlocks )
-			{
-				JSONValue jBlock = ["kind": attrBlock.kind];
-				final switch( attrBlock.kind )
-				{
-					case DirAttrKind.NamedAttr:
-					{
-						JSONValue[string] block;
-						foreach( key, va; attrBlock.namedAttrs ) {
-							block[key] = _valueAttrToStdJSON(va);
-						}
-						jBlock["namedAttrs"] = block;
-						break;
-					}
-					case DirAttrKind.ExprAttr:
-					{
-						JSONValue[] block;
-						foreach( va; attrBlock.exprAttrs ) {
-							block ~= _valueAttrToStdJSON(va);
-						}
-						jBlock["exprAttrs"] = block;
-						break;
-					}
-					case DirAttrKind.BodyAttr:
-					{
-						jBlock["bodyAttr"] = [
-							"isNoscope": attrBlock.bodyAttr.isNoscope,
-							"isNoescape": attrBlock.bodyAttr.isNoescape
-						];
-						break;
-					}
-				}
-				jAttrBlocks ~= jBlock;
+
+			JSONValue[] jAttrs;
+			foreach( ref DirAttr attr; dirSymbol.attrs ) {
+				jAttrs ~= JSONValue([
+					"name": attr.name,
+					"typeName": attr.typeName
+				]);
 			}
-			jCode["attrBlocks"] = jAttrBlocks;
+			jCode["attrs"] = jAttrs;
+
+			jCode["bodyAttr"] = [
+				"isNoscope": dirSymbol.bodyAttrs.isNoscope,
+				"isNoescape": dirSymbol.bodyAttrs.isNoescape
+			];
+
 			return jCode;
 		}
 		case IvyDataType.Callable:
@@ -123,15 +122,8 @@ JSONValue toStdJSON2(IvyData con)
 		case IvyDataType.DataNodeRange:
 		case IvyDataType.AsyncResult:
 		case IvyDataType.ModuleObject: {
-			return JSONValue([IVY_TYPE_FIELD: con.type]);
+			return JSONValue([IvySrlField.type: con.type]);
 		}
 	}
 	assert(false);
-}
-
-JSONValue _valueAttrToStdJSON(VA)(auto ref VA va) {
-	return JSONValue([
-		"name": va.name,
-		"typeName": va.typeName
-	]);
 }

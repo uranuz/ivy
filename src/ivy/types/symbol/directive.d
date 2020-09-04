@@ -7,6 +7,8 @@ class DirectiveSymbol: ICallableSymbol
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 
+	import std.exception: enforce;
+
 private:
 	string _name;
 	DirAttr[] _attrs;
