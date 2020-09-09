@@ -4,7 +4,7 @@ import ivy.interpreter.directive.utils;
 
 class IntCtorDirInterpreter: BaseDirectiveInterpreter
 {
-	shared static this() {
+	this() {
 		_symbol = new DirectiveSymbol(`int`, [DirAttr("value", "any")]);
 	}
 	

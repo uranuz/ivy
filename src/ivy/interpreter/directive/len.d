@@ -4,7 +4,7 @@ import ivy.interpreter.directive.utils;
 
 class LenDirInterpreter: BaseDirectiveInterpreter
 {
-	shared static this() {
+	this() {
 		_symbol = new DirectiveSymbol(`len`, [DirAttr("value", IvyAttrType.Any)]);
 	}
 

@@ -52,37 +52,29 @@ public:
 			result ~= "\r\nCODE\r\n";
 			foreach( i, con; modObj._consts )
 			{
-				if( con.type == IvyDataType.CodeObject )
+				if( con.type != IvyDataType.CodeObject ) {
+					continue;
+				}
+				result ~= "\r\nCode object " ~ i.text ~ " (" ~ con.codeObject.symbol.name ~ ")" ~ "\r\n";
+				foreach( k, instr; con.codeObject._instrs )
 				{
-					if( !con.codeObject ) {
-						result ~= "\r\nCode object " ~ i.text ~ " is null\r\n";
-					}
-					else
-					{
-						result ~= "\r\nCode object " ~ i.text ~ "\r\n";
-						foreach( k, instr; con.codeObject._instrs )
-						{
-							string val;
-							if(
-								instr.arg < modObj._consts.length 
-								&& instrsWhereArgRefsConst.canFind(instr.opcode)
-							) {
-								enum limit = 50;
-								val = modObj._consts[instr.arg].toDebugString();
-								if( val.length >= limit ) {
-									val = val.take(limit).text ~ "...";
-								}
-								val = " (" ~ val ~ ")";
-							}
-							result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.arg.text ~ val ~ "\r\n";
-
+					string val;
+					if(
+						instr.arg < modObj._consts.length 
+						&& instrsWhereArgRefsConst.canFind(instr.opcode)
+					) {
+						enum limit = 50;
+						val = modObj._consts[instr.arg].toDebugString();
+						if( val.length >= limit ) {
+							val = val.take(limit).text ~ "...";
 						}
-						result ~= "\r\nCode object source map(line, startAddr)\r\n";
-						foreach( mapItem; con.codeObject._sourceMap )
-						{
-							result ~= mapItem.line.text ~ "\t\t" ~ mapItem.startInstr.text ~ "\r\n";
-						}
+						val = " (" ~ val ~ ")";
 					}
+					result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.arg.text ~ val ~ "\r\n";
+				}
+				result ~= "\r\nCode object source map(line, startAddr)\r\n";
+				foreach( mapItem; con.codeObject._sourceMap ) {
+					result ~= mapItem.line.text ~ "\t\t" ~ mapItem.startInstr.text ~ "\r\n";
 				}
 			}
 

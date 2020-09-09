@@ -4,6 +4,8 @@ import ivy.types.symbol.iface: ICallableSymbol;
 
 class DirectiveSymbol: ICallableSymbol
 {
+	import trifle.location: Location;
+
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 
@@ -11,20 +13,27 @@ class DirectiveSymbol: ICallableSymbol
 
 private:
 	string _name;
+	Location _loc;
 	DirAttr[] _attrs;
 	DirBodyAttrs _bodyAttrs;
 
 	size_t[string] _attrIndexes;
 
 public:
-	this(string name, DirAttr[] attrs = null, DirBodyAttrs bodyAttrs = DirBodyAttrs.init)
+	this(string name, Location loc, DirAttr[] attrs = null, DirBodyAttrs bodyAttrs = DirBodyAttrs.init)
 	{
 		this._name = name;
+		this._loc = loc;
 		this._attrs = attrs;
 		this._bodyAttrs = bodyAttrs;
 
 		enforce(this._name.length > 0, `Expected directive symbol name`);
 		this._reindexAttrs();
+	}
+
+	this(string name, DirAttr[] attrs = null, DirBodyAttrs bodyAttrs = DirBodyAttrs.init)
+	{
+		this(name, Location(`__global__`), attrs, bodyAttrs);
 	}
 
 	private void _reindexAttrs()
@@ -40,6 +49,10 @@ public:
 	{
 		string name() @property {
 			return this._name;
+		}
+
+		Location location() @property {
+			return _loc;
 		}
 
 		DirAttr[] attrs() @property {

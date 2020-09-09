@@ -143,7 +143,7 @@ public:
 			}
 			moduleObjects[modName] = [
 				"consts": JSONValue(jConsts),
-				"fileName": JSONValue(modObj.symbol.fileName),
+				"fileName": JSONValue(modObj.symbol.location.fileName),
 				IvySrlField.type: JSONValue(IvyDataType.ModuleObject)
 			];
 		}

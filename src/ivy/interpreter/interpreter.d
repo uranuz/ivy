@@ -47,7 +47,7 @@ public:
 
 	ExecStack _stack;
 
-	// Loger method used to send error and debug messages
+	// LogWriter method used to send error and debug messages
 	LogerMethod _logerMethod;
 
 	size_t _pk; // Programme counter
@@ -77,7 +77,7 @@ public:
 		// Add global execution frame
 		this._moduleFrames["__global__"] = _globalFrame;
 
-		this.newFrame(rootCallableObj); // Create entry point module frame
+		this.newFrame(rootCallableObj, true); // Create entry point module frame
 		this._stack.addStackBlock();
 		// Add main module execution frame
 		this._moduleFrames[mainModuleName] = this._frameStack.back;
@@ -85,19 +85,19 @@ public:
 		this._addDirInterpreters(directiveFactory.interps);
 	}
 
-	private void _addNativeDirInterp(string name, IDirectiveInterpreter dirInterp)
+	private void _addNativeDirInterp(IDirectiveInterpreter dirInterp)
 	{
-		log.internalAssert(name.length && dirInterp, `Directive name is empty or direxecInterp is null!`);
+		log.internalAssert(dirInterp, `Directive name is empty or direxecInterp is null!`);
 
 		// Add custom native directive interpreters to global scope
-		_globalFrame.setValue(name, IvyData(new CallableObject(dirInterp)));
+		_globalFrame.setValue(dirInterp.symbol.name, IvyData(new CallableObject(dirInterp)));
 	}
 
 	// Method used to set custom global directive interpreters
 	void _addDirInterpreters(IDirectiveInterpreter[string] dirInterps)
 	{
-		foreach( name, dirInterp; dirInterps ) {
-			this._addNativeDirInterp(name, dirInterp);
+		foreach( dirInterp; dirInterps.byValue ) {
+			this._addNativeDirInterp(dirInterp);
 		}
 	}
 
@@ -131,8 +131,13 @@ public:
 			import std.array: join;
 			import std.conv: text;
 
+			string moduleName;
+			if( ModuleObject modObj = interp.currentModule ) {
+				moduleName = modObj.symbol.name;
+			}
+
 			// Put name of module and line where event occured
-			msg = "Ivy module: " ~ interp.currentModule.symbol.name ~ ":" ~ interp.currentInstrLine().text
+			msg = "Ivy module: " ~ moduleName ~ ":" ~ interp.currentInstrLine().text
 				~ ", OpCode: " ~ interp.currentOpCode().text ~ "\n" ~ msg;
 
 			debug {
@@ -157,7 +162,7 @@ public:
 					getShortFuncName(func),
 					file,
 					line,
-					interp.currentModule.symbol.name,
+					moduleName,
 					interp.currentInstrLine()
 				));
 			}
@@ -255,13 +260,17 @@ public:
 	ExecutionFrame currentFrame() @property
 	{
 		import std.range: empty, back;
-		log.internalAssert(!this._frameStack.empty, "Execution frame stack is empty!");
+
+		import std.exception: enforce;
+
+		enforce(!this._frameStack.empty, "Execution frame stack is empty!");
+		//log.internalAssert(!this._frameStack.empty, "Execution frame stack is empty!");
 		return this._frameStack.back;
 	}
 
-	void newFrame(CallableObject callable)
+	void newFrame(CallableObject callable, bool isModule = false)
 	{
-		ExecutionFrame modFrame = this._getModuleFrame(callable);
+		ExecutionFrame modFrame = isModule? null: this._getModuleFrame(callable);
 		this._frameStack ~= new ExecutionFrame(callable, modFrame);
 		log.write(`Enter new execution frame for callable: `, callable.symbol.name);
 	}
@@ -961,7 +970,7 @@ public:
 
 						CallableObject callable = new CallableObject(codeObject);
 
-						this.newFrame(callable); // Create entry point module frame
+						this.newFrame(callable, true); // Create entry point module frame
 						this._moduleFrames[moduleName] = this._frameStack.back; // We need to store module frame into storage
 
 						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreGlobalName)
@@ -1331,13 +1340,13 @@ public:
 
 	AsyncResult runModuleDirective(string name, IvyData args = IvyData())
 	{
+		import ivy.types.call_spec: CallSpec;
+
 		import std.exception: enforce;
 		import std.algorithm: canFind;
 		enforce([
 			IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray
 		].canFind(args.type), `Expected Undef, Null or AssocArray as list of directive arguments`);
-
-		log.internalAssert(this.currentFrame, `Could not get module frame!`);
 
 		// Find desired directive by name in current module frame
 		IvyData callableNode = this.currentFrame.getValue(name);
@@ -1347,11 +1356,15 @@ public:
 		if( this._stack.length == 1 ) {
 			this._stack.popBack(); // Drop old result from stack
 		}
+
+		CallSpec callSpec = CallSpec(0, args.type == IvyDataType.AssocArray);
+		if( callSpec.hasKwAttrs ) {
+			this._stack.push(args);
+		}
 		this._stack.push(callableNode);
-		this._stack.push(args);
 
 		this._pk = 0;
-		this._codeRange = [Instruction(OpCode.Call)];
+		this._codeRange = [Instruction(OpCode.RunCallable, callSpec.encode())];
 		AsyncResult fResult = new AsyncResult();
 		try {
 			this.execLoopImpl(fResult, 2);

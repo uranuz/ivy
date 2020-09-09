@@ -32,7 +32,7 @@ public:
 	}
 
 	string fileName() @property {
-		return symbol.fileName;
+		return symbol.location.fileName;
 	}
 
 	// Append const to list and return it's index

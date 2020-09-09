@@ -42,7 +42,6 @@ public:
 		this._moduleFrame = modFrame;
 
 		enf(this._callable !is null, `Expected callable object for exec frame`);
-		enf(this._moduleFrame !is null, `Expected module frame for exec frame`);
 
 		this._dataDict = [
 			"_ivyMethod": this._callable.symbol.name,

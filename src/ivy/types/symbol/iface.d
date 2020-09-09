@@ -2,7 +2,11 @@ module ivy.types.symbol.iface;
 
 interface IIvySymbol
 {
+	import trifle.location: Location;
+
 	string name() @property;
+
+	Location location() @property;
 }
 
 interface ICallableSymbol: IIvySymbol

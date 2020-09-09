@@ -16,7 +16,14 @@ interface IDirectiveCompiler
 class BaseDirectiveCompiler: IDirectiveCompiler
 {
 public:
-	override void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector) {}
+	override void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector) {
+		foreach( childNode; stmt[] )
+		{
+			collector.log.write(`!!!!!Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, stmt.name);
+			collector.log.internalAssert(childNode, `Child node is null`);
+			childNode.accept(collector);
+		}
+	}
 
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler) {}
 }

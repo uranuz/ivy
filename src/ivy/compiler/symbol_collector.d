@@ -2,24 +2,28 @@ module ivy.compiler.symbol_collector;
 
 import ivy.ast.iface.visitor: AbstractNodeVisitor;
 
+version(IvyTotalDebug) version = IvyCompilerDebug;
+
 class CompilerSymbolsCollector: AbstractNodeVisitor
 {
 	import ivy.ast.iface;
 	import ivy.compiler.common: takeFrontAs;
-	import ivy.compiler.module_repository;
-	import ivy.compiler.symbol_table;
+	import ivy.compiler.module_repository: CompilerModuleRepository;
+	import ivy.compiler.symbol_table: SymbolTableFrame, SymbolWithFrame;
 	import ivy.compiler.errors: IvyCompilerException;
 	import ivy.compiler.node_visit_mixin: NodeVisitMixin;
 	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
 	import ivy.compiler.directive.factory: DirectiveCompilerFactory;
 	import ivy.types.symbol.iface: IIvySymbol;
+	import ivy.types.symbol.module_: ModuleSymbol;
 	
+	import trifle.location: Location;
 	
 	alias LogerMethod = void delegate(LogInfo);
-private:
+protected:
 	CompilerModuleRepository _moduleRepo;
 	DirectiveCompilerFactory _compilerFactory;
-	SymbolTableFrame[string] _moduleSymbols;
+	SymbolTableFrame _moduleSymbols;
 	SymbolTableFrame _globalSymbolTable;
 
 public SymbolTableFrame[] _frameStack;
@@ -41,8 +45,10 @@ public:
 		enforce(_moduleRepo !is null, `Expected compiler module repository`);
 		enforce(_compilerFactory !is null, `Expected directive compiler factory`);
 
-		_globalSymbolTable = new SymbolTableFrame(null, _logerMethod);
+		_globalSymbolTable = new SymbolTableFrame(null);
 		_addGlobalSymbols(globalSymbols);
+
+		_moduleSymbols = new SymbolTableFrame(null);
 	}
 
 	private void _addGlobalSymbols(IIvySymbol[] globalSymbols)
@@ -87,75 +93,92 @@ public:
 
 	mixin NodeVisitMixin!();
 
-	SymbolTableFrame getModuleSymbols(string moduleName)
+	SymbolWithFrame getModuleSymbols(string moduleName)
 	{
 		import std.range: popBack, empty, back;
 
-		SymbolTableFrame modFrame = _moduleSymbols.get(moduleName, null);
-		if( modFrame !is null ) {
-			return modFrame;
+		SymbolWithFrame swf = _moduleSymbols.getChildFrame(moduleName);
+		if( swf.symbol !is null && swf.frame !is null ) {
+			return swf;
 		}
 
 		// Try to open, parse and load symbols info from another module
 		IvyNode moduleTree = _moduleRepo.getModuleTree(moduleName);
 
-		modFrame = new SymbolTableFrame(null, _logerMethod);
-		_moduleSymbols[moduleName] = modFrame;
+		// Create module symbol
+		swf.symbol = new ModuleSymbol(moduleName, moduleTree.location);
+
+		// Add module symbol with frame in common table of module symbols
+		swf.frame = _moduleSymbols.newChildFrame(swf.symbol, null);
 
 		{
-			_frameStack ~= modFrame;
+			// Add module frame into frame stack...
+			_frameStack ~= swf.frame;
+			// ... and set up exit from frame upon analysis finished
 			scope(exit) {
-				log.internalAssert(!_frameStack.empty, `Compiler directive collector frame stack is empty!`);
-				_frameStack.popBack();
+				this.exitScope();
 			}
 
 			// Go to find directive definitions in this imported module
 			moduleTree.accept(this);
 		}
 
-		return modFrame;
+		return swf;
 	}
 
-	void enterModuleScope(string moduleName)
+	ModuleSymbol enterModuleScope(string moduleName)
 	{
-		log.write(`Enter method`);
-		_frameStack ~= getModuleSymbols(moduleName);
-		log.write(`Exit method`);
+		SymbolWithFrame swf = getModuleSymbols(moduleName);
+
+		ModuleSymbol res = cast(ModuleSymbol) swf.symbol;
+		log.internalAssert(res !is null, `Expected module symbol`);
+		_frameStack ~= swf.frame;
+
+		log.write(`Enter module scope: `, moduleName);
+		_printState();
+		return res;
 	}
 
-	void enterScope(size_t sourceIndex)
+	void enterScope(Location loc)
 	{
 		import std.range: empty, back;
 		log.internalAssert(!_frameStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty`);
 
-		_frameStack ~= _frameStack.back.getChildFrame(sourceIndex);
+		_frameStack ~= _frameStack.back.getChildFrame(loc);
+		log.write(`Enter scope for: `, loc.toString());
+		_printState();
 	}
 
 	void exitScope()
 	{
-		import std.range: empty, popBack;
+		import std.range: empty, popBack, back;
 		log.internalAssert(!_frameStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!");
 
+		log.write(`Exit scope:`);
+		_printState();
 		_frameStack.popBack();
+	}
+
+	private void _printState()
+	{
+		debug {
+			log.write(`Symbol tables:`);
+			foreach( lvl, table; _frameStack[] ) {
+				log.write(`	symbols lvl`, lvl, `: `, table.toPrettyStr());
+			}
+			log.write(`_moduleSymbols:`, _moduleSymbols.toPrettyStr());
+		}
 	}
 
 	IIvySymbol symbolLookup(string name)
 	{
 		import std.range: empty, back;
 		log.internalAssert(!_frameStack.empty, `Cannot look for symbol, because symbol table stack is empty`);
+		log.write(`Symbol lookup: `, name, `, in:`);
+		_printState();
 
 		IIvySymbol symb = _frameStack.back.lookup(name);
-		debug {
-			log.write(`symbolLookup, _frameStack symbols:`);
-			foreach( lvl, table; _frameStack[] ) {
-				log.write(`	symbols lvl`, lvl, `: `, table._symbols);
-				if( table._moduleFrame ) {
-					log.write(`	module symbols lvl`, lvl, `: `, table._moduleFrame._symbols);
-				} else {
-					log.write(`	module frame lvl`, lvl, ` is null`);
-				}
-			}
-		}
+
 
 		if( symb ) {
 			return symb;
@@ -164,7 +187,7 @@ public:
 		symb = _globalSymbolTable.lookup(name);
 
 		if( !symb ) {
-			log.error( `Cannot find symbol "` ~ name ~ `"` );
+			log.error(`Cannot find symbol "` ~ name ~ `"`);
 		}
 
 		return symb;

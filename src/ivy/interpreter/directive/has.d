@@ -4,7 +4,7 @@ import ivy.interpreter.directive.utils;
 
 class HasDirInterpreter: BaseDirectiveInterpreter
 {
-	shared static this()
+	this()
 	{
 		_symbol = new DirectiveSymbol(`has`, [
 			DirAttr("collection", IvyAttrType.Any),

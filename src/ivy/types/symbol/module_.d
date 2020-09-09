@@ -4,6 +4,8 @@ import ivy.types.symbol.iface: ICallableSymbol;
 
 class ModuleSymbol: ICallableSymbol
 {
+	import trifle.location: Location;
+	
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 
@@ -11,22 +13,25 @@ class ModuleSymbol: ICallableSymbol
 
 private:
 	string _name;
-	string _fileName;
+	Location _loc;
 
 public:
-	this(string name, string fileName)
+	this(string name, Location loc)
 	{
 		this._name = name;
-		this._fileName = fileName;
+		this._loc = loc;
 
 		enforce(this._name.length > 0, `Expected module symbol name`);
-		enforce(this._fileName.length > 0, `Expected module symbol file name`);
 	}
 
 	override
 	{
 		string name() @property {
 			return this._name;
+		}
+
+		Location location() @property {
+			return _loc;
 		}
 
 		DirAttr[] attrs() @property {
@@ -40,9 +45,5 @@ public:
 		DirBodyAttrs bodyAttrs() @property {
 			return DirBodyAttrs.init;
 		}
-	}
-
-	string fileName() @property {
-		return this._fileName;
 	}
 }

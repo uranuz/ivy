@@ -52,6 +52,8 @@ public:
 		ICodeBlockStatement defBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
 		IDirectiveStatementRange defStmtRange = defBlockStmt[];
 
+		collector.log.write(`collect: `, stmt.name, `, `, dirNameExpr.name);
+
 		if( defStmtRange.empty )
 			collector.log.error("Expected directive params or body, but got end of input");
 
@@ -72,33 +74,34 @@ public:
 
 		{
 			CompilerDirBodyAttrs res = _analyzeDirBody(defStmtRange.front, collector);
+			defStmtRange.popFront();
 
 			if( collector._frameStack.empty )
 				collector.log.error(`Symbol table frame stack is empty`);
 
 			SymbolTableFrame oldScope = collector._frameStack.back;
+			collector.log.write(`oldScope: `, oldScope.toPrettyStr());
 
 			// Add directive definition into existing frame
-			oldScope.add(new DirectiveSymbol(dirNameExpr.name, attrs));
+			DirectiveSymbol symb = new DirectiveSymbol(dirNameExpr.name, stmt.location, attrs, res.attr);
 
-			if( res.statement && !res.attr.isNoscope )
+			if( !res.attr.isNoscope )
 			{
 				// Create new frame for body if not forbidden
-				collector._frameStack ~= oldScope.newChildFrame(res.statement.location.index, dirNameExpr.name);
+				collector._frameStack ~= oldScope.newChildFrame(symb);
+			} else {
+				oldScope.add(symb);
 			}
 
 			scope(exit)
 			{
-				if( res.statement && !res.attr.isNoscope ) {
-					collector._frameStack.popBack();
+				if( !res.attr.isNoscope ) {
+					collector.exitScope();
 				}
 			}
 
-			if( res.statement )
-			{
-				// Analyse nested tree
-				res.statement.accept(collector);
-			}
+			// Analyse nested tree
+			res.statement.accept(collector);
 		}
 
 		if( !defStmtRange.empty )
@@ -137,7 +140,7 @@ public:
 
 				if( res.defaultValueExpr )
 				{
-					compiler.addInstr(OpCode.LoadName, compiler.addConst( IvyData(res.attr.name)) );
+					compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(res.attr.name) ));
 
 					res.defaultValueExpr.accept(compiler);
 					++defValCount; // Increase default values counter
@@ -155,6 +158,7 @@ public:
 
 		{
 			CompilerDirBodyAttrs res = _analyzeDirBody(defStmtRange.front, compiler);
+			defStmtRange.popFront();
 
 			DirectiveSymbol dirSymbol = cast(DirectiveSymbol) compiler.symbolLookup(dirNameExpr.name);
 			if( dirSymbol is null )
@@ -166,7 +170,7 @@ public:
 				if( !res.attr.isNoscope )
 				{
 					// Compiler should enter frame of directive body, identified by index in source code
-					compiler._symbolsCollector.enterScope(res.statement.location.index);
+					compiler._symbolsCollector.enterScope(stmt.location);
 				}
 
 				scope(exit)
@@ -179,7 +183,7 @@ public:
 				codeObjIndex = compiler.enterNewCodeObject(dirSymbol); // Creating code object
 				scope(exit) compiler.exitCodeObject();
 
-				// Generating code for def.body
+				// Generating code for body
 				res.statement.accept(compiler);
 			}
 
@@ -202,18 +206,17 @@ public:
 			res.defaultValueExpr = cast(IExpression) kwPair.value;
 			if( !res.defaultValueExpr )
 				compiler.log.error(`Expected attribute default value expression!`);
-
-			attrRange.popFront(); // Skip named attribute
 		}
 		else if( INameExpression nameExpr = cast(INameExpression) attrRange.front )
 		{
 			res.attr.name = nameExpr.name;
-			attrRange.popFront(); // Skip variable name
 		}
 		else
 		{
 			compiler.log.error(`Expected [name] or [key: value] expression as attribute definition`);
 		}
+
+		attrRange.popFront(); // Skip attribute
 
 		if( !attrRange.empty )
 		{
@@ -263,13 +266,14 @@ public:
 			if( flagExpr is null ) {
 				break;
 			}
+			bodyStmtRange.popFront();
 			switch( flagExpr.name )
 			{
 				case "noscope": res.attr.isNoscope = true; break;
 				case "noescape": res.attr.isNoescape = true; break;
-				default: break body_flags_loop;
+				default:
+					compiler.log.error("Unexpected directive body flag: ", flagExpr.name);
 			}
-			bodyStmtRange.popFront();
 		}
 
 		if( bodyStmtRange.empty )

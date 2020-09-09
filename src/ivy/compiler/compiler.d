@@ -150,27 +150,29 @@ public:
 			log.write(`Compiled module not found in cache, so try to compile`);
 			IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
 
-			log.write(`Entering new module object`);
-			enterNewModuleObject(cast(ModuleSymbol) this.symbolLookup(moduleName));
 			log.write(`Entering module scope`);
-			_symbolsCollector.enterModuleScope(moduleName);
-			log.write(`Starting compiling module AST`);
-			moduleNode.accept(this);
-			log.write(`Finished compiling module AST`);
+			ModuleSymbol symb = _symbolsCollector.enterModuleScope(moduleName);
 
+			log.write(`Entering new module object`);
+			enterNewModuleObject(symb);
+			
 			scope(exit)
 			{
+				this.exitCodeObject();
+				log.write(`Exited module object`);
 				log.write(`Exiting compiler scopes`);
 				_symbolsCollector.exitScope();
 				log.write(`Exited module scope`);
-				this.exitCodeObject();
-				log.write(`Exited module object`);
 			}
+			
+			log.write(`Starting compiling module AST: ` ~ moduleName);
+			moduleNode.accept(this);
+			log.write(`Finished compiling module AST`);
 		}
 		return _moduleObjCache.get(moduleName);
 	}
 
-	size_t enterNewModuleObject(ModuleSymbol symbol)
+	void enterNewModuleObject(ModuleSymbol symbol)
 	{
 		log.internalAssert(symbol !is null, `Expected module symbol`);
 		if( _moduleObjCache.get(symbol.name) )
@@ -178,10 +180,8 @@ public:
 
 		ModuleObject moduleObject = new ModuleObject(symbol);
 		_moduleObjCache.add(moduleObject);
-		CodeObject mainCodeObject = moduleObject.mainCodeObject;
-		
-		_codeObjStack ~= mainCodeObject;
-		return this.addConst( IvyData(mainCodeObject) );
+
+		_codeObjStack ~= moduleObject.mainCodeObject;
 	}
 
 	size_t enterNewCodeObject(DirectiveSymbol symbol)
@@ -239,6 +239,7 @@ public:
 	{
 		import std.digest.md: md5Of;
 		ModuleObject mod = this.currentModule;
+		log.internalAssert(mod !is null, `Cannot add const to current module`);
 		if( mod.name !in _moduleConstHashes ) {
 			_moduleConstHashes[mod.name] = null;
 		}
@@ -475,7 +476,7 @@ public:
 
 				attrsSet[attr.name] = true;
 				attrRange.popFront();
-				++posAttrCount;
+				++kwAttrCount;
 			}
 			else if( IExpression exprAttr = cast(IExpression) attrRange.front )
 			{
@@ -487,7 +488,7 @@ public:
 				exprAttr.accept(this);
 				attrRange.popFront();
 
-				++kwAttrCount;
+				++posAttrCount;
 			}
 			else
 			{

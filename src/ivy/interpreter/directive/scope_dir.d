@@ -4,7 +4,7 @@ import ivy.interpreter.directive.utils;
 
 class ScopeDirInterpreter: BaseDirectiveInterpreter
 {
-	shared static this()
+	this()
 	{
 		DirBodyAttrs bodyAttrs;
 		bodyAttrs.isNoscope = true;

@@ -4,7 +4,7 @@ import ivy.interpreter.directive.utils;
 
 class StrCtorDirInterpreter: BaseDirectiveInterpreter
 {
-	shared static this() {
+	this() {
 		_symbol = new DirectiveSymbol(`str`, [DirAttr("value", IvyAttrType.Any)]);
 	}
 

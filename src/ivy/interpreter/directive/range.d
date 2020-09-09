@@ -6,7 +6,7 @@ import ivy.types.data.range.integer: IntegerRange;
 
 class RangeDirInterpreter: BaseDirectiveInterpreter
 {
-	shared static this()
+	this()
 	{
 		_symbol = new DirectiveSymbol(`range`, [
 			DirAttr("begin", IvyAttrType.Any),

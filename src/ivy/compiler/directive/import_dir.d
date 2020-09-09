@@ -25,14 +25,16 @@ public:
 			collector.log.error(`Expected end of import directive, maybe ; is missing`);
 
 		// Add imported module symbol table as local symbol
-		collector._frameStack.back.add(new ModuleSymbol(moduleNameExpr.name, stmt.location.fileName));
+		collector._frameStack.back.add(collector.getModuleSymbols(moduleNameExpr.name).symbol);
 	}
 
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
+		import std.array: split;
+
 		compiler.log.error(`"import" directive is not working yet. Use "from ... import ..." instead`);
 		/*
-		import std.array: split;
+		
 
 		auto stmtRange = statement[];
 

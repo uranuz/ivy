@@ -9,7 +9,7 @@ class BaseDirectiveInterpreter: IDirectiveInterpreter
 
 	import std.exception: enforce;
 
-	protected __gshared ICallableSymbol _symbol;
+	protected ICallableSymbol _symbol;
 
 	override void interpret(Interpreter interp) {
 		assert(false, `Implement this!`);

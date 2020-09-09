@@ -1,51 +1,34 @@
 module ivy.compiler.symbol_table;
 
+struct SymbolWithFrame
+{
+	import ivy.types.symbol.iface: ICallableSymbol;
+
+	ICallableSymbol symbol;
+	SymbolTableFrame frame;
+}
+
 class SymbolTableFrame
 {
-	import ivy.types.symbol.iface: IIvySymbol;
+	import trifle.location: Location;
+
+	import ivy.types.symbol.iface: IIvySymbol, ICallableSymbol;
 	
 	import ivy.compiler.errors: IvyCompilerException;
-	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
-	
-	alias LogerMethod = void delegate(LogInfo);
 
+	import std.exception: enforce;
+
+	alias enf = enforce!IvyCompilerException;
+
+private:
 	SymbolTableFrame _moduleFrame;
 
 	IIvySymbol[string] _symbols;
-	SymbolTableFrame[size_t] _childFrames; // size_t - is index of scope start in source code?
-	size_t[string] _namedChildFrames;
-
-	LogerMethod _logerMethod;
+	SymbolTableFrame[string] _childFrames; // <location string> -> SymbolTableFrame
 
 public:
-	this(SymbolTableFrame moduleFrame, LogerMethod logerMethod)
-	{
+	this(SymbolTableFrame moduleFrame) {
 		_moduleFrame = moduleFrame;
-		_logerMethod = logerMethod;
-	}
-
-	version(IvyCompilerDebug)
-		enum isDebugMode = true;
-	else
-		enum isDebugMode = false;
-
-	static struct LogerProxy {
-		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
-		SymbolTableFrame table;
-
-		string sendLogInfo(LogInfoType logInfoType, string msg)
-		{
-			import ivy.loger: getShortFuncName;
-
-			if( table._logerMethod !is null ) {
-				table._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
-			}
-			return msg;
-		}
-	}
-
-	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
-		return LogerProxy(func, file, line, this);
 	}
 
 	IIvySymbol localLookup(string name) {
@@ -54,29 +37,19 @@ public:
 
 	IIvySymbol lookup(string name)
 	{
-		log.write(`Starting compiler symbol lookup: `, name);
-
-		if( IIvySymbol* symb = name in _symbols ) {
-			log.write(`Symbol: `, name, ` found in frame`);
-			return *symb;
-		}
-
-		log.write(`Couldn't find symbol in frame: `, name);
-
-		// We need to try to look in module symbol table
-		if( IIvySymbol symb = moduleLookup(name) ) {
-			log.write(`Symbol found in imported modules: `, name);
+		if( IIvySymbol symb = _symbols.get(name, null) ) {
 			return symb;
 		}
 
-		log.write(`Couldn't find symbol in imported modules: `, name);
+		// We need to try to look in module symbol table
+		if( IIvySymbol symb = moduleLookup(name) ) {
+			return symb;
+		}
 
 		if( !_moduleFrame ) {
-			log.write(`Attempt to find symbol: `, name, ` in module scope failed, because _moduleFrame is null`);
 			return null;
 		}
 
-		log.write(`Attempt to find symbol: `, name, ` in module scope!`);
 		return _moduleFrame.lookup(name);
 	}
 
@@ -89,16 +62,14 @@ public:
 		import std.range: take, drop;
 		import std.array: array;
 
-		log.write(`SymbolTableFrame: Attempt to perform imported modules lookup for symbol: `, name);
-
 		auto splittedName = splitter(name, ".").array;
 		for( size_t i = 1; i <= splittedName.length; ++i )
 		{
 			string namePart = splittedName[].take(i).join(".");
-			size_t* idxPtr = namePart in _namedChildFrames;
-			if( idxPtr is null )
+			ICallableSymbol symb = cast(ICallableSymbol) _symbols.get(namePart, null);
+			if( symb is null )
 				continue;
-			SymbolTableFrame childFrame = _childFrames.get(*idxPtr, null);
+			SymbolTableFrame childFrame = _childFrames.get(symb.location.toString(), null);
 			if( childFrame is null )
 				continue;
 			string modSymbolName = splittedName[].drop(i).join(".");
@@ -110,68 +81,82 @@ public:
 
 	void add(IIvySymbol symb)
 	{
-		log.internalAssert(symb.name !in _symbols, `Symbol with name "`, symb.name, `" already declared in current scope`);
+		enf(symb.name !in _symbols, `Symbol with name "` ~ symb.name ~ `" already declared in current scope`);
 		_symbols[symb.name] = symb;
 	}
 
-	SymbolTableFrame getChildFrame(size_t sourceIndex)
+	SymbolTableFrame getChildFrame(Location loc)
 	{
-		SymbolTableFrame childFrame = _childFrames.get(sourceIndex, null);
-		log.internalAssert(childFrame !is null, `No child frame found with given source index: `, sourceIndex);
+		string locStr = loc.toString();
+
+		SymbolTableFrame childFrame = _childFrames.get(locStr, null);
+		enf(childFrame !is null, `No child frame found with given location: ` ~ locStr);
 		return childFrame;
 	}
 
-	SymbolTableFrame getChildFrame(string name)
+	SymbolWithFrame getChildFrame(string name)
 	{
-		size_t* sourceIndexPtr = name in _namedChildFrames;
-		log.internalAssert(sourceIndexPtr !is null, `No child frame found with given name: `, name);
-		return getChildFrame(*sourceIndexPtr);
+		SymbolWithFrame res;
+
+		res.symbol = cast(ICallableSymbol) _symbols.get(name, null);
+		if( res.symbol is null ) {
+			return res;
+		}
+		res.frame = getChildFrame(res.symbol.location);
+		return res;
 	}
 
-	SymbolTableFrame newChildFrame(size_t sourceIndex, string name)
+	SymbolTableFrame newChildFrame(ICallableSymbol symb, SymbolTableFrame moduleFrame)
 	{
-		log.internalAssert(
-			sourceIndex !in _childFrames,
-			`Child frame already exists with given source index: `, sourceIndex);
+		this.add(symb); // Add symbol to table
+
+		string locStr = symb.location.toString();
+
+		enf(
+			locStr !in _childFrames,
+			`Child frame already exists with location: ` ~ locStr);
 
 		// For now consider if this frame has no module frame - so it is module frame itself
-		SymbolTableFrame childFrame = new SymbolTableFrame(_moduleFrame? _moduleFrame: this, _logerMethod);
-		_childFrames[sourceIndex] = childFrame;
-
-		if( name.length )
-		{
-			log.internalAssert(name !in _namedChildFrames, `Child frame already exists with given name: `, name);
-			_namedChildFrames[name] = sourceIndex;
-		}
+		SymbolTableFrame childFrame = new SymbolTableFrame(moduleFrame);
+		_childFrames[locStr] = childFrame;
 
 		return childFrame;
+	}
+
+	SymbolTableFrame newChildFrame(ICallableSymbol symb) {
+		return newChildFrame(symb, _moduleFrame? _moduleFrame: this);
+	}
+
+	void clear()
+	{
+		_symbols.clear();
+		_childFrames.clear();
 	}
 
 	string toPrettyStr()
 	{
-		import std.conv;
 		string result;
 
 		result ~= "\r\nSYMBOLS:\r\n";
-		foreach( symbName, symb; _symbols )
+		foreach( name, symb; _symbols )
 		{
-			result ~= symbName ~ "\r\n";
+			result ~= name ~ (symb.location.toString() in _childFrames? ` (with frame)`: null) ~ "\r\n";
 		}
 
+		/*
 		result ~= "\r\nFRAMES:\r\n";
-
-		foreach( index, frame; _childFrames )
-		{
-			if( frame )
-			{
-				result ~= "\r\nFRAME with index " ~ index.to!string ~ "\r\n";
-				result ~= frame.toPrettyStr();
-			}
-			else
-			{
-				result ~= "\r\nFRAME with index " ~ index.to!string ~ " is null\r\n";
-			}
+		foreach( locStr, frame; _childFrames ) {
+			result ~= locStr ~ ":\r\n" ~ frame.toPrettyStr();
 		}
+		*/
+
+		if( !_moduleFrame ) {
+			result ~= "\r\nNO MODULE FRAME\r\n";
+		} else {
+			result ~= "\r\nMODULE FRAME SYMBOLS:\r\n" ~ _moduleFrame.toPrettyStr() ~ "\r\n";
+		}
+
+		result ~= "\r\n";
 
 		return result;
 	}

@@ -8,7 +8,7 @@ class FromImportCompiler: IDirectiveCompiler
 	import ivy.ast.iface:
 		INameExpression,
 		IAttributeRange;
-	import ivy.compiler.symbol_table: SymbolTableFrame;
+	import ivy.compiler.symbol_table: SymbolTableFrame, SymbolWithFrame;
 	import ivy.types.symbol.iface: IIvySymbol;
 
 public:
@@ -32,14 +32,16 @@ public:
 			symbolNames ~= symbolNameExpr.name;
 		}
 
-		SymbolTableFrame moduleTable = collector.getModuleSymbols(moduleNameExpr.name);
+		SymbolWithFrame swf = collector.getModuleSymbols(moduleNameExpr.name);
 
 		foreach( symbolName; symbolNames )
 		{
 			// As long as variables currently shall be imported in runtime only and there is no compile-time
 			// symbols for it, so import symbol that currently exists
-			if( IIvySymbol importedSymbol = moduleTable.localLookup(symbolName) ) {
+			if( IIvySymbol importedSymbol = swf.frame.localLookup(symbolName) ) {
 				collector._frameStack.back.add(importedSymbol);
+			} else {
+				collector.log.error(`ERRORRR`);
 			}
 		}
 	}
