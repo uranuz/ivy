@@ -9,8 +9,5 @@
 	"dependencies": {
 		"trifle": ">=0.0.0"
 	},
-	"versions": [
-		"IvyCompilerDebug",
-		"IvyInterpreterDebug"
-	]
+	"versions": []
 }
