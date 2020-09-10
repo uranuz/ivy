@@ -32,9 +32,13 @@ string getShortFuncName(string func)
 
 mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
 {
+	import std.exception: enforce;
+
 	string func;
 	string file;
 	int line;
+
+	private alias enf = enforce!ExceptionType;
 
 	string genericWrite(T...)(LogInfoType logInfoType, lazy T data)
 	{
@@ -48,34 +52,37 @@ mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
 		return this.sendLogInfo(logInfoType, logMessage.data); /// This method need to be implemented to actualy send log message
 	}
 
-	// Write regular log message
+	/// Writes regular log message for debug
 	void write(T...)(lazy T data) {
 		static if(isDebugMode) {
 			genericWrite(LogInfoType.info, data);
 		}
 	}
 
-	// Write warning message
+	/// Writes warning message
 	void warn(T...)(lazy T data) {
 		genericWrite(LogInfoType.warn, data);
 	}
 
-	// Write error message and throw exception
+	/// Writes regular error to log and throws ExceptionType
 	void error(T...)(lazy T data) {
-		throw new ExceptionType(genericWrite(LogInfoType.error, data));
+		this.enforce(false, data);
 	}
 
-	// Write internal error message and throw exception
+	/// Tests assertion. If it's false then writes regular error to log and throws ExceptionType
+	void enforce(C, T...)(C cond, lazy T data) {
+		enf(cond, genericWrite(LogInfoType.error, data));
+	}
+
+
+
+	/// Writes internal error to log and throws ExceptionType
 	void internalError(T...)(lazy T data) {
-		throw new ExceptionType(genericWrite(LogInfoType.internalError, data));
+		internalAssert(false, data);
 	}
 
-	// Test assertion. If assertion is false then logs internal error and throws
-	void internalAssert(T...)(lazy T data)
-	{
-		string msg;
-		if( !data[0] )
-			msg = genericWrite(LogInfoType.internalError, data[1..$]); // Enforce lazyness
-		assert(data[0], msg);
+	/// Tests assertion. If it's false then writes internal error to log and throws ExceptionType
+	void internalAssert(C, T...)(C cond, lazy T data) {
+		enf(cond, genericWrite(LogInfoType.internalError, data));
 	}
 }
