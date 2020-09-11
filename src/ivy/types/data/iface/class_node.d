@@ -13,4 +13,5 @@ interface IClassNode
 	void __setAttr__(IvyData, string);
 	IvyData __serialize__();
 	size_t length() @property;
+	bool empty() @property;
 }

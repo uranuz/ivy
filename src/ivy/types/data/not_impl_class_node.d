@@ -35,7 +35,16 @@ public:
 			mixin(notImplMixin);
 		}
 		size_t length() @property {
-			return 0; // Add trivial implementation
+			mixin(notImplMixin);
+		}
+		bool empty() @property
+		{
+			// By default implement empty with check for length
+			try {
+				return this.length == 0;
+			} catch(PropertyNotImplException) {}
+			// If there is no logic of emptyness implemented then consider it's not empty
+			return false;
 		}
 	}
 }

@@ -192,7 +192,6 @@ struct TIvyData(S)
 
 	bool empty() @property
 	{
-		import std.conv: text;
 		final switch(this.type)
 		{
 			case IvyDataType.Undef:
@@ -212,7 +211,7 @@ struct TIvyData(S)
 			case IvyDataType.AssocArray:
 				return !this.assocArray.length;
 			case IvyDataType.ClassNode:
-				return !this.classNode.length;
+				return this.classNode.empty;
 			case IvyDataType.DataNodeRange:
 				return this.dataRange.empty;
 			case IvyDataType.CodeObject:
@@ -231,7 +230,6 @@ struct TIvyData(S)
 
 	size_t length() @property
 	{
-		import std.conv: text;
 		final switch(this.type)
 		{
 			case IvyDataType.Undef:
@@ -258,7 +256,6 @@ struct TIvyData(S)
 			case IvyDataType.ModuleObject:
 				break; // Error. Has no length
 		}
-		throw new DataNodeException(`No "length" property for type: ` ~ this.type.text);
 	}
 
 	private void assign(T)(auto ref T arg)
@@ -405,8 +402,7 @@ struct TIvyData(S)
 			static assert(false, `unable to convert type "` ~ T.stringof ~ `" to parse node`);
 	}
 
-	void opAssign(T)(auto ref T value)
-	{
+	void opAssign(T)(auto ref T value) {
 		assign(value);
 	}
 
