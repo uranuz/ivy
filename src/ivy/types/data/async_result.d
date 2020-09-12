@@ -1,12 +1,7 @@
 module ivy.types.data.async_result;
 
 import ivy.types.data: IvyData;
-
-enum AsyncResultState: ubyte {
-	pending,
-	resolved,
-	rejected
-}
+public import ivy.types.data.consts: AsyncResultState;
 
 class AsyncResult
 {

@@ -1,12 +1,12 @@
 define('ivy/utils', [
 	'exports',
-	'ivy/Consts',
-	'ivy/ExecutionFrame',
-	'ivy/CodeObject',
-	'ivy/CallableObject',
-	'ivy/DataNodeRange',
-	'ivy/ClassNode',
-	'ivy/AsyncResult'
+	'ivy/types/data/consts',
+	'ivy/interpreter/execution_frame',
+	'ivy/types/code_object',
+	'ivy/types/callable_object',
+	'ivy/types/data/iface/range',
+	'ivy/types/data/iface/class_node',
+	'ivy/types/data/async_result'
 ], function(
 	exports,
 	Consts,

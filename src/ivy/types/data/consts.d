@@ -21,3 +21,9 @@ enum IvyDataType: ubyte {
 enum NodeEscapeState: ubyte {
 	Init, Safe, Unsafe
 }
+
+enum AsyncResultState: ubyte {
+	pending,
+	resolved,
+	rejected
+}
