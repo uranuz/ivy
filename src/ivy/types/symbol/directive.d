@@ -38,10 +38,10 @@ public:
 
 	private void _reindexAttrs()
 	{
-		foreach( index, attr; attrs )
+		foreach( i, attr; attrs )
 		{
 			enforce(attr.name !in this._attrIndexes, `Duplicate attribite name for directive symbol: ` ~ this._name);
-			this._attrIndexes[attr.name] = index;
+			this._attrIndexes[attr.name] = i;
 		}
 	}
 

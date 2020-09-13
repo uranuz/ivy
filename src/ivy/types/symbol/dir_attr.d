@@ -1,9 +1,6 @@
 module ivy.types.symbol.dir_attr;
 
-enum IvyAttrType: string
-{
-	Any = `any`
-}
+public import ivy.types.symbol.consts: IvyAttrType;
 
 struct DirAttr
 {

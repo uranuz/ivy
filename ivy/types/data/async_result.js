@@ -29,10 +29,8 @@ return FirClass(
 			this._state = Consts.AsyncResultState.Error;
 			this._deferred.reject(reason);
 		},
-		state: firProperty({
-			get: function() {
-				return this._state;
-			}
+		state: firProperty(function() {
+			return this._state;
 		})
 	});
 });
