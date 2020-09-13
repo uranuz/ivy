@@ -109,46 +109,46 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 			} // if
 			var instr = this._codeRange[this._pk];
 
-			with(Consts.OpCode) switch(instr[0]) {
-				case Nop: break;
+			switch(instr[0]) {
+				case OpCode.Nop: break;
 
 				// Load constant data from code
-				case LoadConst: {
+				case OpCode.LoadConst: {
 					this._stack.push( this.getModuleConstCopy(instr[1]) );
 					break;
 				}
 
 				// Arithmetic binary operations opcodes
-				case Add: {
+				case OpCode.Add: {
 					var args = this._getNumberArgs();
 					this._stack.push(args[0] + args[1]);
 					break;
 				}
-				case Sub: {
+				case OpCode.Sub: {
 					var args = this._getNumberArgs();
 					this._stack.push(args[0] - args[1]);
 					break;
 				}
-				case Mul: {
+				case OpCode.Mul: {
 					var args = this._getNumberArgs();
 					this._stack.push(args[0] * args[1]);
 					break;
 				}
-				case Div: {
+				case OpCode.Div: {
 					var
 						args = this._getNumberArgs(),
 						res = args[0] / args[1];
 					this._stack.push( args[2] === IvyDataType.Integer? Math.trunc(res): res );
 					break;
 				}
-				case Mod: {
+				case OpCode.Mod: {
 					var args = this._getNumberArgs();
 					this._stack.push(args[0] % args[1]);
 					break;
 				}
 
 				// Arrays or strings concatenation
-				case Concat: {
+				case OpCode.Concat: {
 					var
 						right = this._stack.pop(), left = this._stack.pop(),
 						rType = iu.getDataNodeType(right), lType = iu.getDataNodeType(left);
@@ -162,7 +162,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case Append: {
+				case OpCode.Append: {
 					var right = this._stack.pop(), left = this._stack.back(), lType = iu.getDataNodeType(left);
 					switch( lType ) {
 						case IvyDataType.Array:
@@ -177,7 +177,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case Insert: {
+				case OpCode.Insert: {
 					var
 						posNode = this._stack.pop(), posType = iu.getDataNodeType(posNode),
 						valNode = this._stack.pop(),
@@ -196,13 +196,13 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					arrNode.splice(posNode, 0, valNode);
 					break;
 				}
-				case InsertMass: {
+				case OpCode.InsertMass: {
 					loger.internalAssert(false, 'Not implemented operation');
 					break;
 				}
 
 				// General unary operations opcodes
-				case UnaryMin: {
+				case OpCode.UnaryMin: {
 					var arg = this._stack.pop();
 					if( typeof(arg) !== 'number' ) {
 						throw this.rtError('Expected number operand');
@@ -210,20 +210,21 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					this._stack.push(-arg);
 					break;
 				}
-				case UnaryPlus: {
+				case OpCode.UnaryPlus: {
 					if( typeof(arg) !== 'number' ) {
 						this.rtError('Expected number operand');
 					}
 					// Do nothing
 					break;
 				}
-				case UnaryNot: {
+				case OpCode.UnaryNot: {
 					this._stack.push( !this.evalAsBoolean(this._stack.pop()) );
 					break;
 				}
 
 				// Comparision operations opcodes
-				case Equal: case NotEqual: {
+				case OpCode.Equal:
+				case OpCode.NotEqual: {
 					var
 						right = this._stack.pop(),
 						left = this._stack.pop(),
@@ -250,7 +251,10 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case LT: case GT: case LTEqual: case GTEqual: {
+				case OpCode.LT:
+				case OpCode.GT:
+				case OpCode.LTEqual:
+				case OpCode.GTEqual: {
 					var
 						right = this._stack.pop(),
 						left = this._stack.pop(),
@@ -279,7 +283,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				}
 
 				// Array or assoc array operations
-				case LoadSubscr: {
+				case OpCode.LoadSubscr: {
 					var
 						indexValue = this._stack.pop(), indexType = iu.getDataNodeType(indexValue),
 						aggr = this._stack.pop();
@@ -327,7 +331,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case StoreSubscr: {
+				case OpCode.StoreSubscr: {
 					var
 						indexValue = this._stack.pop(), indexType = iu.getDataNodeType(indexValue),
 						value = this._stack.pop(),
@@ -363,7 +367,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case LoadSlice: {
+				case OpCode.LoadSlice: {
 					var
 						endValue = this._stack.pop(), endType = iu.getDataNodeType(endValue),
 						beginValue = this._stack.pop(), beginType = iu.getDataNodeType(beginValue),
@@ -388,7 +392,9 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				}
 
 				// Frame data load/ store
-				case StoreName: case StoreLocalName: case StoreNameWithParents: {
+				case OpCode.StoreName:
+				case OpCode.StoreLocalName:
+				case OpCode.StoreNameWithParents: {
 					var
 						varValue = this._stack.pop(),
 						varName = this.getModuleConstCopy(instr[1]);
@@ -405,7 +411,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case LoadName: {
+				case OpCode.LoadName: {
 					var varName = this.getModuleConstCopy(instr[1]);
 					if( iu.getDataNodeType(varName) !== IvyDataType.String ) {
 						this.rtError('Expected String as variable name');
@@ -415,7 +421,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				}
 
 				// Preparing and calling directives
-				case LoadDirective: {
+				case OpCode.LoadDirective: {
 					var stackArgCount = instr[1];
 					loger.internalAssert(
 						stackArgCount > 1,
@@ -523,7 +529,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					this._stack.push(undefined); // We should return something
 					break;
 				}
-				case RunCallable: {
+				case OpCode.RunCallable: {
 					var stackArgCount = instr[1];
 					loger.internalAssert(stackArgCount > 0, "Call must at least have 1 arguments in stack!");
 					loger.internalAssert(stackArgCount <= this._stack.getLength(), "Not enough arguments in execution stack");
@@ -673,7 +679,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					break;
 				}
 
-				case Call: {
+				case OpCode.Call: {
 					var args = this._stack.pop(), argsType = iu.getDataNodeType(args);
 					loger.internalAssert(
 						[IvyDataType.AssocArray, IvyDataType.Undef, IvyDataType.Null].indexOf(argsType) > -1,
@@ -748,7 +754,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					break;
 				}
 
-				case Await: {
+				case OpCode.Await: {
 					var aResult = this._stack.pop();
 					loger.internalAssert(
 						iu.getDataNodeType(aResult) === IvyDataType.AsyncResult,
@@ -772,7 +778,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				}
 
 				// Import another module
-				case ImportModule: {
+				case OpCode.ImportModule: {
 					var moduleName = this._stack.pop();
 					if( iu.getDataNodeType(moduleName) !== IvyDataType.String ) {
 						this.rtError('Expected String as module name');
@@ -818,7 +824,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case FromImport: {
+				case OpCode.FromImport: {
 					var symbolsNode = this._stack.pop(), symbolsType = iu.getDataNodeType(symbolsNode);
 					if( symbolsType !== IvyDataType.Array ) {
 						this.rtError('Expected list of symbol names');
@@ -838,10 +844,10 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				}
 
 				// Flow control opcodes
-				case JumpIfTrue:
-				case JumpIfFalse:
-				case JumpIfFalseOrPop: // Used in "and"
-				case JumpIfTrueOrPop: // Used in "or"
+				case OpCode.JumpIfTrue:
+				case OpCode.JumpIfFalse:
+				case OpCode.JumpIfFalseOrPop: // Used in "and"
+				case OpCode.JumpIfTrueOrPop: // Used in "or"
 				{
 					if( instr[1] >= this._codeRange.length ) {
 						this.rtError('Cannot jump after the end of code object');
@@ -864,14 +870,14 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case Jump: {
+				case OpCode.Jump: {
 					if( instr[1] >= this._codeRange.length ) {
 						this.rtError('Cannot jump after the end of code object');
 					}
 					this._pk = instr[1];
 					continue; // Skip _pk increment
 				}
-				case Return: {
+				case OpCode.Return: {
 					// Set instruction index at the end of code object in order to finish 
 					this._pk = this._codeRange.length;
 					var result = this._stack.back();
@@ -882,12 +888,12 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				}
 
 				// Stack operations
-				case PopTop: {
+				case OpCode.PopTop: {
 					this._stack.pop();
 					break;
 				}
 
-				case SwapTwo: {
+				case OpCode.SwapTwo: {
 					var
 						tmp = this._stack.back(), len = this._stack.getLength(),
 						lastIndex = len - 1, prevIndex = len - 2;
@@ -902,7 +908,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				}
 
 				// Loop initialization and execution
-				case GetDataRange: {
+				case OpCode.GetDataRange: {
 					var aggr = this._stack.pop();
 					switch( iu.getDataNodeType(aggr) ) {
 						case IvyDataType.Array:
@@ -921,7 +927,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					break;
 				}
-				case RunLoop: {
+				case OpCode.RunLoop: {
 					var dataRange = this._stack.back();
 					if( iu.getDataNodeType(dataRange) !== IvyDataType.DataNodeRange ) {
 						this.rtError('Expected DataNodeRange to iterate over');
@@ -943,7 +949,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				}
 
 				// Data construction opcodes
-				case MakeArray: {
+				case OpCode.MakeArray: {
 					var
 						arrayLen = instr[1],
 						newArray = [];
@@ -959,7 +965,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					this._stack.push(newArray);
 					break;
 				}
-				case MakeAssocArray: {
+				case OpCode.MakeAssocArray: {
 					var
 						aaLen = instr[1],
 						newAA = {};
@@ -979,7 +985,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					break;
 				}
 
-				case MarkForEscape: {
+				case OpCode.MarkForEscape: {
 					if( instr[1] >= Consts.NodeEscapeStateItems.length ) {
 						this.rtError('Incorrect escape state provided');
 					}
