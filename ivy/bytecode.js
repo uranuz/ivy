@@ -47,7 +47,6 @@ var Consts = {
 
 		// Preparing and calling directives
 		'LoadDirective',
-		'RunCallable',
 		'Call',
 		'Await',
 

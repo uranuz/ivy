@@ -273,10 +273,10 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 					// Comparision itself
 					switch( instr[0] ) {
-						case LT: this._stack.push(left < right); break;
-						case GT: this._stack.push(left > right); break;
-						case LTEqual: this._stack.push(left <= right); break;
-						case GTEqual: this._stack.push(left >= right); break;
+						case OpCode.LT: this._stack.push(left < right); break;
+						case OpCode.GT: this._stack.push(left > right); break;
+						case OpCode.LTEqual: this._stack.push(left <= right); break;
+						case OpCode.GTEqual: this._stack.push(left >= right); break;
 						default: this.rtError('Unexpected bug!');
 					}
 					break;
@@ -404,9 +404,9 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 					}
 
 					switch( instr[0] ) {
-						case StoreName: this.setValue(varName, varValue); break;
-						case StoreLocalName: this.setLocalValue(varName, varValue); break;
-						case StoreNameWithParents: this.setValueWithParents(varName, varValue); break;
+						case OpCode.StoreName: this.setValue(varName, varValue); break;
+						case OpCode.StoreLocalName: this.setLocalValue(varName, varValue); break;
+						case OpCode.StoreNameWithParents: this.setValueWithParents(varName, varValue); break;
 						default: this.rtError('Unexpected StoreName instruction kind');
 					}
 					break;
@@ -527,155 +527,6 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 
 					this.setLocalValue(varName, new CallableObject(varName, codeObj)); // Put this directive in context
 					this._stack.push(undefined); // We should return something
-					break;
-				}
-				case OpCode.RunCallable: {
-					var stackArgCount = instr[1];
-					loger.internalAssert(stackArgCount > 0, "Call must at least have 1 arguments in stack!");
-					loger.internalAssert(stackArgCount <= this._stack.getLength(), "Not enough arguments in execution stack");
-
-					var callableObj = this._stack.pop();
-					loger.internalAssert(
-						iu.getDataNodeType(callableObj) === IvyDataType.Callable,
-						`Expected Callable operand`
-					);
-
-					var
-						attrBlocks = callableObj.attrBlocks(),
-						dataDict = {
-							"_ivyMethod": callableObj._name,
-							"_ivyModule": (callableObj._codeObj? callableObj._codeObj._moduleObj._name: null)
-						}; // Allocating scope
-
-					this.newFrame(callableObj, this._getModuleFrame(callableObj), dataDict, callableObj.isNoscope());
-
-					if( stackArgCount > 1 ) // If args count is 1 - it mean that there is no arguments
-					{
-						var stackArgsProcessed = 0;
-						for( var i = 0; i < attrBlocks.length; ++i )
-						{
-							var
-								attrBlock = attrBlocks[i],
-								// Getting args block metainfo
-								blockArgCount,
-								blockType;
-							switch( attrBlock.kind ) {
-								case DirAttrKind.NamedAttr: case DirAttrKind.ExprAttr: {
-									var blockHeader = this._stack.pop(); // Get block header
-									++stackArgsProcessed;
-									loger.internalAssert(
-										iu.getDataNodeType(blockHeader) === IvyDataType.Integer,
-										`Expected integer as arguments block header!`
-									);
-									blockArgCount = blockHeader >> Consts.stackBlockHeaderSizeOffset;
-									blockType = blockHeader & Consts.stackBlockHeaderTypeMask;
-									// Bit between block size part and block type must always be zero
-									loger.internalAssert(
-										(blockHeader & Consts.stackBlockHeaderCheckMask) == 0,
-										`Seeems that stack is corrupted`
-									);
-									break;
-								}
-								default: break;
-							}
-
-							switch( attrBlock.kind )
-							{
-								case DirAttrKind.NamedAttr:
-								{
-									var passedArgs = {};
-									
-									for( var k = 0; k < blockArgCount; ++k )
-									{
-										var attrValue = this._stack.pop(); ++stackArgsProcessed;
-
-										var attrName = this._stack.pop(); ++stackArgsProcessed;
-										loger.internalAssert(
-											iu.getDataNodeType(attrName) === IvyDataType.String,
-											"Named attribute name must be string!"
-										);
-										loger.internalAssert(
-											!passedArgs.hasOwnProperty(attrName),
-											"Duplicate named argument detected!"
-										);
-										loger.internalAssert(
-											attrBlock.namedAttrs.hasOwnProperty(attrName),
-											"Unexpected argument detected!"
-										);
-
-										this.setLocalValue(attrName, attrValue);
-										passedArgs[attrName] = true;
-									}
-
-									for( var attrName in attrBlock.namedAttrs )
-									{
-										if( !attrBlock.namedAttrs.hasOwnProperty(attrName) ) {
-											continue;
-										}
-										var namedAttr = attrBlock.namedAttrs[attrName];
-										if( passedArgs.hasOwnProperty(attrName) ) {
-											continue; // Attribute already passes to directive
-										}
-										// Do deep copy of default value
-										this.setLocalValue(attrName, iu.deeperCopy(namedAttr.defaultValue));
-									}
-									break;
-								}
-								case DirAttrKind.ExprAttr:
-								{
-									for( var j = 0; j < attrBlock.exprAttrs.length; ++j )
-									{
-										var
-											backIndex = attrBlock.exprAttrs.length - 1 - j,
-											exprAttr = attrBlock.exprAttrs[backIndex];
-										if( backIndex < blockArgCount )
-										{
-											var attrValue = this._stack.pop(); ++stackArgsProcessed;
-											this.setLocalValue(exprAttr.name, attrValue);
-										} else {
-											this.setLocalValue(exprAttr.name, exprAttr.defaultValue);
-										}
-									}
-									break;
-								}
-								default: break;
-							}
-						}
-					}
-
-					if( callableObj._codeObj )
-					{
-						this._stack.push(this._pk+1); // Put next instruction index on the stack to return at
-						this._stack.addStackBlock();
-						this._codeRange = callableObj._codeObj._instrs; // Set new instruction range to execute
-						this._pk = 0;
-						continue; // Skip _pk increment
-					}
-					else
-					{
-						loger.internalAssert(
-							callableObj._dirInterp,
-							`Callable object expected to have non null code object or native directive interpreter object!`
-						);
-						this._stack.addStackBlock();
-						callableObj._dirInterp.interpret(this); // Run native directive interpreter
-
-						// Else we expect to have result of directive on the stack
-						loger.internalAssert(
-							this._stack.getLength(),
-							"Stack should contain 1 item empty now!"
-						);
-
-						// If frame stack contains last frame - it means that we nave done with programme
-						if( this._frameStack.length === exitFrames ) {
-							fResult.resolve(this._stack.back());
-							return;
-						}
-						var result = this._stack.pop(); // Drop result
-						this.removeFrame(); // Drop frame from stack after end of execution
-						this._stack.push(result); // Get result back
-					}
-
 					break;
 				}
 
