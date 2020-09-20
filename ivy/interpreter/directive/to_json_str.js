@@ -1,28 +1,12 @@
 define('fir/ivy/directive/to_json_str', [
-	'ivy/interpreter/directive/iface',
-	'ivy/utils',
-	'ivy/types/data/consts'
-], function(
-	DirectiveInterpreter,
-	iu,
-	Consts
-) {
-	var
-		IvyDataType = Consts.IvyDataType,
-		DirAttrKind = Consts.DirAttrKind;
+	'ivy/interpreter/directive/utils'
+], function(du) {
 return FirClass(
 	function ToJSONStrDirInterpreter() {
-		this._name = 'to_json_str';
-		this._attrBlocks = [{
-			'kind': DirAttrKind.ExprAttr,
-			'exprAttrs': [{ 'name': 'value', 'typeName': 'any' }]
-		}, {
-			'kind': DirAttrKind.BodyAttr,
-			'bodyAttr': {}
-		}]
-	}, DirectiveInterpreter, {
+		this._symbol = new du.DirectiveSymbol(`to_json_str`, [du.DirAttr("value", du.IvyAttrType.Any)]);
+	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
-			interp._stack.push(iu.toStdJSON(interp.getValue("value")));
+			interp._stack.push(du.toStdJSON(interp.getValue("value")));
 		}
 	});
 });

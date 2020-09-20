@@ -1,39 +1,12 @@
 define('ivy/interpreter/directive/int_ctor', [
-	'ivy/interpreter/directive/iface',
-	'ivy/utils',
-	'ivy/types/data/consts'
-], function(DirectiveInterpreter, iu, Consts) {
-	var
-		IvyDataType = Consts.IvyDataType,
-		DirAttrKind = Consts.DirAttrKind;
+	'ivy/interpreter/directive/utils'
+], function(du) {
 return FirClass(
 	function IntCtorDirInterpreter() {
-		this._name = 'int';
-		this._attrBlocks = [{
-			'kind': DirAttrKind.ExprAttr,
-			'exprAttrs': [{ 'name': 'value', 'typeName': 'any' }]
-		}, {
-			'kind': DirAttrKind.BodyAttr,
-			'bodyAttr': {}
-		}]
-	}, DirectiveInterpreter, {
+		this._symbol = new du.DirectiveSymbol(`int`, [du.DirAttr("value", du.IvyAttrType.Any)]);
+	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
-			var value = interp.getValue("value");
-			switch( iu.getDataNodeType(value) ) {
-				case IvyDataType.Boolean: interp._stack.push(value.boolean? 1: 0); break;
-				case IvyDataType.Integer: interp._stack.push(value); break;
-				case IvyDataType.String: {
-					var parsed = parseInt(value, 10);
-					if( isNaN(parsed) || String(parsed) !== value ) {
-						interp.rtError('Unable to parse value as Integer');
-					}
-					interp._stack.push(parsed);
-					break;
-				}
-				default:
-					interp.rtError('Cannot convert value to Integer');
-					break;
-			}
+			interp._stack.push(du.idat.toInteger(interp.getValue("value")));
 		}
-	})
+	});
 });

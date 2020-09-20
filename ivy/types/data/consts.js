@@ -1,4 +1,5 @@
 define('ivy/types/data/consts', [], function() {
+function NullPtrType() {}
 var Consts = {
 	IvyDataTypeItems: [
 		'Undef',
@@ -23,7 +24,9 @@ var Consts = {
 	],
 	AsyncResultStateItems: [
 		'Init', 'Pending', 'Success', 'Error'
-	]
+	],
+	NullPtrType: NullPtrType,
+	NullPtr: new NullPtrType
 },
 EnumConsts = [
 	'IvyDataType',

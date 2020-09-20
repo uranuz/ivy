@@ -1,25 +1,14 @@
 define('ivy/interpreter/directive/typestr', [
-	'ivy/interpreter/directive/iface',
-	'ivy/utils',
+	'ivy/interpreter/directive/utils',
 	'ivy/types/data/consts'
-], function(DirectiveInterpreter, iu, Consts) {
-	var
-		IvyDataType = Consts.IvyDataType,
-		DirAttrKind = Consts.DirAttrKind;
+], function(du, DataConsts) {
 return FirClass(
 	function TypeStrDirInterpreter() {
-		this._name = 'typestr';
-		this._attrBlocks = [{
-			'kind': DirAttrKind.ExprAttr,
-			'exprAttrs': [{ 'name': 'value', 'typeName': 'any' }]
-		}, {
-			'kind': DirAttrKind.BodyAttr,
-			'bodyAttr': {}
-		}]
-	}, DirectiveInterpreter, {
+		this._symbol = new du.DirectiveSymbol(`typestr`, [du.DirAttr("value", du.IvyAttrType.Any)]);
+	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
-			var valueType = iu.getDataNodeType(interp.getValue("value"));
-			if( valueType >= Consts.IvyDataTypeItems.length ) {
+			var valueType = du.idat.type(interp.getValue("value"));
+			if( valueType >= DataConsts.IvyDataTypeItems.length ) {
 				interp.rtError('Unable to get type-string for value');
 			}
 			interp._stack.push(Consts.IvyDataTypeItems[valueType]);

@@ -1,35 +1,12 @@
 define('ivy/interpreter/directive/len', [
-	'ivy/interpreter/directive/iface',
-	'ivy/utils',
-	'ivy/types/data/consts'
-], function(DirectiveInterpreter, iu, Consts) {
-	var
-		IvyDataType = Consts.IvyDataType,
-		DirAttrKind = Consts.DirAttrKind;
+	'ivy/interpreter/directive/utils'
+], function(du) {
 return FirClass(
 	function LenDirInterpreter() {
-		this._name = 'len';
-		this._attrBlocks = [{
-			'kind': DirAttrKind.ExprAttr,
-			'exprAttrs': [{ 'name': 'value', 'typeName': 'any' }]
-		}, {
-			'kind': DirAttrKind.BodyAttr,
-			'bodyAttr': {}
-		}]
-	}, DirectiveInterpreter, {
+		this._symbol = new du.DirectiveSymbol(`len`, [du.DirAttr("value", du.IvyAttrType.Any)]);
+	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
-			var value = interp.getValue("value");
-			switch( iu.getDataNodeType(value) ) {
-				case IvyDataType.String:
-				case IvyDataType.Array:
-					interp._stack.push(value.length);
-					break;
-				case IvyDataType.AssocArray:
-					interp._stack.push(Object.keys(value).length);
-					break;
-				default:
-					interp.rtError('Cannot get length for value');
-			}
+			interp._stack.push(du.idat.length(interp.getValue("value")));
 		}
 	});
 });

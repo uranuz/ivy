@@ -1,24 +1,12 @@
 define('ivy/interpreter/directive/str_ctor', [
-	'ivy/interpreter/directive/iface',
-	'ivy/utils',
-	'ivy/types/data/consts'
-], function(DirectiveInterpreter, iu, Consts) {
-	var
-		IvyDataType = Consts.IvyDataType,
-		DirAttrKind = Consts.DirAttrKind;
+	'ivy/interpreter/directive/utils'
+], function(du) {
 return FirClass(
 	function StrCtorDirInterpreter() {
-		this._name = 'str';
-		this._attrBlocks = [{
-			'kind': DirAttrKind.ExprAttr,
-			'exprAttrs': [{ 'name': 'value', 'typeName': 'any' }]
-		}, {
-			'kind': DirAttrKind.BodyAttr,
-			'bodyAttr': {}
-		}]
-	}, DirectiveInterpreter, {
+		this._symbol = new du.DirectiveSymbol(`str`, [du.DirAttr("value", du.IvyAttrType.Any)]);
+	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
-			interp._stack.push(String(interp.getValue("value")));
+			interp._stack.push(du.idat.toString(interp.getValue("value")));
 		}
-	})
+	});
 });

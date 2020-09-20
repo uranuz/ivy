@@ -1,28 +1,13 @@
 define('ivy/interpreter/directive/scope', [
-	'ivy/interpreter/directive/iface',
-	'ivy/utils',
-	'ivy/types/data/consts'
-], function(DirectiveInterpreter, iu, Consts) {
-	var
-		IvyDataType = Consts.IvyDataType,
-		DirAttrKind = Consts.DirAttrKind;
+	'ivy/interpreter/directive/utils',
+	'ivy/types/symbol/dir_body_attrs'
+], function(du, DirBodyAttrs) {
 return FirClass(
 	function ScopeDirInterpreter() {
-		this._name = 'scope';
-		this._attrBlocks = [{
-			'kind': DirAttrKind.ExprAttr,
-			'exprAttrs': [{ 'name': 'value', 'typeName': 'any' }]
-		}, {
-			'kind': DirAttrKind.BodyAttr,
-			'bodyAttr': {'isNoscope': true}
-		}]
-	}, DirectiveInterpreter, {
+		this._symbol = new du.DirectiveSymbol(`scope`, [], DirBodyAttrs(/*isNoscope=*/true));
+	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
-			var frame = interp.independentFrame();
-			if( !frame ) {
-				interp.rtError('Current frame is null!');
-			}
-			interp._stack.push(frame._dataDict);
+			interp._stack.push(interp.independentFrame._dataDict);
 		}
 	});
 });

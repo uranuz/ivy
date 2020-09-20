@@ -184,7 +184,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						// Don't pop result form stack here
 						arrNode = this._stack.back(), arrType = iu.getDataNodeType(arrNode);
 					
-					if( [IvyDataType.Integer, IvyDataType.Null, IvyDataType.Undef].indexOf(posType) < 0 ) {
+					if( [IvyDataType.Integer, IvyDataType.Null, IvyDataType.Undef].includes(posType) ) {
 						this.rtError('Expected Null, Undef (for append) or Integer as position operand');
 					}
 					if( arrType !== IvyDataType.Array ) {
@@ -240,7 +240,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						IvyDataType.Floating,
 						IvyDataType.String,
 						IvyDataType.DateTime
-						].indexOf(rType) < 0
+						].includes(rType)
 					) {
 						this.rtError('Cannot compare values!')
 					}
@@ -267,7 +267,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						IvyDataType.Integer,
 						IvyDataType.Floating,
 						IvyDataType.String
-						].indexOf(rType) < 0
+						].includes(rType)
 					) {
 						this.rtError(`Unsupported type of operand in comparision operation`)
 					}
@@ -308,7 +308,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 							break;
 						}
 						case IvyDataType.ClassNode: {
-							if( [IvyDataType.String, IvyDataType.Integer].indexOf(indexType) < 0 ) {
+							if( [IvyDataType.String, IvyDataType.Integer].includes(indexType) ) {
 								this.rtError('Expected String or Integer as index value. Got: ' + indexType);
 							}
 							this._stack.push(aggr.at( indexValue ));
@@ -356,7 +356,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 							break;
 						}
 						case IvyDataType.ClassNode: {
-							if( [IvyDataType.String, IvyDataType.Integer].indexOf(indexType) < 0 ) {
+							if( [IvyDataType.String, IvyDataType.Integer].includes(indexType) ) {
 								this.rtError('Expected String or Integer as index value. Got: ' + indexType);
 							}
 							aggr.setAt(value, indexType);
@@ -533,7 +533,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				case OpCode.Call: {
 					var args = this._stack.pop(), argsType = iu.getDataNodeType(args);
 					loger.internalAssert(
-						[IvyDataType.AssocArray, IvyDataType.Undef, IvyDataType.Null].indexOf(argsType) > -1,
+						[IvyDataType.AssocArray, IvyDataType.Undef, IvyDataType.Null].includes(argsType),
 						`Expected assoc array, undef or null as arguments operand`
 					);
 
@@ -704,11 +704,11 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 						this.rtError('Cannot jump after the end of code object');
 					}
 					var jumpCond = this.evalAsBoolean(this._stack.back()); // This is actual condition to test
-					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].indexOf(instr[0]) >= 0 ) {
+					if( [OpCode.JumpIfFalse, OpCode.JumpIfFalseOrPop].includes(instr[0]) ) {
 						jumpCond = !jumpCond; // Invert condition if False family is used
 					}
 
-					if( [OpCode.JumpIfTrue, OpCode.JumpIfFalse].indexOf(instr[0]) >= 0 || !jumpCond ) {
+					if( [OpCode.JumpIfTrue, OpCode.JumpIfFalse].includes(instr[0]) || !jumpCond ) {
 						// Drop condition from _stack on JumpIfTrue, JumpIfFalse anyway
 						// But for JumpIfTrueOrPop, JumpIfFalseOrPop drop it only if jumpCond is false
 						this._stack.pop();
@@ -860,7 +860,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 		var
 			right = this._stack.pop(), rType = iu.getDataNodeType(right),
 			left = this._stack.pop(), lType = iu.getDataNodeType(left);
-		if( [IvyDataType.Integer, IvyDataType.Floating].indexOf(lType) < 0 || lType !== rType ) {
+		if( [IvyDataType.Integer, IvyDataType.Floating].includes(lType) || lType !== rType ) {
 			this.rtError('Left and right values of arithmetic operation must have the same integer or floating type');
 		}
 		return [left, right, lType];
@@ -975,7 +975,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 			break;
 		}
 
-		if( !findLocal && [FrameSearchMode.get, FrameSearchMode.tryGet].indexOf(mode) >= 0 )
+		if( !findLocal && [FrameSearchMode.get, FrameSearchMode.tryGet].includes(mode) )
 		{
 			var globalRes = this._globalFrame.findValue(varName, mode);
 			if( globalRes.parent !== undefined ) {
@@ -1058,7 +1058,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 	{
 		var loger = this;
 		loger.internalAssert(
-			[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].indexOf(iu.getDataNodeType(args)) >= 0,
+			[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].includes(iu.getDataNodeType(args)),
 			`Expected Undef, Null or AssocArray as list of directive arguments`
 		);
 
@@ -1114,7 +1114,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				case DirAttrKind.NamedAttr:
 				{
 					for( var attrName in attrBlock.namedAttrs ) {
-						if( !attrNames || !attrNames.length || attrNames.indexOf(attrName) >= 0 ) {
+						if( !attrNames || !attrNames.length || attrNames.includes(attrName) ) {
 							res[attrName] = iu.deeperCopy(attrBlock.namedAttrs[attrName].defaultValue);
 						}
 					}
@@ -1124,7 +1124,7 @@ function Interpreter(moduleObjCache, directiveFactory, mainModuleName, dataDict)
 				{
 					for( var j = 0; j < attrBlock.exprAttrs; ++j ) {
 						var attrName = attrBlock.exprAttrs[j].name;
-						if( !attrNames || !attrNames.length || attrNames.indexOf(attrName) >= 0 ) {
+						if( !attrNames || !attrNames.length || attrNames.includes(attrName) ) {
 							res[attrName] = iu.deeperCopy(attrBlock.exprAttrs[j].defaultValue);
 						}
 					}

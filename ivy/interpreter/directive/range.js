@@ -1,39 +1,19 @@
 define('ivy/interpreter/directive/range', [
-	'ivy/interpreter/directive/iface',
-	'ivy/utils',
-	'ivy/types/data/consts',
+	'ivy/interpreter/directive/utils',
 	'ivy/types/data/range/integer'
-], function(DirectiveInterpreter, iu, Consts, IntegerRange) {
-	var
-		IvyDataType = Consts.IvyDataType,
-		DirAttrKind = Consts.DirAttrKind;
+], function(du, IntegerRange) {
 return FirClass(
 	function RangeDirInterpreter() {
-		this._name = 'range';
-		this._attrBlocks = [{
-			'kind': DirAttrKind.ExprAttr,
-			'exprAttrs': [
-				{ 'name': 'begin', 'typeName': 'any' },
-				{ 'name': 'end', 'typeName': 'any' }
-			]
-		}, {
-			'kind': DirAttrKind.BodyAttr,
-			'bodyAttr': {}
-		}]
-	}, DirectiveInterpreter, {
+		this._symbol = new du.DirectiveSymbol(`range`, [
+			du.DirAttr("begin", du.IvyAttrType.Any),
+			du.DirAttr("end", du.IvyAttrType.Any)
+		]);
+	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
-			var
-				begin = interp.getValue("begin"),
-				end = interp.getValue("end");
-
-			if( iu.getDataNodeType(begin) !=  IvyDataType.Integer ) {
-				interp.rtError('Expected Integer as "begin" argument');
-			}
-			if( iu.getDataNodeType(end) !=  IvyDataType.Integer ) {
-				interp.rtError('Expected Integer as "end" argument');
-			}
-
-			interp._stack.push(new IntegerRange(begin, end));
+			interp._stack.push(
+				new IntegerRange(
+					du.idat.integer(interp.getValue("begin")),
+					du.idat.integer(interp.getValue("end"))));
 		}
 	});
 });
