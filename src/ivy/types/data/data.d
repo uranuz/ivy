@@ -204,6 +204,35 @@ struct TIvyData(S)
 		throw new DataNodeException(`No "length" property for type: ` ~ this.type.text);
 	}
 
+	ptrdiff_t toInteger()
+	{
+		import std.conv: to, text;
+		switch( this.type )
+		{
+			case IvyDataType.Boolean: return this.boolean? 1: 0;
+			case IvyDataType.Integer: return this.integer;
+			case IvyDataType.String: return this.str.to!ptrdiff_t;
+			default:
+				break;
+		}
+		throw new DataNodeException(`Cannot convert value of type: ` ~ this.type.text ~ ` to integer`);
+	}
+
+	double toFloating()
+	{
+		import std.conv: to;
+		switch( this.type)
+		{
+			case IvyDataType.Boolean: return this.boolean? 1.0: 0.0;
+			case IvyDataType.Integer: return this.integer.to!double;
+			case IvyDataType.Floating: return this.floating;
+			case IvyDataType.String: return this.str.to!double;
+			default:
+				break;
+		}
+		throw new DataNodeException(`Cannot convert value of type: ` ~ this.type.text ~ ` to floating`);
+	}
+
 	private void assign(T)(auto ref T arg)
 	{
 		import trifle.traits: isUnsafelyNullable;
