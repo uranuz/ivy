@@ -27,15 +27,14 @@ class Interpreter
 	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
 	import ivy.bytecode: Instruction, OpCode;
 	import ivy.types.symbol.dir_attr: DirAttr;
+	import ivy.types.symbol.global: GLOBAL_SYMBOL_NAME;
+	import ivy.interpreter.directive.global: globalCallable;
 
 public:
 	alias LogerMethod = void delegate(LogInfo);
 
 	// Stack of execution frames with directives or modules local data
 	ExecutionFrame[] _frameStack;
-
-	// Global execution frame used for some global built-in data
-	ExecutionFrame _globalFrame;
 
 	// Storage for execution frames of imported modules
 	ExecutionFrame[string] _moduleFrames;
@@ -71,11 +70,10 @@ public:
 		ModuleObject mainModuleObj = this._moduleObjCache.get(mainModuleName);
 		this.log.internalAssert(mainModuleObj !is null, `Cannot get main module from module objects!`);
 
-		CallableObject rootCallableObj = new CallableObject(mainModuleObj.mainCodeObject);
+		// Add global execution frame. Do not add it to _frameStack!
+		this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(globalCallable);
 
-		this._globalFrame = new ExecutionFrame(true);
-		// Add global execution frame
-		this._moduleFrames["__global__"] = _globalFrame;
+		CallableObject rootCallableObj = new CallableObject(mainModuleObj.mainCodeObject);
 
 		this.newFrame(rootCallableObj, true); // Create entry point module frame
 		this._stack.addStackBlock();
@@ -88,7 +86,7 @@ public:
 		this.log.internalAssert(dirInterp, `Directive name is empty or direxecInterp is null!`);
 
 		// Add custom native directive interpreters to global scope
-		_globalFrame.setValue(dirInterp.symbol.name, IvyData(new CallableObject(dirInterp)));
+		this.globalFrame.setValue(dirInterp.symbol.name, IvyData(new CallableObject(dirInterp)));
 	}
 
 	// Method used to set custom global directive interpreters
@@ -105,7 +103,7 @@ public:
 	{
 		foreach( string name, IvyData dataNode; extraGlobals ) {
 			// Take a copy of it just like with consts
-			_globalFrame.setValue(name, dataNode);
+			this.globalFrame.setValue(name, dataNode);
 		}
 	}
 
@@ -266,14 +264,20 @@ public:
 		return this._frameStack.back;
 	}
 
+	ExecutionFrame globalFrame() @property {
+		return this._moduleFrames[GLOBAL_SYMBOL_NAME];
+	}
+
 	void newFrame(CallableObject callable, bool isModule = false)
 	{
-		ExecutionFrame modFrame = isModule? null: this._getModuleFrame(callable);
-		this._frameStack ~= new ExecutionFrame(callable, modFrame);
-		if( isModule ) {
-			this._moduleFrames[callable.symbol.name] = this.currentFrame();
+		this._frameStack ~= new ExecutionFrame(callable);
+		string symbolName = callable.symbol.name;
+		if( isModule )
+		{
+			this.log.internalAssert(symbolName != GLOBAL_SYMBOL_NAME, "Cannot create module name with name: ", GLOBAL_SYMBOL_NAME);
+			this._moduleFrames[symbolName] = this.currentFrame();
 		}
-		this.log.write(`Enter new execution frame for callable: `, callable.symbol.name);
+		this.log.write(`Enter new execution frame for callable: `, symbolName);
 	}
 
 	void removeFrame()
@@ -284,82 +288,57 @@ public:
 		this._frameStack.popBack();
 	}
 
-	static struct FrameSearchRes
-	{
-		ExecutionFrame frame;
-		IvyData* node;
-	}
-
 	// Returns execution frame for variable
-	FrameSearchRes findValue(bool globalSearch = false)(string varName)
+	ExecutionFrame findValueFrame(bool globalSearch = false)(string varName)
 	{
 		import std.range: back;
 		this.log.write(`Starting to search for variable: `, varName);
 
-		IvyData* node;
 		for( size_t i = this._frameStack.length; i > 0; --i )
 		{
 			ExecutionFrame frame = this._frameStack[i-1];
 
-			static if( globalSearch ) {
-				node = frame.findGlobalValue(varName);
-			} else {
-				node = frame.findValue(varName);
+			if( frame.hasValue(varName) ) {
+				return frame;
 			}
-			
-			if( node !is null ) {
-				return FrameSearchRes(frame, node);
-			} else if( frame.hasOwnScope() ) {
+
+			static if( globalSearch )
+			{
+				ExecutionFrame modFrame = this._getModuleFrame(frame.callable);
+				if( modFrame.hasValue(varName) ) {
+					return modFrame;
+				}
+			}
+
+			if( frame.hasOwnScope() ) {
 				break;
 			}
 		}
 
 		static if( globalSearch )
 		{
-			node = this._globalFrame.findGlobalValue(varName);
-			if( node !is null ) {
-				return FrameSearchRes(this._globalFrame, node);
+			if( this.globalFrame.hasValue(varName) ) {
+				return this.globalFrame;
 			}
 		}
 		// By default store vars in local frame
-		return FrameSearchRes(this._frameStack.back, null);
+		return this._frameStack.back;
 	}
 
-	ExecutionFrame findVarFrame(bool globalSearch)(string varName)
-	{
-		this.log.write(`Searching frame for variable: ` ~ varName);
-		
-		FrameSearchRes res = this.findValue!globalSearch(varName);
-		this.log.internalAssert(res.frame !is null, `Expected frame to store variable`);
-		return res.frame;
+	IvyData getValue(string varName) {
+		return this.findValueFrame!(/*globalSearch=*/false)(varName).getValue(varName);
 	}
 
-	IvyData getValue(string varName)
-	{
-		FrameSearchRes res = this.findValue!(/*globalSearch=*/false)(varName);
-		if( res.node is null ) {
-			this.log.error("Undefined variable with name '", varName, "'");
-		}
-		return *res.node;
+	IvyData getGlobalValue(string varName) {
+		return this.findValueFrame!(/*globalSearch=*/true)(varName).getValue(varName);
 	}
 
-	IvyData getGlobalValue(string varName)
-	{
-		FrameSearchRes res = this.findValue!(/*globalSearch=*/true)(varName);
-		if( res.node is null ) {
-			this.log.error("Undefined variable with name '", varName, "'");
-		}
-		return *res.node;
+	void setValue(string varName, IvyData value) {
+		this.findValueFrame!(/*globalSearch=*/false)(varName).setValue(varName, value);
 	}
 
-	void setValue(string varName, IvyData value)
-	{
-		this.findVarFrame!(/*globalSearch=*/false)(varName).setValue(varName, value);
-	}
-
-	void setGlobalValue(string varName, IvyData value)
-	{
-		this.findVarFrame!(/*globalSearch=*/true)(varName).setGlobalValue(varName, value);
+	void setGlobalValue(string varName, IvyData value) {
+		this.findValueFrame!(/*globalSearch=*/true)(varName).setValue(varName, value);
 	}
 
 	IvyData getModuleConst( size_t index )
@@ -591,7 +570,7 @@ public:
 							this.log.internalAssert(indexValue.type == IvyDataType.String,
 								"Cannot execute LoadSubscr instruction. Index value for callable aggregate must be string!");
 							if( indexValue.str == `moduleName` ) {
-								this._stack.push(aggr.callable.moduleName);
+								this._stack.push(aggr.callable.moduleSymbol.name);
 							} else {
 								this.log.internalAssert(false, `Unexpected property "` ~ indexValue.str ~ `" for callable object`);
 							}
@@ -1297,7 +1276,7 @@ public:
 
 	ExecutionFrame _getModuleFrame(CallableObject callable)
 	{
-		ExecutionFrame moduleFrame = _moduleFrames.get(callable.moduleName, null);
+		ExecutionFrame moduleFrame = _moduleFrames.get(callable.moduleSymbol.name, null);
 		this.log.internalAssert(moduleFrame, `Module frame with name: `, moduleFrame, ` of callable: `, callable.symbol.name, ` does not exist!`);
 		return moduleFrame;
 	}

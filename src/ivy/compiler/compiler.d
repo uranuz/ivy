@@ -287,7 +287,7 @@ public:
 		switch( node.literalType )
 		{
 			case LiteralType.Undef:
-				constIndex = addConst( IvyData.makeUndef() );
+				constIndex = addConst( IvyData() );
 				break;
 			case LiteralType.Null:
 				constIndex = addConst( IvyData(null) );

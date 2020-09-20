@@ -6,7 +6,7 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 {
 	import ivy.types.data.exception: DataNodeException;
 
-    final switch( node.type )
+	final switch( node.type )
 	{
 		case IvyDataType.Undef:
 		case IvyDataType.Null:

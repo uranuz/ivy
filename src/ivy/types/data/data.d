@@ -56,28 +56,16 @@ struct TIvyData(S)
 		return storage.boolean;
 	}
 
-	void boolean(bool val) @property {
-		assign(val);
-	}
-
 	ptrdiff_t integer() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.Integer, "IvyData is not integer");
 		return storage.integer;
 	}
 
-	void integer(ptrdiff_t val) @property {
-		assign(val);
-	}
-
 	double floating() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.Floating, "IvyData is not floating");
 		return storage.floating;
-	}
-
-	void floating(double val) @property {
-		assign(val);
 	}
 
 	ref String str() @property
@@ -87,10 +75,6 @@ struct TIvyData(S)
 		return storage.str[0];
 	}
 
-	void str(String val) @property {
-		assign(val);
-	}
-
 	ref MIvyData[] array() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not array");
@@ -98,18 +82,10 @@ struct TIvyData(S)
 		return storage.array[0];
 	}
 
-	void array(MIvyData[] val) @property {
-		assign(val);
-	}
-
 	ref MIvyData[String] assocArray() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.AssocArray, "IvyData is not dict");
 		return storage.assocArray;
-	}
-
-	void assocArray(MIvyData[String] val) @property {
-		assign(val);
 	}
 
 	IClassNode classNode() @property
@@ -119,19 +95,11 @@ struct TIvyData(S)
 		return storage.classNode;
 	}
 
-	void classNode(IClassNode val) @property {
-		assign(val);
-	}
-
 	CodeObject codeObject() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.CodeObject, "IvyData is not code object");
 		enforce!DataNodeException(storage.codeObject !is null, "Detected null code object");
 		return storage.codeObject;
-	}
-
-	void codeObject(CodeObject val) @property {
-		assign(val);
 	}
 
 	CallableObject callable() @property
@@ -141,19 +109,11 @@ struct TIvyData(S)
 		return storage.callable;
 	}
 
-	void callable(CallableObject val) @property {
-		assign(val);
-	}
-
 	ExecutionFrame execFrame() @property
 	{
 		enforce!DataNodeException( type == IvyDataType.ExecutionFrame, "IvyData is not a execution frame");
 		enforce!DataNodeException(storage.execFrame !is null, "Detected null execution frame");
 		return storage.execFrame;
-	}
-
-	void execFrame(ExecutionFrame val) @property {
-		assign(val);
 	}
 
 	IvyDataRange dataRange() @property
@@ -163,10 +123,6 @@ struct TIvyData(S)
 		return storage.dataRange;
 	}
 
-	void dataRange(IvyDataRange val) @property {
-		assign(val);
-	}
-
 	AsyncResult asyncResult() @property
 	{
 		enforce!DataNodeException( type == IvyDataType.AsyncResult, "IvyData is not an async result");
@@ -174,20 +130,8 @@ struct TIvyData(S)
 		return storage.asyncResult;
 	}
 
-	void asyncResult(AsyncResult val) @property {
-		assign(val);
-	}
-
 	IvyDataType type() @property {
 		return typeTag;
-	}
-
-	bool isUndef() @property {
-		return type == IvyDataType.Undef;
-	}
-
-	bool isNull() @property {
-		return type == IvyDataType.Null;
 	}
 
 	bool empty() @property
@@ -504,12 +448,6 @@ struct TIvyData(S)
 			return null;
 
 		return key in storage.assocArray;
-	}
-
-	static MIvyData makeUndef() {
-		MIvyData undef;
-		undef.typeTag = IvyDataType.Undef;
-		return undef;
 	}
 
 	bool opEquals(MIvyData rhs)

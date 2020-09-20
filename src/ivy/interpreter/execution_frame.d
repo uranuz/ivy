@@ -24,79 +24,33 @@ class ExecutionFrame
 private:
 	CallableObject _callable;
 
-	ExecutionFrame _moduleFrame;
-
-	/*
-		Type of _dataDict should be Undef or Null if directive call or something that represented
-		by this ExecutionFrame haven't it's own data scope and uses parent scope for data.
-		In other cases _dataDict should be of AssocArray type for storing local variables
-	*/
 public IvyData _dataDict;
 
 public:
-	this(
-		CallableObject callable,
-		ExecutionFrame modFrame
-	) {
+	this(CallableObject callable)
+	{
 		this._callable = callable;
-		this._moduleFrame = modFrame;
-
-		enf(this._callable !is null, `Expected callable object for exec frame`);
+		enf(this._callable !is null, "Expected callable object for exec frame");
 
 		this._dataDict = [
 			"_ivyMethod": this._callable.symbol.name,
-			"_ivyModule": (callable.isNative? null: this._callable.codeObject.moduleObject.symbol.name)
+			"_ivyModule": this._callable.moduleSymbol.name
 		];
 	}
 
-	/// Global execution frame constructor. Do not use it for any other purpose
-	this(bool isGlobal)
-	{
-		enf(isGlobal, `Expected creation of global frame`);
-		this._dataDict = [
-			"_ivyMethod": "__global__"
-		];
-	}
-
-	IvyData* findValue(string varName) {
-		return varName in this._dataDict;
-	}
-
-	IvyData* findGlobalValue(string varName)
-	{
-		if( IvyData* res = this.findValue(varName) ) {
-			return res;
-		}
-
-		if( this._moduleFrame is null ) {
-			return null;
-		}
-		return this._moduleFrame.findGlobalValue(varName);
+	bool hasValue(string varName) {
+		return (varName in this._dataDict) !is null;
 	}
 
 	IvyData getValue(string varName)
 	{
-		IvyData* res = this.findValue(varName);
-		enf(res !is null, "Cannot find variable with name: " ~ varName);
+		IvyData* res = varName in this._dataDict;
+		enf(res !is null, "Cannot find variable with name \"" ~ varName ~ "\" in exec frame for symbol \"" ~ this.callable.symbol.name ~ "\"");
 		return *res;
 	}
 
-	void setValue(string varName, IvyData value)
-	{
-		if( IvyData* res = this.findValue(varName) ) {
-			(*res) = value;
-		} else {
-			this._dataDict[varName] = value;
-		}
-	}
-
-	void setGlobalValue(string varName, IvyData value)
-	{
-		if( IvyData* res = this.findGlobalValue(varName) ) {
-			(*res) = value;
-		} else {
-			this._dataDict[varName] = value;
-		}
+	void setValue(string varName, IvyData value) {
+		this._dataDict[varName] = value;
 	}
 
 	bool hasOwnScope() @property {
@@ -105,12 +59,12 @@ public:
 
 	CallableObject callable() @property
 	{
-		enf(this._callable !is null, `No callable for global execution frame`);
+		enf(this._callable !is null, "No callable for global execution frame");
 		return this._callable;
 	}
 
 	override string toString() {
-		return `<Exec frame for dir object "` ~ this._callable.symbol.name ~ `">`;
+		return "<Exec frame for dir object \"" ~ this.callable.symbol.name ~ "\">";
 	}
 
 }

@@ -33,7 +33,9 @@ public:
 
 	this(string name, DirAttr[] attrs = null, DirBodyAttrs bodyAttrs = DirBodyAttrs.init)
 	{
-		this(name, Location(`__global__`), attrs, bodyAttrs);
+		import ivy.types.symbol.global: globalSymbol;
+		
+		this(name, globalSymbol.location, attrs, bodyAttrs);
 	}
 
 	private void _reindexAttrs()

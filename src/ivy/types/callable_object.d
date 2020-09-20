@@ -58,18 +58,18 @@ public:
 		if( this.isNative ) {
 			return this._dirInterp.symbol;
 		}
-		return this._codeObject.symbol;
+		return this.codeObject.symbol;
+	}
+
+	ICallableSymbol moduleSymbol() @property
+	{
+		if( this.isNative ) {
+			return this._dirInterp.moduleSymbol;
+		}
+		return this.codeObject.moduleObject.symbol;
 	}
 
 	ref IvyData[string] defaults() @property {
 		return this._defaults;
-	}
-	
-	string moduleName() @property
-	{
-		if( this.isNative ) {
-			return "__global__";
-		}
-		return this.codeObject.moduleObject.symbol.name;
 	}
 }

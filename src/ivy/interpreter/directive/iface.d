@@ -8,4 +8,5 @@ interface IDirectiveInterpreter
 	void interpret(Interpreter interp);
 
 	ICallableSymbol symbol() @property;
+	ICallableSymbol moduleSymbol() @property;
 }

@@ -21,4 +21,10 @@ class BaseDirectiveInterpreter: IDirectiveInterpreter
 		enforce(this._symbol !is null, `Directive symbol is not set for: ` ~ typeid(this).text);
 		return this._symbol;
 	}
+
+	override ICallableSymbol moduleSymbol() @property
+	{
+		import ivy.types.symbol.global: globalSymbol;
+		return globalSymbol;
+	}
 }
