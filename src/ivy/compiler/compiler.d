@@ -37,7 +37,7 @@ class ByteCodeCompiler: AbstractNodeVisitor
 	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
 	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
-	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 	
 public:
 	import std.typecons: Tuple;
@@ -104,7 +104,7 @@ public:
 		enum isDebugMode = false;
 
 	static struct LogerProxy {
-		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
+		mixin LogProxyImpl!(IvyCompilerException, isDebugMode);
 		ByteCodeCompiler compiler;
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)

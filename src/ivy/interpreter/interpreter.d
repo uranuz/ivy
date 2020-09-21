@@ -24,7 +24,7 @@ class Interpreter
 	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 	import ivy.types.data.async_result: AsyncResult, AsyncResultState;
-	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 	import ivy.bytecode: Instruction, OpCode;
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.global: GLOBAL_SYMBOL_NAME;
@@ -116,7 +116,7 @@ public:
 	{
 		import ivy.interpreter.exception: IvyInterpretException;
 
-		mixin LogerProxyImpl!(IvyInterpretException, isDebugMode);
+		mixin LogProxyImpl!(IvyInterpretException, isDebugMode);
 		Interpreter interp;
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)

@@ -11,7 +11,7 @@ class CompilerModuleRepository
 	import trifle.text_forward_range: TextForwardRange;
 	import trifle.location: LocationConfig;
 
-	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 
 	alias TextRange = TextForwardRange!(string, LocationConfig());
 	alias LogerMethod = void delegate(LogInfo);
@@ -36,7 +36,7 @@ public:
 		enum isDebugMode = false;
 
 	static struct LogerProxy {
-		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
+		mixin LogProxyImpl!(IvyCompilerException, isDebugMode);
 		CompilerModuleRepository moduleRepo;
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)

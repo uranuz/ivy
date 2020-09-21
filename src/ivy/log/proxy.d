@@ -1,6 +1,6 @@
 module ivy.log.proxy;
 
-mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
+mixin template LogProxyImpl(ExceptionType, bool isDebugMode = false)
 {
 	import std.exception: enforce;
 

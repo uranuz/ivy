@@ -12,7 +12,7 @@ class CompilerSymbolsCollector: AbstractNodeVisitor
 	import ivy.compiler.symbol_table: SymbolTableFrame, SymbolWithFrame;
 	import ivy.compiler.errors: IvyCompilerException;
 	import ivy.compiler.node_visit_mixin: NodeVisitMixin;
-	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 	import ivy.compiler.directive.factory: DirectiveCompilerFactory;
 	import ivy.types.symbol.iface: IIvySymbol;
 	import ivy.types.symbol.module_: ModuleSymbol;
@@ -64,7 +64,7 @@ public:
 		enum isDebugMode = false;
 
 	static struct LogerProxy {
-		mixin LogerProxyImpl!(IvyCompilerException, isDebugMode);
+		mixin LogProxyImpl!(IvyCompilerException, isDebugMode);
 		CompilerSymbolsCollector collector;
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)

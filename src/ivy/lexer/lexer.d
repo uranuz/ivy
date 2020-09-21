@@ -20,7 +20,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	import trifle.text_forward_range: TextForwardRange;
 
 	import ivy.lexer.rule: LexicalRule;
-	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 
 	import ivy.lexer.lexeme_info: LexemeInfo;
 	import ivy.lexer.lexeme: Lexeme;
@@ -188,7 +188,7 @@ public:
 
 	static struct LogerProxy
 	{
-		mixin LogerProxyImpl!(IvyLexerException, isDebugMode);
+		mixin LogProxyImpl!(IvyLexerException, isDebugMode);
 		LexerT lexer;
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)

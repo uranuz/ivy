@@ -8,7 +8,7 @@ class Parser(R)
 	import trifle.text_forward_range: TextForwardRange, GetSourceRangeConfig;
 	import trifle.location: LocationConfig, CustomizedLocation;
 
-	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 	import ivy.lexer.lexer: Lexer;
 	import ivy.lexer.lexeme: Lexeme;
 	import ivy.lexer.consts;
@@ -68,7 +68,7 @@ public:
 	{
 		import ivy.parser.exception: IvyParserException;
 
-		mixin LogerProxyImpl!(IvyParserException, isDebugMode);
+		mixin LogProxyImpl!(IvyParserException, isDebugMode);
 		ParserT parser;
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
