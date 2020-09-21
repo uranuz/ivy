@@ -16,7 +16,7 @@ class ExecutableProgramme
 
 	import ivy.engine: IvyEngine;
 
-	import ivy.loger: LogInfo;
+	import ivy.log.info: LogInfo;
 
 	alias LogerMethod = void delegate(LogInfo);
 private:

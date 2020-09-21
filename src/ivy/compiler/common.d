@@ -3,7 +3,7 @@ module ivy.compiler.common;
 import ivy.ast.iface: IAttributeRange;
 import ivy.compiler.errors: ASTNodeTypeException;
 
-import ivy.loger: getShortFuncName;
+import ivy.log.utils: getShortFuncName;
 
 T expectNode(T)(IvyNode node, string msg = null, string file = __FILE__, string func = __FUNCTION__, int line = __LINE__)
 {

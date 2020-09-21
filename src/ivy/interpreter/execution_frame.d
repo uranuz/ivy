@@ -13,7 +13,7 @@ public:
 
 class ExecutionFrame
 {
-	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.callable_object: CallableObject;
 

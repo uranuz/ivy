@@ -24,7 +24,7 @@ class Interpreter
 	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 	import ivy.types.data.async_result: AsyncResult, AsyncResultState;
-	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
 	import ivy.bytecode: Instruction, OpCode;
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.global: GLOBAL_SYMBOL_NAME;
@@ -121,7 +121,7 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
-			import ivy.loger: getShortFuncName;
+			import ivy.log.utils: getShortFuncName;
 
 			import std.algorithm: map, canFind;
 			import std.array: join;

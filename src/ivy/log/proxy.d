@@ -1,34 +1,4 @@
-module ivy.loger;
-
-enum LogInfoType
-{
-	info, // Regular log message for debug or smth
-	warn, // Warning about strange conditions
-	error, // Regular error, caused by wrong template syntax, wrong user input or smth
-	internalError // Error that caused by wrong Ivy implementation or smth that should never happens
-}
-
-// Struct consolidating info for logging
-struct LogInfo
-{
-	string msg; // Log message
-	LogInfoType type; // Kind of log event
-	string sourceFuncName; // D function name where log event happens
-	string sourceFileName; // D source file name where log event happens
-	size_t sourceLine; // D code source line where log event happens
-	string processedFile; // Path or name to processed file
-	size_t processedLine; // Line number of processed file where log event happens
-	string processedText; // Short fragment of processed text where log event happens
-}
-
-string getShortFuncName(string func)
-{
-	import std.algorithm: splitter;
-	import std.range: retro, take;
-	import std.array: array, join;
-
-	return func.splitter('.').retro.take(2).array.retro.join(".");
-}
+module ivy.log.proxy;
 
 mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
 {
@@ -74,11 +44,9 @@ mixin template LogerProxyImpl(ExceptionType, bool isDebugMode = false)
 		enf(cond, genericWrite(LogInfoType.error, data));
 	}
 
-
-
 	/// Writes internal error to log and throws ExceptionType
 	void internalError(T...)(lazy T data) {
-		internalAssert(false, data);
+		this.internalAssert(false, data);
 	}
 
 	/// Tests assertion. If it's false then writes internal error to log and throws ExceptionType

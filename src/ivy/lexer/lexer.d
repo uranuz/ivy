@@ -20,7 +20,7 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 	import trifle.text_forward_range: TextForwardRange;
 
 	import ivy.lexer.rule: LexicalRule;
-	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
 
 	import ivy.lexer.lexeme_info: LexemeInfo;
 	import ivy.lexer.lexeme: Lexeme;
@@ -193,7 +193,7 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
-			import ivy.loger: getShortFuncName;
+			import ivy.log.utils: getShortFuncName;
 
 			import std.array: array;
 			import std.conv: to;

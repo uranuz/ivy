@@ -37,7 +37,7 @@ class ByteCodeCompiler: AbstractNodeVisitor
 	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
 	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
-	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
 	
 public:
 	import std.typecons: Tuple;
@@ -109,7 +109,7 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
-			import ivy.loger: getShortFuncName;
+			import ivy.log.utils: getShortFuncName;
 
 			if( compiler._logerMethod !is null )
 			{

@@ -8,7 +8,7 @@ class Parser(R)
 	import trifle.text_forward_range: TextForwardRange, GetSourceRangeConfig;
 	import trifle.location: LocationConfig, CustomizedLocation;
 
-	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
 	import ivy.lexer.lexer: Lexer;
 	import ivy.lexer.lexeme: Lexeme;
 	import ivy.lexer.consts;
@@ -73,7 +73,7 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
-			import ivy.loger: getShortFuncName;
+			import ivy.log.utils: getShortFuncName;
 
 			import std.array: array;
 			import std.conv: to;

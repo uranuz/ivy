@@ -2,7 +2,7 @@ module ivy.engine_config;
 
 import ivy.compiler.directive.factory: DirectiveCompilerFactory;
 import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
-import ivy.loger: LogInfo;
+import ivy.log.info: LogInfo;
 
 // Structure for configuring Ivy
 struct IvyConfig

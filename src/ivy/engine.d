@@ -11,7 +11,8 @@ class IvyEngine
 	import ivy.compiler.compiler: ByteCodeCompiler;
 	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 	import ivy.programme: ExecutableProgramme;
-	import ivy.loger: LogInfo, LogInfoType;
+	import ivy.log.info: LogInfo;
+	import ivy.log.consts: LogInfoType;
 
 private:
 	IvyConfig _config;

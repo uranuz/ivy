@@ -12,7 +12,7 @@ class CompilerSymbolsCollector: AbstractNodeVisitor
 	import ivy.compiler.symbol_table: SymbolTableFrame, SymbolWithFrame;
 	import ivy.compiler.errors: IvyCompilerException;
 	import ivy.compiler.node_visit_mixin: NodeVisitMixin;
-	import ivy.loger: LogInfo, LogerProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, LogerProxyImpl, LogInfoType;
 	import ivy.compiler.directive.factory: DirectiveCompilerFactory;
 	import ivy.types.symbol.iface: IIvySymbol;
 	import ivy.types.symbol.module_: ModuleSymbol;
@@ -69,7 +69,7 @@ public:
 
 		string sendLogInfo(LogInfoType logInfoType, string msg)
 		{
-			import ivy.loger: getShortFuncName;
+			import ivy.log.utils: getShortFuncName;
 
 			if( collector._logerMethod !is null )
 			{
