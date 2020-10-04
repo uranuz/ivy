@@ -82,8 +82,8 @@ public:
 			compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 		}
 
-		size_t afterEndInstrIndex = compiler.getInstrCount();
-		compiler.addInstr(OpCode.Nop); // Need some fake to jump if it's end of code object
+		// Need some fake to jump if it's end of code object
+		size_t afterEndInstrIndex = compiler.addInstr(OpCode.Nop);
 
 		foreach( currIndex; jumpInstrIndexes )
 		{

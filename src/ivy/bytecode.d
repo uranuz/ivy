@@ -10,6 +10,16 @@ enum OpCode: ubyte
 	// Load constant data from code
 	LoadConst,
 
+	// Stack operations
+	PopTop,
+	SwapTwo,
+	DubTop,
+
+	// General unary operations opcodes
+	UnaryMin,
+	UnaryPlus,
+	UnaryNot,
+
 	// Arithmetic binary operations opcodes
 	Add,
 	Sub,
@@ -17,29 +27,13 @@ enum OpCode: ubyte
 	Div,
 	Mod,
 
-	// Arrays or strings concatenation
-	Concat,
-	Append,
-	Insert,
-	InsertMass,
-
-	// General unary operations opcodes
-	UnaryMin,
-	UnaryPlus,
-	UnaryNot,
-
 	// Comparision operations opcodes
-	LT,
-	GT,
 	Equal,
 	NotEqual,
+	LT,
+	GT,
 	LTEqual,
 	GTEqual,
-
-	// Array or assoc array operations
-	LoadSubscr,
-	StoreSubscr,
-	LoadSlice,
 
 	// Frame data load/ store
 	StoreName,
@@ -50,37 +44,42 @@ enum OpCode: ubyte
 	StoreAttr,
 	LoadAttr,
 
-	// Preparing and calling directives
-	LoadDirective,
-	RunCallable,
-	Call,
-	Await,
+	// Data construction opcodes
+	MakeArray,
+	MakeAssocArray,
 
-	// Import another module
-	ImportModule,
-	FromImport,
+	// Array or assoc array operations
+	StoreSubscr,
+	LoadSubscr,
+	LoadSlice,
+
+	// Arrays or strings concatenation
+	Concat,
+	Append,
+	Insert,
 
 	// Flow control opcodes
 	JumpIfTrue,
 	JumpIfFalse,
-	JumpIfFalseOrPop, // Used in "and"
-	JumpIfTrueOrPop, // Used in "or"
+	JumpIfTrueOrPop,
+	JumpIfFalseOrPop,
 	Jump,
 	Return,
-
-	// Stack operations
-	PopTop,
-	SwapTwo,
-	DubTop,
 
 	// Loop initialization and execution
 	GetDataRange,
 	RunLoop,
 
-	// Data construction opcodes
-	MakeArray,
-	MakeAssocArray,
+	// Import another module
+	ImportModule,
+	FromImport,
 
+	// Preparing and calling directives
+	LoadDirective,
+	RunCallable,
+	Await,
+
+	// Other stuff
 	MarkForEscape
 }
 

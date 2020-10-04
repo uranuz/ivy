@@ -17,30 +17,18 @@ class CodeObject
 	import ivy.bytecode: Instruction;
 	import ivy.types.module_object: ModuleObject;
 	import ivy.types.symbol.iface: ICallableSymbol;
-	import ivy.types.symbol.module_: ModuleSymbol;
-	import ivy.types.symbol.directive: DirectiveSymbol;
-	import ivy.types.symbol.dir_attr: DirAttr;
 
 	import std.exception: enforce;
 
-	ModuleObject _moduleObject; // Module object which contains this code object
-	Instruction[] _instrs; // Plain list of instructions
 	ICallableSymbol _symbol;
-	
+	Instruction[] _instrs; // Plain list of instructions
+	ModuleObject _moduleObject; // Module object which contains this code object
 
 	SourceMapItem[] _sourceMap; // Debugging info (source map sorted by line)
 	SourceMapItem[] _revSourceMap; // Debugging info (source map sorted by startInstr)
 
 public:
-	this(DirectiveSymbol symbol, ModuleObject moduleObject) {
-		_init(symbol, moduleObject);
-	}
-
-	this(ModuleSymbol symbol, ModuleObject moduleObject) {
-		_init(symbol, moduleObject);
-	}
-
-	private void _init(ICallableSymbol symbol, ModuleObject moduleObject)
+	this(ICallableSymbol symbol, ModuleObject moduleObject)
 	{
 		this._symbol = symbol;
 		this._moduleObject = moduleObject;

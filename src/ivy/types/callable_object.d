@@ -28,13 +28,13 @@ public:
 	{
 		this._codeObject = codeObject;
 		this._defaults = defaults;
-		enforce(this._codeObject !is null, `Expected code object`);
+		enforce(this._codeObject !is null, "Expected code object");
 	}
 
 	this(IDirectiveInterpreter dirInterp)
 	{
 		this._dirInterp = dirInterp;
-		enforce(this._dirInterp !is null, `Expected native dir interpreter`);
+		enforce(this._dirInterp !is null, "Expected native dir interpreter");
 	}
 
 	bool isNative() @property {
@@ -43,13 +43,13 @@ public:
 
 	IDirectiveInterpreter dirInterp() @property
 	{
-		enforce(this._dirInterp !is null, `Callable is not a native dir interpreter`);
+		enforce(this._dirInterp !is null, "Callable is not a native dir interpreter");
 		return this._dirInterp;
 	}
 
 	CodeObject codeObject() @property
 	{
-		enforce(this._codeObject !is null, `Callable is not an ivy code object`);
+		enforce(this._codeObject !is null, "Callable is not an ivy code object");
 		return this._codeObject;
 	}
 

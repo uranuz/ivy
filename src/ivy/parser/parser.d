@@ -926,18 +926,18 @@ public:
 
 		switch( lex.info.typeIndex ) with(LexemeType)
 		{
-			case Sub:
-			{
-				lexer.popFront();
-				expr = parseUnaryExp();
-				expr = new UnaryArithmeticExp!(config)(loc, Operator.UnaryMin, expr);
-				break;
-			}
 			case Add:
 			{
 				lexer.popFront();
 				expr = parseUnaryExp();
 				expr = new UnaryArithmeticExp!(config)(loc, Operator.UnaryPlus, expr);
+				break;
+			}
+			case Sub:
+			{
+				lexer.popFront();
+				expr = parseUnaryExp();
+				expr = new UnaryArithmeticExp!(config)(loc, Operator.UnaryMin, expr);
 				break;
 			}
 			case Name:

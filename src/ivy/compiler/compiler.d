@@ -392,13 +392,20 @@ public:
 		{
 			case Operator.And, Operator.Or:
 			{
+				// Instructions to evaluate left value...
 				node.leftExpr.accept(this);
+				// Add instruction to jump after the right tree if it shouldn't be evaluated
+				// If operator is And then we shouldn't evaluate right tree if result is False
+				// If operator is Or then we shouldn't evaluate right tree if result if True
 				size_t jumpInstrIndex = addInstr(
 					node.operatorIndex == Operator.And? OpCode.JumpIfFalseOrPop: OpCode.JumpIfTrueOrPop
 				);
+
+				// Instructions to evaluate all right tree of And/ Or...
 				node.rightExpr.accept(this);
 
-				setInstrArg(jumpInstrIndex, _codeObjStack.back._instrs.length);
+				// Set possition where to jump if right tree evaluation needs to be skipped
+				setInstrArg(jumpInstrIndex, currentCodeObject._instrs.length);
 				return;
 			}
 			default:
@@ -527,10 +534,8 @@ public:
 		if( !node )
 			log.error( "Code block statement node is null!" );
 
-		if( node.isListBlock )
-		{
-			IvyData emptyArray = IvyData[].init;
-			addInstr(OpCode.LoadConst, addConst(emptyArray));
+		if( node.isListBlock ) {
+			addInstr(OpCode.MakeArray);
 		}
 
 		auto stmtRange = node[];
@@ -552,8 +557,7 @@ public:
 		if( !node )
 			log.error( "Mixed block statement node is null!" );
 
-		IvyData emptyArray = IvyData[].init;
-		addInstr(OpCode.LoadConst, addConst(emptyArray));
+		addInstr(OpCode.MakeArray);
 
 		auto stmtRange = node[];
 		while( !stmtRange.empty )

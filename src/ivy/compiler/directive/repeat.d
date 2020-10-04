@@ -41,8 +41,8 @@ public:
 		// Issue instruction to get iterator from aggregate in execution stack
 		compiler.addInstr(OpCode.GetDataRange);
 
-		// Creating node for string result on stack
-		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(IvyData[].init) ));
+		// Creating node to accumulate result on stack
+		compiler.addInstr(OpCode.MakeArray);
 
 		// RunLoop expects  data node range on the top, but result aggregator
 		// can be left on (TOP - 1), so swap these...

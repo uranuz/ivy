@@ -18,7 +18,7 @@ struct ExecStack
 	{
 		import std.range: popBack, empty;
 		enforce!IvyInterpretException(!this._stackBlocks.empty, `Cannot remove stack block!`);
-		this.popBackN(this.length); // Remove odd items from stack
+		this.popN(this.length); // Remove odd items from stack
 		this._stackBlocks.popBack();
 	}
 
@@ -36,11 +36,11 @@ struct ExecStack
 	{
 		import std.range: back;
 		enforce!IvyInterpretException(!this.empty, `Cannot get exec stack "back" property, because it is empty!!!`);
-		return this._stack.back();
+		return this._stack.back;
 	}
 
 	// Drop current item from the stack
-	IvyData popBack()
+	IvyData pop()
 	{
 		import std.range: popBack, back;
 		enforce!IvyInterpretException(!this.empty, `Cannot execute "popBack" for exec stack, because it is empty!!!`);
@@ -49,7 +49,7 @@ struct ExecStack
 		return val;
 	}
 
-	void popBackN(size_t count)
+	void popN(size_t count)
 	{
 		import std.range: popBackN;
 		enforce!IvyInterpretException(count <= this.length, `Requested to remove more items than exists in stack block`);
@@ -59,10 +59,6 @@ struct ExecStack
 	void push(T)(auto ref T arg) {
 		this._stack ~= IvyData(arg);
 	}
-
-	//void opOpAssign(string op : "~", T)(auto ref T arg) {
-	//	this._stack ~= arg;
-	//}
 
 	import std.traits: isIntegral;
 

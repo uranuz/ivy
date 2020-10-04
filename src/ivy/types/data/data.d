@@ -17,9 +17,13 @@ struct TIvyData(S)
 
 	import std.exception: enforce;
 	import std.conv: text;
+	import std.traits: StringTypeOf, isAggregateType, isStaticArray;
+	
 
 	alias String = S;
-	alias MIvyData = TIvyData!(S);
+	alias MIvyData = TIvyData!String;
+
+	enum bool isMyString(T) = is(StringTypeOf!T) && !isAggregateType!T && !isStaticArray!T;
 
 	struct Storage {
 		union {
@@ -77,7 +81,7 @@ struct TIvyData(S)
 
 	ref MIvyData[] array() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not array");
+		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not array, but" ~ this.toDebugString());
 		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
 		return storage.array[0];
 	}
@@ -215,7 +219,7 @@ struct TIvyData(S)
 			default:
 				break;
 		}
-		throw new DataNodeException(`Cannot convert value of type: ` ~ this.type.text ~ ` to integer`);
+		throw new DataNodeException("Cannot convert value of type: " ~ this.type.text ~ " to integer");
 	}
 
 	double toFloating()
@@ -230,14 +234,14 @@ struct TIvyData(S)
 			default:
 				break;
 		}
-		throw new DataNodeException(`Cannot convert value of type: ` ~ this.type.text ~ ` to floating`);
+		throw new DataNodeException("Cannot convert value of type: " ~ this.type.text ~ " to floating");
 	}
 
 	private void assign(T)(auto ref T arg)
 	{
 		import trifle.traits: isUnsafelyNullable;
 
-		import std.traits: isIntegral, isFloatingPoint, isArray;
+		import std.traits: isIntegral, isFloatingPoint, isArray, isSomeString;
 
 		static if( isUnsafelyNullable!T )
 		{
@@ -268,15 +272,17 @@ struct TIvyData(S)
 			typeTag = IvyDataType.Floating;
 			storage.floating = arg;
 		}
-		else static if( is(T : string) )
+		else static if( isMyString!T )
 		{
+			import std.conv: to;
+
 			typeTag = IvyDataType.String;
-			storage.str = [arg];
+			storage.str = [arg.to!String];
 		}
 		else static if( isArray!T )
 		{
 			typeTag = IvyDataType.Array;
-			static if( is(ElementEncodingType!T : MIvyData) ) {
+			static if( is(ElementEncodingType!T: MIvyData) ) {
 				storage.array = [arg];
 			}
 			else
@@ -374,7 +380,7 @@ struct TIvyData(S)
 			}
 		}
 		else
-			static assert(false, `unable to convert type "` ~ T.stringof ~ `" to parse node`);
+			static assert(false, "Unable to convert type " ~ T.stringof ~ " to Ivy data");
 	}
 
 	void opAssign(T)(auto ref T value)
@@ -481,7 +487,7 @@ struct TIvyData(S)
 
 	bool opEquals(MIvyData rhs)
 	{
-		import std.range: zip;
+		import std.conv: text;
 		if( rhs.type != this.type ) {
 			return false;
 		}
@@ -496,12 +502,13 @@ struct TIvyData(S)
 			case IvyDataType.String: return this.str == rhs.str;
 			case IvyDataType.Array:
 			{
-				if( this.array.length != rhs.array.length ) {
+				if( this.length != rhs.length ) {
 					return false;
 				}
-				foreach( pair; zip(this.array, rhs.array) ) {
+				for( size_t i = 0; i < this.length; ++i )
+				{
 					// Use nested opEquals
-					if( pair[0] != pair[1] ) {
+					if( this[i] != rhs[i] ) {
 						return false;
 					}
 				}
@@ -509,25 +516,26 @@ struct TIvyData(S)
 			}
 			case IvyDataType.AssocArray:
 			{
-				if( this.assocArray.length != rhs.assocArray.length ) {
+				if( this.length != rhs.length ) {
 					return false;
 				}
-				foreach( key, val; this.assocArray )
+				foreach( key, value; this.assocArray )
 				{
-					if( auto valPtr = key in rhs.assocArray )
-					{
-						// Compare values
-						if( *valPtr != val ) {
-							return false;
-						}
-					} else {
-						return false; // There is no suck key so they are not equal
+					auto rhsValPtr = key in rhs;
+					if( rhsValPtr is null ) {
+						return false;
+					}
+					// Compare values
+					if( *rhsValPtr != value ) {
+						return false;
 					}
 				}
 				return true; // All keys exist and values are equal - fantastic!
 			}
-			case IvyDataType.CodeObject: return this.codeObject == rhs.codeObject;
-			default: throw new Exception(`Cannot compare data nodes of type: ` ~ this.type.text);
+			case IvyDataType.CodeObject:
+				return this.codeObject == rhs.codeObject;
+			default:
+				throw new Exception("Cannot compare data nodes of type: " ~ this.type.text);
 		}
 	}
 

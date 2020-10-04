@@ -17,47 +17,43 @@ class ModuleObject
 
 public:
 	this(ModuleSymbol symbol) {
-		this._consts ~= IvyData(new CodeObject(symbol, this));
-	}
-
-	ModuleSymbol symbol() @property
-	{
-		ModuleSymbol modSymbol = cast(ModuleSymbol) this.mainCodeObject.symbol;
-		enforce(modSymbol !is null, `Expected module symbol`);
-		return modSymbol;
-	}
-	
-	string name() @property {
-		return symbol.name;
-	}
-
-	string fileName() @property {
-		return symbol.location.fileName;
+		this.addConst(IvyData(new CodeObject(symbol, this)));
 	}
 
 	// Append const to list and return it's index
-	// This function can return index of already existing object if it's equal to passed data
 	size_t addConst(IvyData data)
 	{
-		import std.range: back;
-		size_t index = _consts.length;
-		_consts ~= data;
-		_consts.back.escapeState = NodeEscapeState.Safe; // Consider all constants are Safe by default
+		// Get index of added constant
+		size_t index = this._consts.length;
+		// Consider all constants are Safe by default
+		data.escapeState = NodeEscapeState.Safe; 
+		this._consts ~= data;
 		return index;
 	}
 
 	IvyData getConst(size_t index)
 	{
 		import std.conv: text;
-		enforce(index < _consts.length, `There is no constant with index ` ~ index.text ~ ` in module "` ~ symbol.name ~ `"`);
-		return _consts[index];
+		enforce(index < _consts.length, "There is no constant with index " ~ index.text ~ " in module: " ~ symbol.name);
+		return this._consts[index];
 	}
 
-	CodeObject mainCodeObject() @property
-	{
-		IvyData codeObjNode = this.getConst(0);
-		enforce(codeObjNode.type == IvyDataType.CodeObject, `First constant of module object expected to be it's main code object`);
+	CodeObject mainCodeObject() @property {
+		return this.getConst(0).codeObject;
+	}
 
-		return codeObjNode.codeObject;
+	ModuleSymbol symbol() @property
+	{
+		ModuleSymbol modSymbol = cast(ModuleSymbol) this.mainCodeObject.symbol;
+		enforce(modSymbol !is null, "Expected module symbol");
+		return modSymbol;
+	}
+	
+	string name() @property {
+		return this.symbol.name;
+	}
+
+	string fileName() @property {
+		return this.symbol.location.fileName;
 	}
 }
