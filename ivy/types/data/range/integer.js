@@ -1,14 +1,14 @@
 define('ivy/types/data/range/integer', [
-	'ivy/errors',
+	'ivy/exception',
 	'ivy/types/data/iface/range'
-], function(errors, DataNodeRange) {
+], function(IvyException, DataNodeRange) {
 return FirClass(
 	function IntegerRange(begin, end) {
 		if( typeof(begin) !== 'number' || typeof(end) !== 'number' ) {
-			throw new errors.IvyError('Number range begin and end arguments must be numbers');
+			throw new IvyException('Number range begin and end arguments must be numbers');
 		}
 		if( begin > end ) {
-			throw new errors.IvyError('Begin must not be greater than end');
+			throw new IvyException('Begin must not be greater than end');
 		}
 		this._current = begin;
 		this._end = end;
@@ -20,7 +20,7 @@ return FirClass(
 		// Method must advance range to the next item
 		pop: function() {
 			if( this.empty() ) {
-				throw new errors.IvyError('Cannot advance empty IntegerRange');
+				throw new IvyException('Cannot advance empty IntegerRange');
 			}
 			return this._current++;
 		},

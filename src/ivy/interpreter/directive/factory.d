@@ -25,7 +25,7 @@ public:
 	void add(IDirectiveInterpreter dirInterp)
 	{
 		string name = dirInterp.symbol.name;
-		enforce(name !in this._indexes, `Directive interpreter with name "` ~ name ~ `" already added`);
+		enforce(name !in this._indexes, "Directive interpreter with name: " ~ name ~ " already added");
 		this._indexes[name] = this._dirInterps.length;
 		this._dirInterps ~= dirInterp;
 	}

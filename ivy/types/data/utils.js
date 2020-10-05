@@ -3,36 +3,13 @@ define('ivy/types/data/utils', [
 	'ivy/types/data/consts',
 	'ivy/types/data/data'
 ], function(
-	exports,
-	Consts,
+	dutil,
+	DataConsts,
 	idat
 ) {
-var
-IvyDataType = Consts.IvyDataType,
-iutil = {
-	back: function(arr) {
-		if( arr.length === 0 ) {
-			throw new Error('Cannot get back item, because array is empty!');
-		}
-		return arr[arr.length-1];
-	},
-	reversed: function(arr)
-	{
-		if( !(arr instanceof Array) ) {
-			throw new Error('Expected array');
-		}
-		var i = arr.length;
-		return {
-			next: function() {
-				return i > 0? {
-					done: false,
-					value: arr[i-1]
-				}: {
-					done: true
-				}
-			}
-		}
-	},
+var IvyDataType = DataConsts.IvyDataType;
+
+Object.assign(dutil, {
 	deeperCopy: function(val) {
 		switch( idat.type(val) ) {
 			case IvyDataType.Undef:
@@ -70,13 +47,6 @@ iutil = {
 			default:
 				throw new Error('Getting of deeper copy for this type is not implemented for now');
 		}
-	},
-	
-};
-// For now use CommonJS format to resolve cycle dependencies
-for( var key in iutil ) {
-	if( iutil.hasOwnProperty(key) ) {
-		exports[key] = iutil[key];
 	}
-}
+});
 });

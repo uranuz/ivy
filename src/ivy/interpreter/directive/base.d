@@ -12,13 +12,13 @@ class BaseDirectiveInterpreter: IDirectiveInterpreter
 	protected ICallableSymbol _symbol;
 
 	override void interpret(Interpreter interp) {
-		assert(false, `Implement this!`);
+		assert(false, "Implement this!");
 	}
 
 	override ICallableSymbol symbol() @property
 	{
 		import std.conv: text;
-		enforce(this._symbol !is null, `Directive symbol is not set for: ` ~ typeid(this).text);
+		enforce(this._symbol !is null, "Directive symbol is not set for: " ~ typeid(this).text);
 		return this._symbol;
 	}
 

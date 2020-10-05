@@ -5,7 +5,7 @@ import ivy.interpreter.directive.utils;
 class EmptyDirInterpreter: BaseDirectiveInterpreter
 {
 	this() {
-		_symbol = new DirectiveSymbol(`empty`, [DirAttr("value", IvyAttrType.Any)]);
+		_symbol = new DirectiveSymbol("empty", [DirAttr("value", IvyAttrType.Any)]);
 	}
 	
 	override void interpret(Interpreter interp)

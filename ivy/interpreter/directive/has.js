@@ -4,7 +4,7 @@ define('ivy/interpreter/directive/has', [
 var IvyDataType = du.IvyDataType;
 return FirClass(
 	function HasDirInterpreter() {
-		this._symbol = new du.DirectiveSymbol(`has`, [
+		this._symbol = new du.DirectiveSymbol("has", [
 			du.DirAttr("collection", du.IvyAttrType.Any),
 			du.DirAttr("key", du.IvyAttrType.Any)
 		]);
@@ -16,16 +16,13 @@ return FirClass(
 			switch( du.idat.type(collection) )
 			{
 				case IvyDataType.AssocArray:
-					if( du.idat.type(key) !== IvyDataType.String ) {
-						interp.rtError('Expected String as attribute name');
-					}
-					interp._stack.push(collection[key] !== undefined);
+					interp._stack.push(collection.hasOwnProperty(du.idat.str(key)));
 					break;
 				case IvyDataType.Array:
 					interp._stack.push(collection.includes(key));
 					break;
 				default:
-					interp.rtError('Unexpected collection type');
+					interp.log.internalError("Unexpected collection type");
 					break;
 			}
 		}

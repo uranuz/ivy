@@ -1,13 +1,13 @@
 define('ivy/interpreter/execution_frame', [
-	'ivy/errors'
+	'ivy/exception'
 ], function(
-	errors
+	IvyException
 ) {
 return FirClass(
 function ExecutionFrame(callable) {
 	this._callable = callable;
 	if( this._callable == null ) {
-		throw new errors.IvyError("Expected callable object for exec frame");
+		throw new IvyException("Expected callable object for exec frame");
 	}
 
 	this._dataDict = {
@@ -21,7 +21,7 @@ function ExecutionFrame(callable) {
 
 	getValue: function(varName) {
 		if( !this.hasValue(varName) ) {
-			throw new errors.IvyError("Cannot find variable with name: \"" + varName + "\" for symbol \"" + callable.symbol.name + "\"");
+			throw new IvyException("Cannot find variable with name: \"" + varName + "\" for symbol \"" + callable.symbol.name + "\"");
 		}
 		return res[varName];
 	},

@@ -5,7 +5,7 @@ import ivy.interpreter.directive.utils;
 class LenDirInterpreter: BaseDirectiveInterpreter
 {
 	this() {
-		_symbol = new DirectiveSymbol(`len`, [DirAttr("value", IvyAttrType.Any)]);
+		_symbol = new DirectiveSymbol("len", [DirAttr("value", IvyAttrType.Any)]);
 	}
 
 	override void interpret(Interpreter interp) {

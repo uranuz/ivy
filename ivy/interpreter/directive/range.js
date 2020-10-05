@@ -4,7 +4,7 @@ define('ivy/interpreter/directive/range', [
 ], function(du, IntegerRange) {
 return FirClass(
 	function RangeDirInterpreter() {
-		this._symbol = new du.DirectiveSymbol(`range`, [
+		this._symbol = new du.DirectiveSymbol("range", [
 			du.DirAttr("begin", du.IvyAttrType.Any),
 			du.DirAttr("end", du.IvyAttrType.Any)
 		]);

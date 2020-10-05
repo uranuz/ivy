@@ -8,7 +8,7 @@ define('ivy/types/data/data', [
 	'ivy/types/data/iface/class_node',
 	'ivy/types/data/async_result'
 ], function(
-	exports,
+	idat,
 	Consts,
 	ExecutionFrame,
 	CodeObject,
@@ -17,9 +17,9 @@ define('ivy/types/data/data', [
 	ClassNode,
 	AsyncResult
 ) {
-var
-IvyDataType = Consts.IvyDataType,
-idat = {
+var IvyDataType = Consts.IvyDataType;
+
+Object.assign(idat, {
 	// Value accessors with type check
 	boolean: function(val) {
 		return idat._getTyped(val, IvyDataType.Boolean);
@@ -97,8 +97,6 @@ idat = {
 			return IvyDataType.CodeObject;
 		} else if( val instanceof AsyncResult ) {
 			return IvyDataType.AsyncResult;
-		} else if( val instanceof Date ) {
-			return IvyDataType.DateTime;
 		} else if( val instanceof CallableObject ) {
 			return IvyDataType.Callable;
 		} else if( val instanceof ExecutionFrame ) {
@@ -125,8 +123,6 @@ idat = {
 				return '' + val;
 			case IvyDataType.String:
 				return val;
-			case IvyDataType.DateTime:
-				return '' + val;
 			case IvyDataType.AssocArray: {
 				var result = '{';
 				for( var key in val ) {
@@ -265,12 +261,59 @@ idat = {
 				break;
 		}
 		throw new Error('Cannot convert value to Integer');
+	},
+
+	opEquals: function(val, rhs) {
+		if( rhs.type != val.type ) {
+			return false;
+		}
+		switch( idat.type(val) )
+		{
+			case IvyDataType.Undef:
+			case IvyDataType.Null:
+				return true; // Undef and Null values are equal to each other
+			case IvyDataType.Boolean: return val.boolean == rhs.boolean;
+			case IvyDataType.Integer: return val.integer == rhs.integer;
+			case IvyDataType.Floating: return val.floating == rhs.floating;
+			case IvyDataType.String: return val.str == rhs.str;
+			case IvyDataType.Array:
+			{
+				if( val.length != rhs.length ) {
+					return false;
+				}
+				for( var i = 0; i < val.length; i++ )
+				{
+					if( !idat.opEquals(val[i], rhs[i]) ) {
+						return false;
+					}
+				}
+				return true; // All equal - fantastic!
+			}
+			case IvyDataType.AssocArray:
+			{
+				if( Object.keys(val).length != Object.keys(rhs).length ) {
+					return false;
+				}
+				for( var key in val )
+				{
+					if( !val.hasOwnProperty(key) ) {
+						continue;
+					}
+					if( !rhs.hasOwnProperty(key) ) {
+						return false;
+					}
+					// Compare values
+					if( !idat.opEquals(val[key], rhs[key]) ) {
+						return false;
+					}
+				}
+				return true; // All keys exist and values are equal - fantastic!
+			}
+			case IvyDataType.CodeObject:
+				return val.codeObject.opEquals(rhs);
+			default:
+				throw new Exception("Cannot compare data nodes of type: " + idat.type(val));
+		}
 	}
-};
-// For now use CommonJS format to resolve cycle dependencies
-for( var key in idat ) {
-	if( idat.hasOwnProperty(key) ) {
-		exports[key] = idat[key];
-	}
-}
+});
 });

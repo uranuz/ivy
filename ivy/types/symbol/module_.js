@@ -1,9 +1,11 @@
 define('ivy/types/symbol/dir_attr', [
 	'ivy/types/symbol/iface/callable',
-	'ivy/types/symbol/dir_body_attrs'
+	'ivy/types/symbol/dir_body_attrs',
+	'ivy/location'
 ], function(
 	ICallableSymbol,
-	DirBodyAttrs
+	DirBodyAttrs,
+	Location
 ) {
 var emptyBodyAttrs = DirBodyAttrs();
 return FirClass(

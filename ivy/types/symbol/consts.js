@@ -4,6 +4,6 @@ var Consts = {
 		Any: "any"
 	},
 	GLOBAL_SYMBOL_NAME: "__global__"
-},
+}
 return Consts;
 });

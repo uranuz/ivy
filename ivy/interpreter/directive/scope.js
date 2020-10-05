@@ -4,7 +4,7 @@ define('ivy/interpreter/directive/scope', [
 ], function(du, DirBodyAttrs) {
 return FirClass(
 	function ScopeDirInterpreter() {
-		this._symbol = new du.DirectiveSymbol(`scope`, [], DirBodyAttrs(/*isNoscope=*/true));
+		this._symbol = new du.DirectiveSymbol("scope", [], DirBodyAttrs(/*isNoscope=*/true));
 	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
 			interp._stack.push(interp.independentFrame._dataDict);

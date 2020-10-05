@@ -5,7 +5,7 @@ import ivy.interpreter.directive.utils;
 class BoolCtorDirInterpreter: BaseDirectiveInterpreter
 {
 	this() {
-		_symbol = new DirectiveSymbol(`bool`, [DirAttr("value", IvyAttrType.Any)]);
+		_symbol = new DirectiveSymbol("bool", [DirAttr("value", IvyAttrType.Any)]);
 	}
 	
 	override void interpret(Interpreter interp) {

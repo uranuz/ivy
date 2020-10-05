@@ -5,7 +5,7 @@ import ivy.interpreter.directive.utils;
 class IntCtorDirInterpreter: BaseDirectiveInterpreter
 {
 	this() {
-		_symbol = new DirectiveSymbol(`int`, [DirAttr("value", "any")]);
+		_symbol = new DirectiveSymbol("int", [DirAttr("value", "any")]);
 	}
 	
 	override void interpret(Interpreter interp) {

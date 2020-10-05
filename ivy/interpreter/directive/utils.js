@@ -3,7 +3,7 @@ define('ivy/interpreter/directive/utils', [
 	'ivy/interpreter/directive/iface',
 	'ivy/interpreter/directive/base',
 	'ivy/interpreter/interpreter',
-	'ivy/types/data',
+	'ivy/types/data/data',
 	'ivy/types/data/consts',
 	'ivy/types/symbol/directive',
 	'ivy/types/symbol/dir_attr',

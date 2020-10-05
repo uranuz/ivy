@@ -1,36 +1,55 @@
 define('ivy/types/callable_object', [
 	'ivy/types/code_object',
 	'ivy/utils',
-	'ivy/types/data/consts'
-], function(CodeObject, iu, Consts) {
+	'ivy/exception'
+], function(
+	CodeObject,
+	iutil,
+	IvyException
+) {
+var enforce = iutil.enforce.bind(iutil, IvyException);
+
 return FirClass(
-	function CallableObject(name, codeObj) {
-		this._name = name;
-		if( codeObj instanceof CodeObject ) {
-			this._codeObj = codeObj;
+	function CallableObject(codeObjectOrDirInterp, defaults) {
+		if( codeObjectOrDirInterp instanceof CodeObject ) {
+			this._codeObject = codeObjectOrDirInterp;
 			this._dirInterp = null;
 		} else {
-			this._codeObj = null;
-			this._dirInterp = codeObj;
+			this._codeObject = null;
+			this._dirInterp = codeObjectOrDirInterp;
 		}
+		this._defaults = defaults || {};
 	}, {
-		attrBlocks: function() {
-			return (this._codeObj? this._codeObj._attrBlocks: this._dirInterp._attrBlocks)
-		},
+		isNative: firProperty(function() {
+			return this._dirInterp != null;
+		}),
 
-		isNoscope: function() {
-			var attrBlocks = this.attrBlocks();
-			if( attrBlocks.length < 1 ) {
-				throw new Error('Attr block count must be > 1');
-			}
-			if( iu.back(attrBlocks).kind !== Consts.DirAttrKind.BodyAttr ) {
-				throw new Error('Last attr block definition expected to be BodyAttr');
-			}
-			return iu.back(attrBlocks).bodyAttr.isNoscope;
-		},
+		dirInterp: firProperty(function() {
+			enforce(this._dirInterp != null, "Callable is not a native dir interpreter");
+			return this._dirInterp;
+		}),
 
-		moduleName: function() {
-			return this._codeObj? this._codeObj._moduleObj._name: "__global__"
-		}
+		codeObject:firProperty(function() {
+			enforce(this._codeObject != null, "Callable is not an ivy code object");
+			return this._codeObject;
+		}),
+
+		symbol: firProperty(function() {
+			if( this.isNative ) {
+				return this._dirInterp.symbol;
+			}
+			return this._codeObject.symbol;
+		}),
+
+		moduleSymbol: firProperty(function() {
+			if( this.isNative ) {
+				return this._dirInterp.moduleSymbol;
+			}
+			return this.codeObject.moduleObject.symbol;
+		}),
+
+		defaults: firProperty(function() {
+			return this._defaults;
+		})
 	});
 });

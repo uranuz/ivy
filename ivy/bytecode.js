@@ -1,5 +1,5 @@
 define('ivy/bytecode', [], function() {
-var Consts = {
+var Bytecode = {
 	OpCodeItems: [
 		'InvalidCode', // Used to check if code of operation was not properly set
 
@@ -8,6 +8,16 @@ var Consts = {
 		// Load constant data from code
 		'LoadConst',
 
+		// Stack operations
+		'PopTop',
+		'SwapTwo',
+		'DubTop',
+
+		// General unary operations opcodes
+		'UnaryPlus',
+		'UnaryMin',
+		'UnaryNot',
+
 		// Arithmetic binary operations opcodes
 		'Add',
 		'Sub',
@@ -15,66 +25,59 @@ var Consts = {
 		'Div',
 		'Mod',
 
-		// Arrays or strings concatenation
-		'Concat',
-		'Append',
-		'Insert',
-		'InsertMass',
-
-		// General unary operations opcodes
-		'UnaryMin',
-		'UnaryPlus',
-		'UnaryNot',
-
 		// Comparision operations opcodes
-		'LT',
-		'GT',
 		'Equal',
 		'NotEqual',
+		'LT',
+		'GT',
 		'LTEqual',
 		'GTEqual',
 
-		// Array or assoc array operations
-		'LoadSubscr',
-		'StoreSubscr',
-		'LoadSlice',
-
 		// Frame data load/ store
 		'StoreName',
-		'StoreLocalName',
-		'StoreNameWithParents',
+		'StoreGlobalName',
 		'LoadName',
 
-		// Preparing and calling directives
-		'LoadDirective',
-		'Call',
-		'Await',
-
-		// Import another module
-		'ImportModule',
-		'FromImport',
-
-		// Flow control opcodes
-		'JumpIfTrue',
-		'JumpIfFalse',
-		'JumpIfFalseOrPop', // Used in "and"
-		'JumpIfTrueOrPop', // Used in "or"
-		'Jump',
-		'Return',
-
-		// Stack operations
-		'PopTop',
-		'SwapTwo',
-		'DubTop',
-
-		// Loop initialization and execution
-		'GetDataRange',
-		'RunLoop',
+		// Work with attributes
+		'StoreAttr',
+		'LoadAttr',
 
 		// Data construction opcodes
 		'MakeArray',
 		'MakeAssocArray',
 
+		// Array or assoc array operations
+		'StoreSubscr',
+		'LoadSubscr',
+		'LoadSlice',
+
+		// Arrays or strings concatenation
+		'Concat',
+		'Append',
+		'Insert',
+
+		// Flow control opcodes
+		'JumpIfTrue',
+		'JumpIfFalse',
+		'JumpIfTrueOrPop',
+		'JumpIfFalseOrPop',
+		'Jump',
+		'Return',
+
+		// Loop initialization and execution
+		'GetDataRange',
+		'RunLoop',
+
+		// Import another module
+		'ImportModule',
+		'FromImport',
+
+		// Preparing and calling directives
+		'LoadDirective',
+		'RunCallable',
+		'Await',
+
+		// Other stuff
 		'MarkForEscape'
 	]
 },
@@ -84,12 +87,21 @@ EnumConsts = [
 for( var i = 0; i < EnumConsts.length; ++i ) {
 	var
 		constName = EnumConsts[i],
-		constItems = Consts[constName + 'Items'],
+		constItems = Bytecode[constName + 'Items'],
 		enumObj = {};
 	for( var j = 0; j < constItems.length; ++j ) {
 		enumObj[constItems[j]] = j;
 	}
-	Consts[constName] = enumObj;
+	Bytecode[constName] = enumObj;
 }
-return Consts;
+
+Bytecode.Instruction = FirClass(
+	function Instruction(opcode, arg) {
+		var inst = firPODCtor(this, Instruction, arguments);
+		if( inst ) return inst;
+
+		this.opcode = opcode; // So... it's instruction opcode
+		this.arg = arg; // One arg for now
+	});
+return Bytecode;
 });
