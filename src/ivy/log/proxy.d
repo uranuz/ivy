@@ -25,13 +25,13 @@ mixin template LogProxyImpl(ExceptionType, bool isDebugMode = false)
 	/// Writes regular log message for debug
 	void write(T...)(lazy T data) {
 		static if(isDebugMode) {
-			genericWrite(LogInfoType.info, data);
+			this.genericWrite(LogInfoType.info, data);
 		}
 	}
 
 	/// Writes warning message
 	void warn(T...)(lazy T data) {
-		genericWrite(LogInfoType.warn, data);
+		this.genericWrite(LogInfoType.warn, data);
 	}
 
 	/// Writes regular error to log and throws ExceptionType
@@ -41,7 +41,7 @@ mixin template LogProxyImpl(ExceptionType, bool isDebugMode = false)
 
 	/// Tests assertion. If it's false then writes regular error to log and throws ExceptionType
 	void enforce(C, T...)(C cond, lazy T data) {
-		enf(cond, genericWrite(LogInfoType.error, data));
+		enf(cond, this.genericWrite(LogInfoType.error, data));
 	}
 
 	/// Writes internal error to log and throws ExceptionType
@@ -51,6 +51,6 @@ mixin template LogProxyImpl(ExceptionType, bool isDebugMode = false)
 
 	/// Tests assertion. If it's false then writes internal error to log and throws ExceptionType
 	void internalAssert(C, T...)(C cond, lazy T data) {
-		enf(cond, genericWrite(LogInfoType.internalError, data));
+		enf(cond, this.genericWrite(LogInfoType.internalError, data));
 	}
 }

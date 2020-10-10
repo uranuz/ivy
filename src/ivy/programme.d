@@ -52,12 +52,12 @@ public:
 
 	/// Run programme main module
 	AsyncResult run(IvyData[string] extraGlobals = null) {
-		return runSaveState(extraGlobals).asyncResult;
+		return this.runSaveState(extraGlobals).asyncResult;
 	}
 
 	IvyData runSync(IvyData[string] extraGlobals = null)
 	{
-		IvyData ivyRes = runSaveStateSync(extraGlobals)._stack.back();
+		IvyData ivyRes = this.runSaveStateSync(extraGlobals)._stack.back();
 		if( ivyRes.type == IvyDataType.AsyncResult ) {
 			ivyRes.asyncResult.then(
 				(IvyData methodRes) => ivyRes = methodRes
@@ -71,10 +71,10 @@ public:
 		import ivy.interpreter.interpreter: Interpreter;
 
 		Interpreter interp = new Interpreter(
-			_mainModuleName,
-			_moduleObjCache,
-			_directiveFactory,
-			_logerMethod
+			this._mainModuleName,
+			this._moduleObjCache,
+			this._directiveFactory,
+			this._logerMethod
 		);
 		interp.addExtraGlobals(extraGlobals);
 		return SaveStateResult(interp, interp.execLoop());
@@ -83,7 +83,7 @@ public:
 	Interpreter runSaveStateSync(IvyData[string] extraGlobals = null)
 	{
 		import std.exception: enforce;
-		SaveStateResult moduleExecRes = runSaveState(extraGlobals);
+		SaveStateResult moduleExecRes = this.runSaveState(extraGlobals);
 		enforce(
 			moduleExecRes.asyncResult.state == AsyncResultState.resolved,
 			`Expected module execution async result resolved state`);
@@ -96,7 +96,7 @@ public:
 		IvyData[string] extraGlobals = null
 	) {
 		AsyncResult fResult = new AsyncResult();
-		SaveStateResult moduleExecRes = runSaveState(extraGlobals);
+		SaveStateResult moduleExecRes = this.runSaveState(extraGlobals);
 		
 		moduleExecRes.asyncResult.then(
 			(IvyData modRes) {
@@ -114,7 +114,7 @@ public:
 	) {
 		import std.exception: enforce;
 		AsyncResult asyncRes =
-			runSaveStateSync(extraGlobals)
+			this.runSaveStateSync(extraGlobals)
 			.runModuleDirective(methodName, methodParams);
 		enforce(
 			asyncRes.state == AsyncResultState.resolved,
@@ -148,8 +148,8 @@ public:
 			];
 		}
 		JSONValue jProg = [
-			`mainModuleName`: JSONValue(this._mainModuleName),
-			`moduleObjects`: JSONValue(moduleObjects)
+			"mainModuleName": JSONValue(this._mainModuleName),
+			"moduleObjects": JSONValue(moduleObjects)
 		];
 		return jProg;
 	}
