@@ -31,13 +31,13 @@ public:
 	}
 
 	IDirectiveInterpreter[] interps() @property {
-		return _dirInterps;
+		return this._dirInterps;
 	}
 
 	ICallableSymbol[] symbols() @property
 	{
 		import std.algorithm: map;
 		import std.array: array;
-		return _dirInterps.map!(it => it.symbol).array;
+		return this._dirInterps.map!(it => it.symbol).array;
 	}
 }

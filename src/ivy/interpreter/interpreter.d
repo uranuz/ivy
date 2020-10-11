@@ -62,11 +62,11 @@ public:
 		this._directiveFactory = directiveFactory;
 		this._logerMethod = logerMethod;
 
-		this.log.internalAssert(this._moduleObjCache !is null, `Expected module objects cache`);
-		this.log.internalAssert(this._directiveFactory !is null, `Expected directive factory`);
+		this.log.internalAssert(this._moduleObjCache !is null, "Expected module objects cache");
+		this.log.internalAssert(this._directiveFactory !is null, "Expected directive factory");
 
 		ModuleObject mainModuleObj = this._moduleObjCache.get(mainModuleName);
-		this.log.internalAssert(mainModuleObj !is null, `Cannot get main module from module objects!`);
+		this.log.internalAssert(mainModuleObj !is null, "Cannot get main module from module objects!");
 
 		// Add global execution frame. Do not add it to _frameStack!
 		this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(globalCallable);
@@ -87,7 +87,7 @@ public:
 		CodeObject codeObject = this.currentCodeObject;
 		this.log.internalAssert(codeObject !is null, "Expected current code object to run");
 
-		this._codeRange = codeObject._instrs[];
+		this._codeRange = codeObject.instrs[];
 		this.setJump(0);
 		try {
 			this.execLoopImpl(fResult);
@@ -133,7 +133,7 @@ public:
 					codeObject !is null,
 					"Expected code object");
 
-				this._codeRange = codeObject._instrs[]; // Set old instruction range back
+				this._codeRange = codeObject.instrs[]; // Set old instruction range back
 				this.setJump(this._stack.pop().integer);
 				this._stack.push(result); // Put result back
 				continue;
@@ -709,14 +709,12 @@ public:
 
 				case OpCode.ImportModule:
 				{
-					IvyData modNameNode = this._stack.pop();
-					this.log.internalAssert(modNameNode.type == IvyDataType.String, "Module name operand must be a string");
-					string moduleName = modNameNode.str;
-
+					string moduleName = this._stack.pop().str;
 					ModuleObject moduleObject = this._moduleObjCache.get(moduleName);
+					ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
 					this.log.internalAssert(moduleObject !is null, "No such module object: ", moduleName);
 
-					if( ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null) )
+					if( moduleFrame )
 					{
 						// Module is imported already. Just use it..
 						// Put module root frame into previous execution frame (it will be stored with StoreGlobalName)
@@ -734,17 +732,16 @@ public:
 						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreGlobalName)
 						this._stack.push(this.currentFrame);
 						// Decided to put return address into parent frame`s stack block instead of current
-						this._stack.push(_pk+1);
+						this._stack.push(this._pk+1);
 
 						this._stack.addStackBlock(); // Add new stack block for execution frame
 
 						// Preparing to run code object in newly created frame
-						this._codeRange = codeObject._instrs[];
+						this._codeRange = codeObject.instrs[];
 						this.setJump(0);
 
 						continue execution_loop; // Skip _pk increment
 					}
-
 					break;
 				}
 
@@ -849,7 +846,7 @@ public:
 					{
 						this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
 						this._stack.addStackBlock();
-						this._codeRange = callable.codeObject._instrs[]; // Set new instruction range to execute
+						this._codeRange = callable.codeObject.instrs[]; // Set new instruction range to execute
 						this.setJump(0);
 						continue execution_loop;
 					}
@@ -933,7 +930,7 @@ public:
 		for( size_t i = this._frameStack.length; i > 0; --i )
 		{
 			ExecutionFrame frame = this._frameStack[i-1];
-			if( frame.hasOwnScope() ) {
+			if( frame.hasOwnScope ) {
 				return frame;
 			}
 		}
@@ -1144,7 +1141,7 @@ public:
 		// Find desired directive by name in current module frame
 		CallableObject callable = this.currentFrame.getValue(name).callable;
 
-		this.log.internalAssert(this._stack.length < 2, `Expected 0 or 1 items in stack!`);
+		this.log.internalAssert(this._stack.length < 2, "Expected 0 or 1 items in stack!");
 		if( this._stack.length == 1 ) {
 			this._stack.pop(); // Drop old result from stack
 		}
@@ -1179,7 +1176,7 @@ public:
 		for( size_t i = 0; i < attrs.length; ++i )
 		{
 			DirAttr attr = attrs[i];
-			if( !attrNames.length && attrNames.canFind(attr.name) ) {
+			if( attrNames.length && !attrNames.canFind(attr.name) ) {
 				continue;
 			}
 			InterpDirAttr ida;

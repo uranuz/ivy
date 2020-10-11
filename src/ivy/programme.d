@@ -131,27 +131,13 @@ public:
 	import std.json: JSONValue;
 	JSONValue toStdJSON()
 	{
-		import ivy.types.data.conv.ivy_to_std_json: toStdJSON2;
-		import ivy.types.data.conv.consts: IvySrlField;
+		import std.algorithm: map;
+		import std.array: array;
 
-		JSONValue[string] moduleObjects;
-		foreach( string modName, ModuleObject modObj; _moduleObjCache.moduleObjects )
-		{
-			JSONValue[] jConsts;
-			foreach( ref IvyData con; modObj._consts ) {
-				jConsts ~= toStdJSON2(con);
-			}
-			moduleObjects[modName] = [
-				"consts": JSONValue(jConsts),
-				"fileName": JSONValue(modObj.symbol.location.fileName),
-				IvySrlField.type: JSONValue(IvyDataType.ModuleObject)
-			];
-		}
-		JSONValue jProg = [
+		return JSONValue([
 			"mainModuleName": JSONValue(this._mainModuleName),
-			"moduleObjects": JSONValue(moduleObjects)
-		];
-		return jProg;
+			"moduleObjects": JSONValue(map!((modObj) => modObj.toStdJSON())(this._moduleObjCache.moduleObjects.byValue).array)
+		]);
 	}
 }
 

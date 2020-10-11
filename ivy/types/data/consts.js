@@ -7,7 +7,6 @@ var Consts = {
 		'Boolean',
 		'Integer',
 		'Floating',
-		'DateTime',
 		'String',
 		'Array',
 		'AssocArray',

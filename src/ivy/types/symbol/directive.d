@@ -10,6 +10,7 @@ class DirectiveSymbol: ICallableSymbol
 	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 
 	import std.exception: enforce;
+	import std.json: JSONValue;
 
 private:
 	string _name;
@@ -70,6 +71,18 @@ public:
 
 		DirBodyAttrs bodyAttrs() @property {
 			return this._bodyAttrs;
+		}
+
+		JSONValue toStdJSON() @property
+		{
+			import std.algorithm: map;
+			import std.array: array;
+
+			return JSONValue([
+				"name": JSONValue(this._name),
+				"attrs": JSONValue(map!((attr) => attr.toStdJSON())(this._attrs).array),
+				"bodyAttrs": this._bodyAttrs.toStdJSON()
+			]);
 		}
 	}
 }

@@ -19,7 +19,9 @@ class CodeObject
 	import ivy.types.symbol.iface: ICallableSymbol;
 
 	import std.exception: enforce;
+	import std.json: JSONValue;
 
+protected:
 	ICallableSymbol _symbol;
 	Instruction[] _instrs; // Plain list of instructions
 	ModuleObject _moduleObject; // Module object which contains this code object
@@ -43,6 +45,14 @@ public:
 
 	ModuleObject moduleObject() @property {
 		return this._moduleObject;
+	}
+
+	ref Instruction[] instrs() @property {
+		return this._instrs;
+	}
+
+	ref SourceMapItem[] sourceMap() @property {
+		return this._sourceMap;
 	}
 
 	size_t addInstr(Instruction instr, size_t line)
@@ -134,5 +144,22 @@ public:
 			return false;
 		}
 		return true; // They are equal at the first look
+	}
+
+	JSONValue toStdJSON()
+	{
+		import ivy.types.symbol.dir_attr: DirAttr;
+		import ivy.types.data.consts: IvyDataType;
+		import ivy.types.data.conv.consts: IvySrlField;
+
+		import std.algorithm: map;
+		import std.array: array;
+
+		return JSONValue([
+			IvySrlField.type: JSONValue(IvyDataType.CodeObject),
+			"symbol": this.symbol.toStdJSON(),
+			"moduleObject": JSONValue(this.moduleObject.symbol.name),
+			"instrs": JSONValue(map!((instr) => instr.toStdJSON())(this._instrs).array)
+		]);
 	}
 }

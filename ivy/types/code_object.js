@@ -13,6 +13,10 @@ return FirClass(
 			return this._moduleObject;
 		}),
 
+		instrs: firProperty(function() {
+			return this._instrs;
+		}),
+
 		addInstr: function(instr) {
 			var index = this._instrs.length;
 			this._instrs.push(instr);

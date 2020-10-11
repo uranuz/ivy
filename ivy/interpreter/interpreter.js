@@ -3,6 +3,7 @@ define('ivy/interpreter/interpreter', [
 	'ivy/types/symbol/consts',
 	'ivy/types/data/data',
 	'ivy/utils',
+	'ivy/types/data/utils',
 	'ivy/bytecode',
 	'ivy/interpreter/exec_stack',
 	'ivy/interpreter/execution_frame',
@@ -11,12 +12,14 @@ define('ivy/interpreter/interpreter', [
 	'ivy/types/data/range/assoc_array',
 	'ivy/types/data/async_result',
 	'ivy/log/proxy',
+	'ivy/interpreter/directive/global',
 	'ivy/types/call_spec'
 ], function(
 	DataConsts,
 	SymbolConsts,
 	idat,
 	iutil,
+	dutil,
 	Bytecode,
 	ExecStack,
 	ExecutionFrame,
@@ -24,12 +27,15 @@ define('ivy/interpreter/interpreter', [
 	ArrayRange,
 	AssocArrayRange,
 	AsyncResult,
-	LogProxy
+	LogProxy,
+	globalCallable,
+	CallSpec
 ) {
 var
 	GLOBAL_SYMBOL_NAME = SymbolConsts.GLOBAL_SYMBOL_NAME,
 	IvyDataType = DataConsts.IvyDataType,
-	OpCode = Bytecode.OpCode;
+	OpCode = Bytecode.OpCode,
+	Instruction = Bytecode.Instruction;
 return FirClass(
 function Interpreter(
 	mainModuleName,
@@ -47,7 +53,7 @@ function Interpreter(
 	this._codeRange = [];
 
 	var mainModuleObj = this._moduleObjCache.get(mainModuleName);
-	this.log.internalAssert(mainModuleObj != null, `Cannot get main module from module objects!`);
+	this.log.internalAssert(mainModuleObj != null, "Cannot get main module from module objects!");
 
 	this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(globalCallable);
 
@@ -56,7 +62,7 @@ function Interpreter(
 	this._stack.addStackBlock();
 
 	// Add custom native directive interpreters to global scope
-	directiveFactory.interps.forEach(function() {
+	directiveFactory.interps.forEach(function(dirInterp) {
 		this.globalFrame.setValue(dirInterp.symbol.name, new CallableObject(dirInterp));
 	}.bind(this));
 }, {
@@ -66,7 +72,7 @@ function Interpreter(
 			codeObject = this.currentCodeObject;;
 		this.log.internalAssert(codeObject != null, "Expected current code object to run");
 
-		this._codeRange = codeObject._instrs;
+		this._codeRange = codeObject.instrs;
 		this.setJump(0);
 		try {
 			this.execLoopImpl(fResult);
@@ -100,7 +106,7 @@ function Interpreter(
 					codeObject != null,
 					"Expected code object");
 
-				this._codeRange = codeObject._instrs; // Set old instruction range back
+				this._codeRange = codeObject.instrs; // Set old instruction range back
 				this._stack.push(result); // Put result back
 				continue;
 			} // if
@@ -115,7 +121,7 @@ function Interpreter(
 
 				// Load constant from programme data table into stack
 				case OpCode.LoadConst: {
-					this._stack.push( this.getModuleConstCopy(instr[1]) );
+					this._stack.push( this.getModuleConstCopy(instr.arg) );
 					break;
 				}
 
@@ -285,7 +291,7 @@ function Interpreter(
 						}
 						case IvyDataType.ClassNode:
 						{
-							aggr.classNode.__setAttr__(attrVal, attrName.str);
+							idat.classNode(aggr).__setAttr__(attrVal, attrName.str);
 							break;
 						}
 					}
@@ -322,12 +328,12 @@ function Interpreter(
 						}
 						case IvyDataType.ClassNode:
 						{
-							this._stack.push(aggr.classNode.__getAttr__(attrName));
+							this._stack.push(idat.classNode(aggr).__getAttr__(attrName));
 							break;
 						}
 						case IvyDataType.ExecutionFrame:
 						{
-							this._stack.push(aggr.execFrame.getValue(attrName));
+							this._stack.push(idat.execFrame(aggr).getValue(attrName));
 							break;
 						}
 					}
@@ -444,9 +450,12 @@ function Interpreter(
 
 					switch( idat.type(aggr) ) {
 						case IvyDataType.String:
-						case IvyDataType.Array:
-						case IvyDataType.ClassNode: {
+						case IvyDataType.Array: {
 							this._stack.push(aggr.slice(begin, end));
+							break;
+						}
+						case IvyDataType.ClassNode: {
+							this._stack.push(aggr.__slice__(begin, end));
 							break;
 						}
 						default:
@@ -521,7 +530,7 @@ function Interpreter(
 					// This is actual condition to test
 					var jumpCond = (
 						instr.opcode === OpCode.JumpIfTrue || instr.opcode === OpCode.JumpIfTrueOrPop
-					) === this._stack.back.toBoolean();
+					) === idat.toBoolean(this._stack.back);
 
 					if( 
 						instr.opcode === OpCode.JumpIfTrue || instr.opcode === OpCode.JumpIfFalse || !jumpCond
@@ -567,7 +576,7 @@ function Interpreter(
 							res = new AssocArrayRange(aggr);
 							break;
 						case IvyDataType.ClassNode:
-							res = aggr.range();
+							res = aggr.__range__();
 							break;
 						case IvyDataType.DataNodeRange:
 							res = aggr;
@@ -594,48 +603,39 @@ function Interpreter(
 
 				// Import another module
 				case OpCode.ImportModule: {
-					var moduleName = this._stack.pop();
-					if( iu.getDataNodeType(moduleName) !== IvyDataType.String ) {
-						this.rtError('Expected String as module name');
-					}
-					
-					if( !this._moduleObjCache.get(moduleName) ) {
-						this.rtError('Failed to get module with name: ' + moduleName);
-					}
+					var
+						moduleName = idat.str(this._stack.pop()),
+						moduleObject = this._moduleObjCache.get(moduleName),
+						moduleFrame = this._moduleFrames[moduleName];
+					this.log.internalAssert(moduleObject != null, "No such module object: ", moduleName);
 
-					if( !this._moduleFrames.hasOwnProperty(moduleName) ) {
+					if( moduleFrame )
+					{
+						// Module is imported already. Just use it..
+						// Put module root frame into previous execution frame (it will be stored with StoreGlobalName)
+						this._stack.push(moduleFrame); 
+						// As long as module returns some value at the end of execution, so put fake value there for consistency
+						this._stack.push();
+					}
+					else
+					{
 						// Run module here
-						var
-							modObject = this._moduleObjCache.get(moduleName),
-							codeObject = modObject.mainCodeObject(),
-							callableObj = new CallableObject(moduleName, codeObject),
-							dataDict = {
-								"_ivyMethod": moduleName,
-								"_ivyModule": moduleName
-							},
-							// Create entry point module frame
-							frame = this.newFrame(callableObj, null, dataDict, false);
+						var codeObject = moduleObject.mainCodeObject;
 
-						// We need to store module frame into storage
-						this._moduleFrames[moduleName] = frame; 
+						this.newFrame(new CallableObject(codeObject), true); // Create entry point module frame
 
-						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreName)
-						this._stack.push(frame);
+						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreGlobalName)
+						this._stack.push(this.currentFrame);
 						// Decided to put return address into parent frame`s stack block instead of current
-						this._stack.push(this._pk + 1);
-						// Add new stack block for execution frame
-						this._stack.addStackBlock(); 
+						this._stack.push(this._pk+1);
+
+						this._stack.addStackBlock(); // Add new stack block for execution frame
 
 						// Preparing to run code object in newly created frame
-						this._codeRange = codeObject._instrs;
+						this._codeRange = codeObject.instrs;
 						this.setJump(0);
 
-						continue; // Skip this._pk increment
-					} else {
-						// Put module root frame into previous execution frame (it will be stored with StoreName)
-						this._stack.push(this._moduleFrames[moduleName]); 
-						// As long as module returns some value at the end of execution, so put fake value there for consistency
-						this._stack.push(undefined);
+						continue execution_loop; // Skip _pk increment
 					}
 					break;
 				}
@@ -708,7 +708,7 @@ function Interpreter(
 								attr.name,
 								`, that has no default value`
 							);
-							this.setValue(attr.name, deeperCopy(defaults[attr.name]));
+							this.setValue(attr.name, dutil.deeperCopy(defaults[attr.name]));
 						}
 					}
 
@@ -723,7 +723,7 @@ function Interpreter(
 
 						// If frame stack contains last frame - it means that we have done with programme
 						if( this._frameStack.length == exitFrames ) {
-							fResult.resolve(this._stack.back());
+							fResult.resolve(this._stack.back);
 							return;
 						}
 						var result = this._stack.pop();
@@ -734,7 +734,7 @@ function Interpreter(
 					{
 						this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
 						this._stack.addStackBlock();
-						this._codeRange = callable.codeObject._instrs; // Set new instruction range to execute
+						this._codeRange = callable.codeObject.instrs; // Set new instruction range to execute
 						this.setJump(0);
 						continue execution_loop;
 					}
@@ -792,24 +792,24 @@ function Interpreter(
 		}
 	},
 
-	currentFrame: function() {
+	currentFrame: firProperty(function() {
 		this.log.internalAssert(this._frameStack.length > 0, "Execution frame stack is empty!");
 		return iutil.back(this._frameStack);
-	},
+	}),
 
 	/** Returns nearest independent execution frame that is not marked `noscope`*/
-	independentFrame: function() {
+	independentFrame: firProperty(function() {
 		this.log.internalAssert(this._frameStack.length > 0, "Execution frame stack is empty!");
 
 		for( var i = this._frameStack.length; i > 0; --i )
 		{
 			var frame = this._frameStack[i-1];
-			if( frame.hasOwnScope() ) {
+			if( frame.hasOwnScope ) {
 				return frame;
 			}
 		}
 		this.log.internalError("Cannot get current independent execution frame!");
-	},
+	}),
 
 	currentCallable: firProperty(function() {
 		return this.currentFrame.callable;
@@ -840,13 +840,13 @@ function Interpreter(
 	},
 
 	getModuleConst: function(index) {
-		var moduleObj = this.getModuleObject();
+		var moduleObj = this.currentModule;
 		this.log.internalAssert(moduleObj != null, "Unable to get module constant");
 		return moduleObj.getConst(index);
 	},
 
 	getModuleConstCopy: function(index) {
-		return iu.deeperCopy( this.getModuleConst(index) );
+		return dutil.deeperCopy( this.getModuleConst(index) );
 	},
 
 	// Execute binary operation
@@ -879,7 +879,7 @@ function Interpreter(
 		if( isModule )
 		{
 			this.log.internalAssert(symbolName !== GLOBAL_SYMBOL_NAME, "Cannot create module name with name: ", GLOBAL_SYMBOL_NAME);
-			this._moduleFrames[symbolName] = this.currentFrame();
+			this._moduleFrames[symbolName] = this.currentFrame;
 		}
 		this.log.write("Enter new execution frame for callable: ", symbolName);
 	},
@@ -931,7 +931,7 @@ function Interpreter(
 			}
 		}
 		// By default store vars in local frame
-		return this._frameStack.back;
+		return iutil.back(this._frameStack);
 	},
 
 	getValue: function(varName) {
@@ -951,7 +951,7 @@ function Interpreter(
 	},
 
 	_getModuleFrame: function(callable) {
-		var moduleFrame = this._moduleFrames[moduleName];
+		var moduleFrame = this._moduleFrames[callable.moduleSymbol.name];
 		this.log.internalAssert(
 			moduleFrame != null,
 			"Module frame with name: ", moduleFrame, " of callable: ", callable.symbol.name, " does not exist!");
@@ -960,27 +960,23 @@ function Interpreter(
 
 	runModuleDirective: function(name, args)
 	{
-		this.log.internalAssert(
-			[IvyDataType.Undef, IvyDataType.Null, IvyDataType.AssocArray].includes(iu.getDataNodeType(args)),
-			`Expected Undef, Null or AssocArray as list of directive arguments`
-		);
-
-		this.log.internalAssert(this.currentFrame(), `Could not get module frame!`);
-
 		// Find desired directive by name in current module frame
-		var callableNode = this.currentFrame().getValue(name);
-		this.log.internalAssert(iu.getDataNodeType(callableNode) === IvyDataType.Callable, `Expected Callable!`);
+		var callable = idat.callable(this.currentFrame.getValue(name));
 
-		this.log.internalAssert(this._stack.length < 2, `Expected 0 or 1 items in stack!`);
-		if( this._stack.length === 1 ) {
+		this.log.internalAssert(this._stack.length < 2, "Expected 0 or 1 items in stack!");
+		if( this._stack.length == 1 ) {
 			this._stack.pop(); // Drop old result from stack
 		}
-		this._stack.push(callableNode);
-		this._stack.push(args);
 
-		this._codeRange = [[OpCode.Call,0]];
+		var callSpec = CallSpec(0, idat.type(args) === IvyDataType.AssocArray);
+		if( callSpec.hasKwAttrs ) {
+			this._stack.push(args);
+		}
+		this._stack.push(callable);
+
+		this._codeRange = [Instruction(OpCode.RunCallable, callSpec.encode())];
 		this.setJump(0);
-		var fResult = new AsyncResult()
+		var fResult = new AsyncResult();
 		try {
 			this.execLoopImpl(fResult, 2);
 		} catch(ex) {
@@ -990,9 +986,9 @@ function Interpreter(
 	},
 
 
-	getDirAttrDefaults: function(name, attrNames) {
+	getDirAttrs: function(name, attrNames) {
 		var
-			callable = this.currentFrame.getValue(name).callable,
+			callable = idat.callable(this.currentFrame.getValue(name)),
 			attrs = callable.symbol.attrs,
 			defaults = callable.defaults;
 			res = {};
@@ -1000,7 +996,7 @@ function Interpreter(
 		for( var i = 0; i < attrs.length; ++i )
 		{
 			var attr = attrs[i];
-			if( !attrNames.length && attrNames.canFind(attr.name) ) {
+			if( attrNames.length && !attrNames.includes(attr.name) ) {
 				continue;
 			}
 			var ida = {};

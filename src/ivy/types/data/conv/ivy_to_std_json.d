@@ -81,40 +81,7 @@ JSONValue toStdJSON2(IvyData con)
 			return JSONValue(arr);
 		}
 		case IvyDataType.CodeObject: {
-			import ivy.types.code_object: CodeObject;
-			import ivy.types.symbol.iface: ICallableSymbol;
-			import ivy.types.symbol.dir_attr: DirAttr;
-
-			CodeObject codeObject = con.codeObject;
-			ICallableSymbol dirSymbol = codeObject.symbol;
-
-			JSONValue jCode = [
-				IvySrlField.type: JSONValue(con.type),
-				"name": JSONValue(dirSymbol.name),
-				"moduleObject": JSONValue(codeObject.moduleObject.symbol.name),
-			];
-
-			JSONValue[] jInstrs;
-			foreach( instr; codeObject._instrs ) {
-				jInstrs ~= JSONValue([ JSONValue(instr.opcode), JSONValue(instr.arg) ]);
-			}
-			jCode["instrs"] = jInstrs;
-
-			JSONValue[] jAttrs;
-			foreach( ref DirAttr attr; dirSymbol.attrs ) {
-				jAttrs ~= JSONValue([
-					"name": attr.name,
-					"typeName": attr.typeName
-				]);
-			}
-			jCode["attrs"] = jAttrs;
-
-			jCode["bodyAttr"] = [
-				"isNoscope": dirSymbol.bodyAttrs.isNoscope,
-				"isNoescape": dirSymbol.bodyAttrs.isNoescape
-			];
-
-			return jCode;
+			return con.codeObject.toStdJSON();
 		}
 		case IvyDataType.Callable:
 		case IvyDataType.ClassNode:

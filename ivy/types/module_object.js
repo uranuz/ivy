@@ -1,8 +1,11 @@
 define('ivy/types/module_object', [
-	'ivy/types/code_object'
+	'ivy/types/code_object',
+	'ivy/types/data/consts'
 ], function(
-	CodeObject
+	CodeObject,
+	DataConsts
 ) {
+var NodeEscapeState = DataConsts.NodeEscapeState;
 return FirClass(
 	function ModuleObject(symbol) {
 		this._consts = [];
@@ -14,7 +17,7 @@ return FirClass(
 			// Get index of added constant
 			var index = this._consts.length;
 			// Consider all constants are Safe by default
-			this._consts.back.escapeState = NodeEscapeState.Safe;
+			//data.escapeState = NodeEscapeState.Safe;
 			this._consts.push(data);
 			return index;
 		},

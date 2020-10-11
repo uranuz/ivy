@@ -1,6 +1,7 @@
 define('ivy/bytecode', [], function() {
-var Bytecode = {
-	OpCodeItems: [
+var
+	Bytecode = {},
+	OpCodeItems = [
 		'InvalidCode', // Used to check if code of operation was not properly set
 
 		'Nop',
@@ -79,11 +80,11 @@ var Bytecode = {
 
 		// Other stuff
 		'MarkForEscape'
-	]
-},
-EnumConsts = [
-	'OpCode'
-];
+	],
+	EnumConsts = [
+		'OpCode'
+	];
+Bytecode.OpCodeItems = OpCodeItems;
 for( var i = 0; i < EnumConsts.length; ++i ) {
 	var
 		constName = EnumConsts[i],
@@ -97,11 +98,20 @@ for( var i = 0; i < EnumConsts.length; ++i ) {
 
 Bytecode.Instruction = FirClass(
 	function Instruction(opcode, arg) {
-		var inst = firPODCtor(this, Instruction, arguments);
+		var inst = firPODCtor(this, arguments);
 		if( inst ) return inst;
 
 		this.opcode = opcode; // So... it's instruction opcode
 		this.arg = arg; // One arg for now
+	}, {
+		name: firProperty(function() {
+			return OpCodeItems[this.opcode];
+		}),
+
+		toString: function() {
+			return this.name + ': ' + this.arg;
+		}
 	});
+
 return Bytecode;
 });

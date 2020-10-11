@@ -8,7 +8,7 @@ return FirClass(
 	}, du.BaseDirectiveInterpreter, {
 		interpret: function(interp) {
 			var valueType = du.idat.type(interp.getValue("value"));
-			interp.internalAssert(
+			interp.log.internalAssert(
 				valueType < DataConsts.IvyDataTypeItems.length,
 				"Unable to get type-string for value");
 			interp._stack.push(Consts.IvyDataTypeItems[valueType]);

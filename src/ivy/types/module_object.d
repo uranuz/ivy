@@ -12,6 +12,7 @@ class ModuleObject
 	import ivy.types.symbol.module_: ModuleSymbol;
 
 	import std.exception: enforce;
+	import std.json: JSONValue;
 
 	IvyData[] _consts; // List of constant data for this module
 
@@ -55,5 +56,18 @@ public:
 
 	string fileName() @property {
 		return this.symbol.location.fileName;
+	}
+
+	JSONValue toStdJSON()
+	{
+		import ivy.types.data.conv.ivy_to_std_json: toStdJSON2;
+		import ivy.types.data.conv.consts: IvySrlField;
+		import std.algorithm: map;
+		import std.array: array;
+
+		return JSONValue([
+			"consts": JSONValue(map!toStdJSON2(this._consts).array),
+			IvySrlField.type: JSONValue(IvyDataType.ModuleObject)
+		]);
 	}
 }

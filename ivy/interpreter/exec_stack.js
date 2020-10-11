@@ -1,4 +1,4 @@
-define('ivy/interpreter/exec_stack', ['ivy/utils'], function(iu) {
+define('ivy/interpreter/exec_stack', ['ivy/utils'], function(iutil) {
 return FirClass(
 	function ExecStack() {
 		this._stack = [];
@@ -9,7 +9,7 @@ return FirClass(
 			if( this.empty ) {
 				throw Error(`Cannot get stack item! Execution stack is empty!`);
 			}
-			return iu.back(this._stack);
+			return iutil.back(this._stack);
 		}),
 		/** Drop last item from stack */
 		pop: function() {
@@ -30,14 +30,14 @@ return FirClass(
 			if( this._stack.length === 0 || this._blocks.length === 0 ) {
 				return true;
 			}
-			return this._stack.length <= iu.back(this._blocks);
+			return this._stack.length <= iutil.back(this._blocks);
 		}),
 		/** Get length of current block of stack */
 		length: firProperty(function() {
-			if( this.empty() ) {
+			if( this.empty ) {
 				return 0;
 			}
-			return this._stack.length - iu.back(this._blocks);
+			return this._stack.length - iutil.back(this._blocks);
 		}),
 		/** Creates new block in stack */
 		addStackBlock: function() {
@@ -59,13 +59,13 @@ return FirClass(
 			if( index >= this.length || index < 0 ) {
 				throw Error(`Index is out of stack bounds!`);
 			}
-			return this._stack[iu.back(this._blocks) + index];
+			return this._stack[iutil.back(this._blocks) + index];
 		},
 		setAt: function(val, index) {
 			if( index >= this.length || index < 0 ) {
 				throw Error(`Index is out of stack bounds!`);
 			}
-			this._stack[iu.back(this._blocks) + index] = val;
+			this._stack[iutil.back(this._blocks) + index] = val;
 		}
 	});
 });

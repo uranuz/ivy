@@ -16,7 +16,7 @@ Object.assign(iutil, {
 
 	// Creates reverse iterator over array
 	reversed: FirClass(function Reversed(arr) {
-		var inst = firPODCtor(this, Reversed, arguments);
+		var inst = firPODCtor(this, arguments);
 		if( inst ) return inst;
 
 		if( !(arr instanceof Array) ) {

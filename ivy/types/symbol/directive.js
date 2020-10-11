@@ -20,6 +20,7 @@ return FirClass(
 			this._loc = loc;
 			this._attrs = attrs || [];
 			this._bodyAttrs = bodyAttrs || DirBodyAttrs();
+			this._attrIndexes = {};
 
 			if( !this._name.length ) {
 				throw new Error('Expected directive symbol name');
@@ -55,7 +56,7 @@ return FirClass(
 			return this._attrs;
 		}),
 
-		getAttr: function(attrName) {
+		__getAttr__: function(attrName) {
 			var idx = this._attrIndexes[attrName];
 			if( idx == null ) {
 				throw new Error('No attribute with name "' + attrName + '" for directive "' + this._name + '"');

@@ -2,21 +2,25 @@ define('ivy/programme', [
 	'ivy/interpreter/interpreter',
 	'ivy/types/data/async_result',
 	'ivy/types/data/consts'
-], function(Interpreter, AsyncResult, Consts) {
-var AsyncResultState = Consts.AsyncResultState;
+], function(
+	Interpreter,
+	AsyncResult,
+	DataConsts
+) {
+var AsyncResultState = DataConsts.AsyncResultState;
 return FirClass(
-	function Programme(moduleObjCache, directiveFactory, mainModuleName) {
+	function ExecutableProgramme(mainModuleName, moduleObjCache, directiveFactory) {
+		this._mainModuleName = mainModuleName;
 		this._moduleObjCache = moduleObjCache;
 		this._directiveFactory = directiveFactory;
-		this._mainModuleName = mainModuleName;
 	}, {
 		/// Run programme main module with arguments passed as mainModuleScope parameter
-		run: function(mainModuleScope, extraGlobals) {
-			return this.runSaveState(mainModuleScope, extraGlobals).asyncResult;
+		run: function(extraGlobals) {
+			return this.runSaveState(extraGlobals).asyncResult;
 		},
 
 		runSync: function() {
-			var ivyRes = this.runSaveStateSync(mainModuleScope, extraGlobals)._stack.back();
+			var ivyRes = this.runSaveStateSync(extraGlobals)._stack.back;
 			if( ivyRes.type == IvyDataType.AsyncResult ) {
 				ivyRes.asyncResult.then(function(methodRes) {
 					ivyRes = methodRes;
@@ -27,15 +31,12 @@ return FirClass(
 			return ivyRes;
 		},
 
-		runSaveState: function(mainModuleScope, extraGlobals) {
-			var
-				fResult = new AsyncResult(),
-				interp = new Interpreter(
-					this._moduleObjCache,
-					this._directiveFactory,
-					this._mainModuleName,
-					mainModuleScope
-				);
+		runSaveState: function(extraGlobals) {
+			var interp = new Interpreter(
+				this._mainModuleName,
+				this._moduleObjCache,
+				this._directiveFactory
+			);
 			interp.addExtraGlobals(extraGlobals);
 			return {
 				interp: interp,
@@ -43,18 +44,18 @@ return FirClass(
 			};
 		},
 
-		runSaveStateSync: function(mainModuleScope, extraGlobals) {
-			var moduleExecRes = this.runSaveState(mainModuleScope, extraGlobals);
+		runSaveStateSync: function(extraGlobals) {
+			var moduleExecRes = this.runSaveState(extraGlobals);
 			if( moduleExecRes.state !== AsyncResultState.resolved ) {
 				'Expected module execution async result resolved state'
 			}
 			return moduleExecRes.interp;
 		},
 
-		runMethod: function(methodName, methodParams, extraGlobals, mainModuleScope) {
+		runMethod: function(methodName, methodParams, extraGlobals) {
 			var
 				fResult = new AsyncResult(),
-				moduleExecRes = this.runSaveState(mainModuleScope, extraGlobals);
+				moduleExecRes = this.runSaveState(extraGlobals);
 			
 			moduleExecRes.asyncResult.then(
 				function(modRes) {
@@ -73,10 +74,10 @@ return FirClass(
 			return fResult;
 		},
 
-		runMethodSync: function(methodName, methodParams, extraGlobals, mainModuleScope) {
+		runMethodSync: function(methodName, methodParams, extraGlobals) {
 			var
 				ivyRes,
-				asyncRes = this.runSaveStateSync(mainModuleScope, extraGlobals)
+				asyncRes = this.runSaveStateSync(extraGlobals)
 					.runModuleDirective(methodName, methodParams);
 			if( asyncRes.state !== AsyncResultState.resolved ) {
 				throw new Error('Expected method execution async result resolved state');

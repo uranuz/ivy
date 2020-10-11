@@ -29,7 +29,7 @@ return FirClass(
 			return this._dirInterp;
 		}),
 
-		codeObject:firProperty(function() {
+		codeObject: firProperty(function() {
 			enforce(this._codeObject != null, "Callable is not an ivy code object");
 			return this._codeObject;
 		}),

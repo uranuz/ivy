@@ -141,7 +141,7 @@ Object.assign(idat, {
 				return result;
 			}
 			case IvyDataType.ClassNode: {
-				return this.toString(val.serialize());
+				return this.toString(val.__serialize__());
 			}
 			default:
 				throw new Error('Getting of deeper copy for this type is not implemented for now');
@@ -153,7 +153,7 @@ Object.assign(idat, {
 	_replaceIntoJSON: function(key, val) {
 		switch( idat.type(val) ) {
 			case IvyDataType.ClassNode:
-				return val.serialize();
+				return val.__serialize__();
 			default: break;
 		}
 		return val;
@@ -264,7 +264,7 @@ Object.assign(idat, {
 	},
 
 	opEquals: function(val, rhs) {
-		if( rhs.type != val.type ) {
+		if( idat.type(rhs) != idat.type(val) ) {
 			return false;
 		}
 		switch( idat.type(val) )

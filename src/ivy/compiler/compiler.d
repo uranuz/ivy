@@ -145,30 +145,27 @@ public:
 		if( ModuleObject moduleObject = _moduleObjCache.get(moduleName) ) {
 			return moduleObject;
 		}
-		else
+		log.write(`Compiled module not found in cache, so try to compile`);
+		IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
+
+		log.write(`Entering module scope`);
+		ModuleSymbol symb = _symbolsCollector.enterModuleScope(moduleName);
+
+		log.write(`Entering new module object`);
+		enterNewModuleObject(symb);
+		
+		scope(exit)
 		{
-			log.write(`Compiled module not found in cache, so try to compile`);
-			IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
-
-			log.write(`Entering module scope`);
-			ModuleSymbol symb = _symbolsCollector.enterModuleScope(moduleName);
-
-			log.write(`Entering new module object`);
-			enterNewModuleObject(symb);
-			
-			scope(exit)
-			{
-				this.exitCodeObject();
-				log.write(`Exited module object`);
-				log.write(`Exiting compiler scopes`);
-				_symbolsCollector.exitScope();
-				log.write(`Exited module scope`);
-			}
-			
-			log.write(`Starting compiling module AST: ` ~ moduleName);
-			moduleNode.accept(this);
-			log.write(`Finished compiling module AST`);
+			this.exitCodeObject();
+			log.write(`Exited module object`);
+			log.write(`Exiting compiler scopes`);
+			_symbolsCollector.exitScope();
+			log.write(`Exited module scope`);
 		}
+		
+		log.write(`Starting compiling module AST: ` ~ moduleName);
+		moduleNode.accept(this);
+		log.write(`Finished compiling module AST`);
 		return _moduleObjCache.get(moduleName);
 	}
 
@@ -405,7 +402,7 @@ public:
 				node.rightExpr.accept(this);
 
 				// Set possition where to jump if right tree evaluation needs to be skipped
-				setInstrArg(jumpInstrIndex, currentCodeObject._instrs.length);
+				setInstrArg(jumpInstrIndex, currentCodeObject.instrs.length);
 				return;
 			}
 			default:

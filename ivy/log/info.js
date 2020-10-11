@@ -10,7 +10,7 @@ return FirClass(
 		processedLine,
 		processedText
 	) {
-		var inst = firPODCtor(this, LogInfo, arguments);
+		var inst = firPODCtor(this, arguments);
 		if( inst ) return inst;
 
 		this.msg = msg;

@@ -1,29 +1,33 @@
-define('ivy/interpreter/directive/factory', [], function(dirs) {
+define('ivy/interpreter/directive/factory', [
+	'ivy/utils',
+	'ivy/exception'
+], function(
+	iutil,
+	IvyException
+) {
+var enforce = iutil.enforce.bind(iutil, IvyException);
 return FirClass(
 	function DirectiveFactory() {
-		this._dirInterps = {};
+		this._dirInterps = [];
+		this._indexes = {};
 	}, {
 		get: function(name) {
-			return this._dirInterps[name];
+			return this._dirInterps[this._indexes[name]];
 		},
 
 		add: function(dirInterp) {
-			this._dirInterps[dirInterp._name] = dirInterp;
+			var name = dirInterp.symbol.name;
+			enforce(!this._indexes.hasOwnProperty(name), "Directive interpreter with name: " + name + " already added");
+			this._indexes[name] = this._dirInterps.length;
+			this._dirInterps.push(dirInterp);
 		},
 
-		interps: function() {
+		interps: firProperty(function() {
 			return this._dirInterps;
-		},
+		}),
 
-		symbols: function() {
-			var symbs = [];
-			for( var key in this._dirInterps ) {
-				if( this._dirInterps.hasOwnProperty(key) ) {
-					symbs.push(this._dirInterps[key].symbol);
-				}
-			}
-			return symbs;
-		}
+		symbols: firProperty(function() {
+			return this._dirInterps.map(function(it) { return it.symbol });
+		})
 	});
-	return DirectiveFactory;
 });

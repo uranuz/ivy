@@ -21,9 +21,9 @@ function ExecutionFrame(callable) {
 
 	getValue: function(varName) {
 		if( !this.hasValue(varName) ) {
-			throw new IvyException("Cannot find variable with name: \"" + varName + "\" for symbol \"" + callable.symbol.name + "\"");
+			throw new IvyException("Cannot find variable with name: \"" + varName + "\" for symbol \"" + this.callable.symbol.name + "\"");
 		}
-		return res[varName];
+		return this._dataDict[varName];
 	},
 
 	setValue: function(varName, value) {

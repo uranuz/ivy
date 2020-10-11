@@ -86,6 +86,24 @@ enum OpCode: ubyte
 // Minimal element of bytecode is instruction opcode with optional arg
 struct Instruction
 {
+	import std.json: JSONValue;
+
 	OpCode opcode; // So... it's instruction opcode
 	size_t arg; // One arg for now
+
+	string name() @property
+	{
+		import std.conv: text;
+		return this.opcode.text;
+	}
+
+	string toString()
+	{
+		import std.conv: text;
+		return this.name ~ ": " ~ this.arg.text;
+	}
+
+	JSONValue toStdJSON() {
+		return JSONValue([JSONValue(this.opcode), JSONValue(this.arg)]);
+	}
 }

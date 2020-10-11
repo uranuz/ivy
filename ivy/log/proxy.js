@@ -1,5 +1,11 @@
-define('ivy/log/proxy', [], function() {
-var isDebugMode = false;
+define('ivy/log/proxy', [
+	"ivy/log/consts"
+], function(
+	LogConsts
+) {
+var
+	isDebugMode = false,
+	LogInfoType = LogConsts.LogInfoType;
 return FirClass(
 function LogProxyImpl(func, file, line) {
 	this.func = func;
@@ -30,13 +36,13 @@ function LogProxyImpl(func, file, line) {
 	/// Writes regular log message for debug
 	write: function(data) {
 		if( isDebugMode ) {
-			genericWrite(LogInfoType.info, data);
+			this.genericWrite(LogInfoType.info, data);
 		}
 	},
 
 	/// Writes warning message
 	warn: function() {
-		genericWrite(LogInfoType.warn, data);
+		this.genericWrite(LogInfoType.warn, data);
 	},
 
 	/// Writes regular error to log and throws ExceptionType
@@ -46,7 +52,7 @@ function LogProxyImpl(func, file, line) {
 
 	/// Tests assertion. If it's false then writes regular error to log and throws ExceptionType
 	enforce: function(cond) {
-		this._enf(cond, genericWrite(LogInfoType.error, arguments));
+		this._enf(cond, this.genericWrite(LogInfoType.error, arguments));
 	},
 
 	/// Writes internal error to log and throws ExceptionType
@@ -56,7 +62,7 @@ function LogProxyImpl(func, file, line) {
 
 	/// Tests assertion. If it's false then writes internal error to log and throws ExceptionType
 	internalAssert: function(cond) {
-		this._enf(cond, genericWrite(LogInfoType.internalError, arguments));
+		this._enf(cond, this.genericWrite(LogInfoType.internalError, arguments));
 	},
 
 	/// Name of function where event occured

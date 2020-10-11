@@ -56,7 +56,7 @@ public:
 					continue;
 				}
 				result ~= "\r\nCode object " ~ i.text ~ " (" ~ con.codeObject.symbol.name ~ ")" ~ "\r\n";
-				foreach( k, instr; con.codeObject._instrs )
+				foreach( k, instr; con.codeObject.instrs )
 				{
 					string val;
 					if(
@@ -73,7 +73,7 @@ public:
 					result ~= k.text ~ "  " ~ instr.opcode.text ~ "  " ~ instr.arg.text ~ val ~ "\r\n";
 				}
 				result ~= "\r\nCode object source map(line, startAddr)\r\n";
-				foreach( mapItem; con.codeObject._sourceMap ) {
+				foreach( mapItem; con.codeObject.sourceMap ) {
 					result ~= mapItem.line.text ~ "\t\t" ~ mapItem.startInstr.text ~ "\r\n";
 				}
 			}

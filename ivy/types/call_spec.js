@@ -2,7 +2,7 @@ define('ivy/types/call_spec', [], function() {
 /// Directive call specification
 return FirClass(
 	function CallSpec(specOrAttrCount, hasKwAttrs) {
-		var inst = firPODCtor(this, CallSpec, arguments);
+		var inst = firPODCtor(this, arguments);
 		if( inst ) return inst;
 
 		if( hasKwAttrs == null ) {

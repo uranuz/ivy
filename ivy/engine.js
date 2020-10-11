@@ -52,9 +52,9 @@ return FirClass(
 
 		_makeProgramme: function(moduleName) {
 			return new ExecutableProgramme(
+				moduleName,
 				this._codeLoader,
-				this._config.directiveFactory,
-				moduleName
+				this._config.directiveFactory
 			);
 		},
 

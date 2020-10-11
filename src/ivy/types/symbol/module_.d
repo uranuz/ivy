@@ -10,6 +10,7 @@ class ModuleSymbol: ICallableSymbol
 	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 
 	import std.exception: enforce;
+	import std.json: JSONValue;
 
 private:
 	string _name;
@@ -44,6 +45,12 @@ public:
 
 		DirBodyAttrs bodyAttrs() @property {
 			return DirBodyAttrs.init;
+		}
+
+		JSONValue toStdJSON() @property {
+			return JSONValue([
+				"name": this._name
+			]);
 		}
 	}
 }

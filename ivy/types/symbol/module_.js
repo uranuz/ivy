@@ -11,7 +11,7 @@ var emptyBodyAttrs = DirBodyAttrs();
 return FirClass(
 	function ModuleSymbol(name, loc) {
 		this._name = name;
-		this._loc = loc;
+		this._loc = Location();
 
 		if( !this._name.length ) {
 			throw new Error('Expected module symbol name');
@@ -32,7 +32,7 @@ return FirClass(
 			return [];
 		}),
 
-		getAttr: function() {
+		__getAttr__: function() {
 			throw new Error('Module symbol has no attributes');
 		},
 

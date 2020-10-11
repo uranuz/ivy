@@ -130,11 +130,10 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 			renderDataNode!renderType(sink, node.classNode.__serialize__(), maxRecursion - 1);
 			break;
 		case IvyDataType.CodeObject:
-			import std.conv: text;
-			_writeStr!renderType(sink, "[[code object, size: " ~ node.codeObject._instrs.length.text ~ "]]");
+			_writeStr!renderType(sink, "[[code object: " ~ node.codeObject.symbol.name ~ "]]");
 			break;
 		case IvyDataType.Callable:
-			_writeStr!renderType(sink, "[[callable object, " ~ node.callable.symbol.name ~ "]]");
+			_writeStr!renderType(sink, "[[callable object: " ~ node.callable.symbol.name ~ "]]");
 			break;
 		case IvyDataType.ExecutionFrame:
 			_writeStr!renderType(sink, "[[execution frame]]");

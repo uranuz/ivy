@@ -1,7 +1,7 @@
 define('ivy/location', [], function() {
 return FirClass(
 	function Location(fileName, index, length) {
-		var inst = firPODCtor(this, Location, arguments);
+		var inst = firPODCtor(this, arguments);
 		if( inst ) return inst;
 
 		this.fileName = fileName || null;
