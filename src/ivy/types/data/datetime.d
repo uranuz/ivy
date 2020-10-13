@@ -1,6 +1,6 @@
 module ivy.types.data.datetime;
 
-import ivy.types.data.not_impl_class_node: NotImplClassNode;
+import ivy.types.data.base_class_node: BaseClassNode;
 
 enum DateTimeAttr: string
 {
@@ -17,7 +17,7 @@ enum DateTimeAttr: string
 }
 
 // Хранит дату/время
-class IvyDateTime: NotImplClassNode
+class IvyDateTime: BaseClassNode
 {
 	import ivy.types.data: IvyData, IvyDataType;
 	

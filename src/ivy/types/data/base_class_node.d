@@ -1,18 +1,18 @@
-module ivy.types.data.not_impl_class_node;
+module ivy.types.data.base_class_node;
 
 import ivy.types.data.iface.class_node: IClassNode;
 
-class NotImplClassNode: IClassNode
+class BaseClassNode: IClassNode
 {
 	import ivy.types.data.iface.range: IvyDataRange;
 	import ivy.types.data: IvyData;
-	import ivy.types.data.exception: PropertyNotImplException;
+	import ivy.types.data.exception: NotImplException;
 
 protected:
 	string _getClassName() {
 		return typeid(this).name;
 	}
-	enum string notImplMixin = `throw new PropertyNotImplException(_getClassName(), __FUNCTION__);`;
+	enum string notImplMixin = `throw new NotImplException(_getClassName(), __FUNCTION__);`;
 
 public:
 	override {
@@ -42,7 +42,7 @@ public:
 			// By default implement empty with check for length
 			try {
 				return this.length == 0;
-			} catch(PropertyNotImplException) {}
+			} catch(NotImplException) {}
 			// If there is no logic of emptyness implemented then consider it's not empty
 			return false;
 		}

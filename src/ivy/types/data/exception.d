@@ -14,7 +14,7 @@ public:
 	}
 }
 
-class PropertyNotImplException: DataNodeException
+class NotImplException: DataNodeException
 {
 public:
 	@safe this(string nodeKind, string prop, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow {

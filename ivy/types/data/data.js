@@ -5,7 +5,7 @@ define('ivy/types/data/data', [
 	'ivy/types/code_object',
 	'ivy/types/callable_object',
 	'ivy/types/data/iface/range',
-	'ivy/types/data/iface/class_node',
+	'ivy/types/data/base_class_node',
 	'ivy/types/data/async_result'
 ], function(
 	idat,
