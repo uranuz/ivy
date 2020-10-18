@@ -27,3 +27,17 @@ enum AsyncResultState: ubyte {
 	resolved,
 	rejected
 }
+
+enum DateTimeAttr: string
+{
+	year = `year`,
+	month = `month`,
+	day = `day`,
+	hour = `hour`,
+	minute = `minute`,
+	second = `second`,
+	millisecond = `millisecond`,
+	dayOfWeek = `dayOfWeek`,
+	dayOfYear = `dayOfYear`,
+	utcMinuteOffset = `utcMinuteOffset`
+}

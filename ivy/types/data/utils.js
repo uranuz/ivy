@@ -20,9 +20,6 @@ Object.assign(dutil, {
 			case IvyDataType.String:
 				// All of these are value types so just return plain copy
 				return val;
-			case IvyDataType.DateTime:
-				// Copy date object
-				return new Date(val.getTime());
 			case IvyDataType.AssocArray: {
 				var newObj = {};
 				for( var key in val ) {

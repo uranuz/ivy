@@ -177,20 +177,19 @@ function Interpreter(
 					var
 						right = this._stack.pop(),
 						left = this._stack.pop(),
-						ltype ,
+						lType = idat.type(left),
 						res;
 					this.log.internalAssert(
-						left.type == right.type,
+						lType == idat.type(right),
 						"Left and right values of arithmetic operation must have the same integer or floating type!");
 
-
-					switch( left.type )
+					switch( lType )
 					{
 						case IvyDataType.Integer:
-							res = this._doBinaryOp(instr.opcode, left.integer, right.integer);
+							res = this._doBinaryOp(instr.opcode, left, right);
 							break;
 						case IvyDataType.Floating:
-							res = this._doBinaryOp(instr.opcode, left.floating, right.floating);
+							res = this._doBinaryOp(instr.opcode, left, right);
 							break;
 						default:
 							this.log.error("Unexpected types of operands");
@@ -291,7 +290,7 @@ function Interpreter(
 						}
 						case IvyDataType.ClassNode:
 						{
-							idat.classNode(aggr).__setAttr__(attrVal, attrName.str);
+							idat.classNode(aggr).__setAttr__(attrVal, attrName);
 							break;
 						}
 					}

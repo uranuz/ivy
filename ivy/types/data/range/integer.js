@@ -14,19 +14,19 @@ return FirClass(
 		this._end = end;
 	}, DataNodeRange, {
 		// Method must return first item of range or raise error if range is empty
-		front: function() {
+		front: firProperty(function() {
 			return this._current;
-		},
+		}),
 		// Method must advance range to the next item
 		pop: function() {
-			if( this.empty() ) {
+			if( this.empty ) {
 				throw new IvyException('Cannot advance empty IntegerRange');
 			}
 			return this._current++;
 		},
 		// Method is used to check if range is empty
-		empty: function() {
+		empty: firProperty(function() {
 			return this._current >= this._end;
-		}
+		})
 	});
 });

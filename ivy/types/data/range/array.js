@@ -11,22 +11,22 @@ return FirClass(
 		this._i = 0;
 	}, DataNodeRange, {
 		// Method must return first item of range or raise error if range is empty
-		front: function() {
-			if( this.empty() ) {
+		front: firProperty(function() {
+			if( this.empty ) {
 				throw new IvyException('Cannot get front element of empty ArrayRange');
 			}
 			return this._array[this._i];
-		},
+		}),
 		// Method must advance range to the next item
 		pop: function() {
-			if( this.empty() ) {
+			if( this.empty ) {
 				throw new IvyException('Cannot advance empty ArrayRange');
 			}
 			return this._array[(this._i)++];
 		},
 		// Method is used to check if range is empty
-		empty: function() {
+		empty: firProperty(function() {
 			return this._i >= this._array.length;
-		}
+		})
 });
 });

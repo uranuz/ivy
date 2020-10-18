@@ -1,7 +1,6 @@
 define('ivy/types/data/consts', [], function() {
-function NullPtrType() {}
-var Consts = {
-	IvyDataTypeItems: [
+var
+	IvyDataTypeItems = [
 		'Undef',
 		'Null',
 		'Boolean',
@@ -18,29 +17,54 @@ var Consts = {
 		'AsyncResult',
 		'ModuleObject'
 	],
-	NodeEscapeStateItems: [
-		'Init', 'Safe', 'Unsafe'
+	NodeEscapeStateItems = [
+		'Init',
+		'Safe',
+		'Unsafe'
 	],
-	AsyncResultStateItems: [
-		'Init', 'Pending', 'Success', 'Error'
+	AsyncResultStateItems = [
+		'Init',
+		'Pending',
+		'Success',
+		'Error'
 	],
-	NullPtrType: NullPtrType,
-	NullPtr: new NullPtrType
-},
-EnumConsts = [
-	'IvyDataType',
-	'NodeEscapeState',
-	'AsyncResultState'
-];
-for( var i = 0; i < EnumConsts.length; ++i ) {
+	DateTimeAttrItems = [
+		'year',
+		'month',
+		'day',
+		'hour',
+		'minute',
+		'second',
+		'millisecond',
+		'dayOfWeek',
+		'dayOfYear',
+		'utcMinuteOffset'
+	],
+	Consts = {
+		IvyDataTypeItems: IvyDataTypeItems,
+		NodeEscapeStateItems: NodeEscapeStateItems,
+		AsyncResultStateItems: AsyncResultStateItems,
+
+		DateTimeAttrItems: DateTimeAttrItems
+	};
+[
+	['IvyDataType', true],
+	['NodeEscapeState', true],
+	['AsyncResultState', true],
+
+	['DateTimeAttr', false]
+].forEach(function(constNameType) {
 	var
-		constName = EnumConsts[i],
+		constName = constNameType[0],
+		intConst = constNameType[1],
 		constItems = Consts[constName + 'Items'],
 		enumObj = {};
-	for( var j = 0; j < constItems.length; ++j ) {
-		enumObj[constItems[j]] = j;
-	}
+
+	constItems.forEach(function(key, index) {
+		enumObj[key] = intConst? index: key;
+	});
+
 	Consts[constName] = enumObj;
-}
+});
 return Consts;
 });
