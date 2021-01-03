@@ -1015,13 +1015,6 @@ public:
 		return left;
 	}
 
-/+
-	IExpression parseLogicalXorExp()
-	{
-
-	}
-+/
-
 	IExpression parseLogicalAndExp()
 	{
 		log.write("parseLogicalAndExp");

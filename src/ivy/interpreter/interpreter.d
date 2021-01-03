@@ -104,788 +104,773 @@ public:
 
 	void execLoopImpl(AsyncResult fResult, size_t exitFrames = 1)
 	{
+		while( true )
+		{
+			while( this._pk < this._codeRange.length )
+				this.execLoopBody();
+
+			// We expect to have only the result of directive on the stack
+			this.log.internalAssert(this._stack.length == 1, "Frame stack should contain 1 item now");
+
+			// If there is the last frame it means that it is the last module frame.
+			// We need to leave frame here for case when we want to execute specific function of module
+			if( this._frameStack.length <= exitFrames )
+				break;
+
+			IvyData result = this._stack.pop(); // Take result
+			this.removeFrame(); // Exit out of this frame
+
+			CodeObject codeObject = this.currentCodeObject;
+			this.log.internalAssert(codeObject !is null, "Expected code object");
+
+			this._codeRange = codeObject.instrs[]; // Set old instruction range back
+			this.setJump(this._stack.pop().integer);
+			this._stack.push(result); // Put result back
+		}
+
+		fResult.resolve(this._stack.back);
+	}
+
+	void execLoopBody()
+	{
 		import std.range: empty, back, popBack;
 		import std.conv: to, text;
-		import std.meta: AliasSeq;
-		import std.typecons: tuple;
 		import std.algorithm: canFind;
 
-		execution_loop:
-		while( this._pk <= this._codeRange.length )
+		Instruction instr = this._codeRange[this._pk];
+		final switch( instr.opcode )
 		{
-			if( this._pk >= this._codeRange.length ) // Ended with this code object
+			case OpCode.InvalidCode: {
+				this.log.internalError("Invalid code of operation");
+				break;
+			}
+			case OpCode.Nop: break;
+
+			// Load constant from programme data table into stack
+			case OpCode.LoadConst:
 			{
-				// Else we expect to have result of directive on the stack
-				this.log.internalAssert(
-					this._stack.length == 1,
-					"Frame stack should contain 1 item now");
-				if( this._frameStack.length == exitFrames ) {
-					// If there is the last frame it means that it is the last module frame.
-					// We need to leave frame here for case when we want to execute specific function of module
-					fResult.resolve(this._stack.back);
-					return;
-				}
-				IvyData result = this._stack.pop(); // Take result
-				this.removeFrame(); // Exit out of this frame
+				this._stack.push(this.getModuleConstCopy(instr.arg));
+				break;
+			}
 
-				CodeObject codeObject = this.currentCodeObject;
-				this.log.internalAssert(
-					codeObject !is null,
-					"Expected code object");
-
-				this._codeRange = codeObject.instrs[]; // Set old instruction range back
-				this.setJump(this._stack.pop().integer);
-				this._stack.push(result); // Put result back
-				continue;
-			} // if
-			
-			Instruction instr = this._codeRange[this._pk];
-			final switch( instr.opcode )
+			case OpCode.PopTop:
 			{
-				case OpCode.InvalidCode: {
-					this.log.internalError("Invalid code of operation");
-					break;
-				}
-				case OpCode.Nop: break;
+				this._stack.pop();
+				break;
+			}
 
-				// Load constant from programme data table into stack
-				case OpCode.LoadConst:
+			// Swaps two top items on the stack
+			case OpCode.SwapTwo:
+			{
+				IvyData top = this._stack.pop();
+				IvyData beforeTop = this._stack.pop();
+				this._stack.push(top);
+				this._stack.push(beforeTop);
+				break;
+			}
+
+			case OpCode.DubTop: {
+				this._stack.push(this._stack.back);
+				break;
+			}
+
+			// Useless unary plus operation
+			case OpCode.UnaryPlus:
+			{
+				this.log.internalAssert(
+					[IvyDataType.Integer, IvyDataType.Floating].canFind(this._stack.back.type),
+					"Operand for unary plus operation must have integer or floating type!" );
+
+				// Do nothing for now:)
+				break;
+			}
+
+			case OpCode.UnaryMin:
+			{
+				this.log.internalAssert(
+					[IvyDataType.Integer, IvyDataType.Floating].canFind(this._stack.back.type),
+					"Operand for unary minus operation must have integer or floating type!");
+
+				if( this._stack.back.type == IvyDataType.Integer ) {
+					this._stack.back = - this._stack.back.integer;
+				} else {
+					this._stack.back = - this._stack.back.floating;
+				}
+
+				break;
+			}
+
+			case OpCode.UnaryNot:
+			{
+				this._stack.back = !this._stack.back.toBoolean();
+				break;
+			}
+
+			// Base arithmetic operations execution
+			case OpCode.Add:
+			case OpCode.Sub:
+			case OpCode.Mul:
+			case OpCode.Div:
+			case OpCode.Mod:
+			{
+				// Right value was evaluated last so it goes first in the stack
+				IvyData right = this._stack.pop();
+				IvyData left = this._stack.pop();
+				IvyData res;
+
+				this.log.internalAssert(
+					left.type == right.type,
+					"Operands of arithmetic operation must have the same type!");
+
+
+				switch( left.type )
 				{
-					this._stack.push(this.getModuleConstCopy(instr.arg));
-					break;
+					case IvyDataType.Integer:
+						res = this._doBinaryOp(instr.opcode, left.integer, right.integer);
+						break;
+					case IvyDataType.Floating:
+						res = this._doBinaryOp(instr.opcode, left.floating, right.floating);
+						break;
+					default:
+						this.log.error("Unexpected types of operands");
+						break;
 				}
 
-				case OpCode.PopTop:
+				this._stack.push(res);
+				break;
+			}
+
+			// Shallow equality comparision
+			case OpCode.Equal:
+			case OpCode.NotEqual:
+			{
+				this._stack.push(this._doBinaryOp(instr.opcode, this._stack.pop(), this._stack.pop()));
+				break;
+			}
+
+			// Comparision operations
+			case OpCode.LT:
+			case OpCode.GT:
+			case OpCode.LTEqual:
+			case OpCode.GTEqual:
+			{
+				// Right value was evaluated last so it goes first in the stack
+				IvyData right = this._stack.pop();
+				IvyData left = this._stack.pop();
+				IvyData res;
+				this.log.internalAssert(
+					left.type == right.type,
+					"Operands of less or greather comparision must have the same type");
+
+				switch( left.type )
 				{
-					this._stack.pop();
-					break;
+					case IvyDataType.Undef:
+					case IvyDataType.Null:
+						// Undef and Null are not less or equal to something
+						res = false;
+						break;
+					case IvyDataType.Integer:
+						res = this._doBinaryOp(instr.opcode, left.integer, right.integer);
+						break;
+					case IvyDataType.Floating:
+						res = this._doBinaryOp(instr.opcode, left.floating, right.floating);
+						break;
+					case IvyDataType.String:
+						res = this._doBinaryOp(instr.opcode, left.str, right.str);
+						break;
+					default:
+						this.log.internalError("Less or greater comparisions doesn't support type ", left.type, " yet!");
 				}
+				this._stack.push(res);
+				break;
+			}
 
-				// Swaps two top items on the stack
-				case OpCode.SwapTwo:
+			// Stores data from stack into local context frame variable
+			case OpCode.StoreName:
+			case OpCode.StoreGlobalName:
+			{
+				IvyData varValue = this._stack.pop();
+				string varName = getModuleConstCopy(instr.arg).str;
+
+				switch(instr.opcode) {
+					case OpCode.StoreName: this.setValue(varName, varValue); break;
+					case OpCode.StoreGlobalName: this.setGlobalValue(varName, varValue); break;
+					default: this.log.internalError("Unexpected instruction opcode");
+				}
+				break;
+			}
+
+			// Loads data from local context frame variable by index of var name in module constants
+			case OpCode.LoadName:
+			{
+				string varName = this.getModuleConstCopy(instr.arg).str;
+				this._stack.push(this.getGlobalValue(varName));
+				break;
+			}
+
+			case OpCode.StoreAttr:
+			{
+				IvyData attrVal = this._stack.pop();
+				string attrName = this._stack.pop().str;
+				IvyData aggr = this._stack.pop();
+				final switch( aggr.type )
 				{
-					IvyData top = this._stack.pop();
-					IvyData beforeTop = this._stack.pop();
-					this._stack.push(top);
-					this._stack.push(beforeTop);
-					break;
-				}
-
-				case OpCode.DubTop: {
-					this._stack.push(this._stack.back);
-					break;
-				}
-
-				// Useless unary plus operation
-				case OpCode.UnaryPlus:
-				{
-					this.log.internalAssert(
-						[IvyDataType.Integer, IvyDataType.Floating].canFind(this._stack.back.type),
-						"Operand for unary plus operation must have integer or floating type!" );
-
-					// Do nothing for now:)
-					break;
-				}
-
-				case OpCode.UnaryMin:
-				{
-					this.log.internalAssert(
-						[IvyDataType.Integer, IvyDataType.Floating].canFind(this._stack.back.type),
-						"Operand for unary minus operation must have integer or floating type!");
-
-					if( this._stack.back.type == IvyDataType.Integer ) {
-						this._stack.back = - this._stack.back.integer;
-					} else {
-						this._stack.back = - this._stack.back.floating;
-					}
-
-					break;
-				}
-
-				case OpCode.UnaryNot:
-				{
-					this._stack.back = !this._stack.back.toBoolean();
-					break;
-				}
-
-				// Base arithmetic operations execution
-				case OpCode.Add:
-				case OpCode.Sub:
-				case OpCode.Mul:
-				case OpCode.Div:
-				case OpCode.Mod:
-				{
-					// Right value was evaluated last so it goes first in the stack
-					IvyData right = this._stack.pop();
-					IvyData left = this._stack.pop();
-					IvyData res;
-
-					this.log.internalAssert(
-						left.type == right.type,
-						"Operands of arithmetic operation must have the same type!");
-
-
-					switch( left.type )
+					case IvyDataType.Undef:
+					case IvyDataType.Null:
+					case IvyDataType.Boolean:
+					case IvyDataType.Integer:
+					case IvyDataType.Floating:
+					case IvyDataType.String:
+					case IvyDataType.Array:
+					case IvyDataType.CodeObject:
+					case IvyDataType.Callable:
+					case IvyDataType.DataNodeRange:
+					case IvyDataType.AsyncResult:
+					case IvyDataType.ModuleObject:
+					case IvyDataType.ExecutionFrame:
+						this.log.internalError("Unable to set attribute of value with type: ", aggr.type);
+						break;
+					case IvyDataType.AssocArray:
 					{
-						case IvyDataType.Integer:
-							res = this._doBinaryOp(instr.opcode, left.integer, right.integer);
-							break;
-						case IvyDataType.Floating:
-							res = this._doBinaryOp(instr.opcode, left.floating, right.floating);
-							break;
-						default:
-							this.log.error("Unexpected types of operands");
-							break;
-					}
-
-					this._stack.push(res);
-					break;
-				}
-
-				// Shallow equality comparision
-				case OpCode.Equal:
-				case OpCode.NotEqual:
-				{
-					this._stack.push(this._doBinaryOp(instr.opcode, this._stack.pop(), this._stack.pop()));
-					break;
-				}
-
-				// Comparision operations
-				case OpCode.LT:
-				case OpCode.GT:
-				case OpCode.LTEqual:
-				case OpCode.GTEqual:
-				{
-					// Right value was evaluated last so it goes first in the stack
-					IvyData right = this._stack.pop();
-					IvyData left = this._stack.pop();
-					IvyData res;
-					this.log.internalAssert(
-						left.type == right.type,
-						"Operands of less or greather comparision must have the same type");
-
-					switch( left.type )
-					{
-						case IvyDataType.Undef:
-						case IvyDataType.Null:
-							// Undef and Null are not less or equal to something
-							res = false;
-							break;
-						case IvyDataType.Integer:
-							res = this._doBinaryOp(instr.opcode, left.integer, right.integer);
-							break;
-						case IvyDataType.Floating:
-							res = this._doBinaryOp(instr.opcode, left.floating, right.floating);
-							break;
-						case IvyDataType.String:
-							res = this._doBinaryOp(instr.opcode, left.str, right.str);
-							break;
-						default:
-							this.log.internalError("Less or greater comparisions doesn't support type ", left.type, " yet!");
-					}
-					this._stack.push(res);
-					break;
-				}
-
-				// Stores data from stack into local context frame variable
-				case OpCode.StoreName:
-				case OpCode.StoreGlobalName:
-				{
-					IvyData varValue = this._stack.pop();
-					string varName = getModuleConstCopy(instr.arg).str;
-
-					switch(instr.opcode) {
-						case OpCode.StoreName: this.setValue(varName, varValue); break;
-						case OpCode.StoreGlobalName: this.setGlobalValue(varName, varValue); break;
-						default: this.log.internalError("Unexpected instruction opcode");
-					}
-					break;
-				}
-
-				// Loads data from local context frame variable by index of var name in module constants
-				case OpCode.LoadName:
-				{
-					string varName = this.getModuleConstCopy(instr.arg).str;
-					this._stack.push(this.getGlobalValue(varName));
-					break;
-				}
-
-				case OpCode.StoreAttr:
-				{
-					IvyData attrVal = this._stack.pop();
-					string attrName = this._stack.pop().str;
-					IvyData aggr = this._stack.pop();
-					final switch( aggr.type )
-					{
-						case IvyDataType.Undef:
-						case IvyDataType.Null:
-						case IvyDataType.Boolean:
-						case IvyDataType.Integer:
-						case IvyDataType.Floating:
-						case IvyDataType.String:
-						case IvyDataType.Array:
-						case IvyDataType.CodeObject:
-						case IvyDataType.Callable:
-						case IvyDataType.DataNodeRange:
-						case IvyDataType.AsyncResult:
-						case IvyDataType.ModuleObject:
-						case IvyDataType.ExecutionFrame:
-							this.log.internalError("Unable to set attribute of value with type: ", aggr.type);
-							break;
-						case IvyDataType.AssocArray:
-						{
-							aggr[attrName] = attrVal;
-							break;
-						}
-						case IvyDataType.ClassNode:
-						{
-							aggr.classNode.__setAttr__(attrVal, attrName);
-							break;
-						}
-					}
-					break;
-				}
-
-				// 
-				case OpCode.LoadAttr:
-				{
-					string attrName = this._stack.pop().str;
-					IvyData aggr = this._stack.pop();
-
-					final switch( aggr.type )
-					{
-						case IvyDataType.Undef:
-						case IvyDataType.Null:
-						case IvyDataType.Boolean:
-						case IvyDataType.Integer:
-						case IvyDataType.Floating:
-						case IvyDataType.String:
-						case IvyDataType.Array:
-						case IvyDataType.CodeObject:
-						case IvyDataType.Callable:
-						case IvyDataType.DataNodeRange:
-						case IvyDataType.AsyncResult:
-						case IvyDataType.ModuleObject:
-							this.log.internalError("Unable to get attribute of value with type: ", aggr.type);
-							break;
-						case IvyDataType.AssocArray:
-						{
-							IvyData* valPtr = attrName in aggr;
-							this._stack.push(valPtr is null? IvyData(): *valPtr);
-							break;
-						}
-						case IvyDataType.ClassNode:
-						{
-							this._stack.push(aggr.classNode.__getAttr__(attrName));
-							break;
-						}
-						case IvyDataType.ExecutionFrame:
-						{
-							this._stack.push(aggr.execFrame.getValue(attrName));
-							break;
-						}
-					}
-					break;
-				}
-
-				case OpCode.MakeArray:
-				{
-					IvyData[] newArray = [IvyData()];
-
-					newArray.length = instr.arg; // Preallocating is good ;)
-					for( size_t i = instr.arg; i > 0; --i ) {
-						// We take array items from the tail, so we must consider it!
-						newArray[i-1] = this._stack.pop();
-					}
-					this._stack.push(newArray);
-					break;
-				}
-
-				case OpCode.MakeAssocArray:
-				{
-					IvyData[string] res;
-					for( size_t i = 0; i < instr.arg; ++i )
-					{
-						IvyData val = this._stack.pop();
-						string key = this._stack.pop().str;
-
-						res[key] = val;
-					}
-					this._stack.push(res);
-					break;
-				}
-
-				// Set property of object, array item or class object with writeable attribute
-				// by passed property name or index
-				case OpCode.StoreSubscr:
-				{
-					IvyData index = this._stack.pop();
-					IvyData value = this._stack.pop();
-					IvyData aggr = this._stack.pop();
-
-					switch( aggr.type )
-					{
-						case IvyDataType.Array:
-							this.log.internalAssert(
-								index.integer < aggr.length,
-								"Index is out of bounds of array");
-							aggr[index.integer] = value;
-							break;
-						case IvyDataType.AssocArray:
-							aggr[index.str] = value;
-							break;
-						case IvyDataType.ClassNode: {
-							switch( index.type )
-							{
-								case IvyDataType.Integer:
-									aggr[index.integer] = value;
-									break;
-								case IvyDataType.String:
-									aggr[index.str] = value;
-									break;
-								default:
-									this.log.error("Index for class node must be string or integer!");
-									break;
-							}
-							break;
-						}
-						default:
-							this.log.error("Unexpected aggregate type");
-					}
-					break;
-				}
-
-				// Load constant from programme data table into stack
-				case OpCode.LoadSubscr:
-				{
-					import std.utf: toUTFindex, decode;
-
-					IvyData index = this._stack.pop();
-					IvyData aggr = this._stack.pop();
-
-					switch( aggr.type )
-					{
-						case IvyDataType.String:
-						{
-							// Index operation for string in D is little more complicated
-							string aggrStr = aggr.str;
-							size_t startIndex = aggrStr.toUTFindex(index.integer); // Get code unit index by index of symbol
-							size_t endIndex = startIndex;
-
-							aggrStr.decode(endIndex); // decode increases passed index
-							this.log.internalAssert(
-								startIndex < aggr.length,
-								"String slice start index must be less than str length");
-							this.log.internalAssert(
-								endIndex <= aggr.length,
-								"String slice end index must be less or equal to str length");
-							this._stack.push(aggrStr[startIndex..endIndex]);
-							break;
-						}
-						case IvyDataType.Array:
-						{
-							this.log.internalAssert(
-								index.integer < aggr.array.length,
-								"Array index must be less than array length");
-							this._stack.push(aggr.array[index.integer]);
-							break;
-						}
-						case IvyDataType.AssocArray:
-						{
-							auto valPtr = index.str in aggr.assocArray;
-							this.log.internalAssert(
-								valPtr !is null,
-								"Key in associative array is not found: ", index);
-							this._stack.push(*valPtr);
-							break;
-						}
-						case IvyDataType.ClassNode:
-						{
-							this._stack.push(aggr.classNode[index]);
-							break;
-						}
-						case IvyDataType.Callable:
-						{
-							if( index.str == "moduleName" ) {
-								this._stack.push(aggr.callable.moduleSymbol.name);
-							} else {
-								this.log.internalError("Callable object has no property: ", index);
-							}
-							break;
-						}
-						default:
-							this.log.internalError("Unexpected type of aggregate: ", aggr.type);
-					}
-					break;
-				}
-
-				// Load data node slice for array-like nodes onto stack
-				case OpCode.LoadSlice:
-				{
-					size_t end = this._stack.pop().integer;
-					size_t begin = this._stack.pop().integer;
-					IvyData aggr = this._stack.pop();
-
-					switch( aggr.type )
-					{
-						case IvyDataType.String:
-						{
-							import std.utf: toUTFindex, decode;
-
-							size_t startIndex = aggr.str.toUTFindex(begin); // Get code unit index by index of symbol
-							size_t endIndex = end;
-							aggr.str.decode(endIndex); // decode increases passed index
-
-							this._stack.push(aggr.str[startIndex..endIndex]);
-							break;
-						}
-						case IvyDataType.Array:
-							this._stack.push(aggr.array[begin..end]);
-							break;
-						case IvyDataType.ClassNode:
-							// Class node must have it's own range checks
-							this._stack.push(aggr.classNode[begin..end]);
-							break;
-						default:
-							this.log.internalError("Unexpected aggregate type");
-					}
-					break;
-				}
-
-				// Concatenates two arrays or strings and puts result onto stack
-				case OpCode.Concat:
-				{
-					IvyData right = this._stack.pop();
-					IvyData left = this._stack.pop();
-
-					this.log.internalAssert(
-						left.type == right.type,
-						"Left and right operands for concatenation operation must have the same type!");
-
-					switch( left.type )
-					{
-						case IvyDataType.String:
-							this._stack.push(left.str ~ right.str);
-							break;
-						case IvyDataType.Array:
-							this._stack.push(left.array ~ right.array);
-							break;
-						default:
-							this.log.internalError("Unexpected type of operand");
-					}
-					break;
-				}
-
-				case OpCode.Append:
-				{
-					IvyData value = this._stack.pop();
-					this._stack.back.array ~= value;
-					break;
-				}
-
-				case OpCode.Insert:
-				{
-					import std.array: insertInPlace;
-
-					IvyData posNode = this._stack.pop();
-					IvyData value = this._stack.pop();
-					IvyData[] aggr = this._stack.back.array;
-
-					size_t pos;
-					switch( posNode.type )
-					{
-						case IvyDataType.Integer:
-							pos = posNode.integer;
-							break;
-						case IvyDataType.Undef:
-						case IvyDataType.Null:
-							pos = aggr.length; // Act like append
-							break;
-						default:
-							this.log.internalError("Position argument expected to be an integer or empty (for append), but got: ", posNode);
-					}
-					this.log.internalAssert(
-						pos <= aggr.length,
-						"Insert position is wrong: ", pos);
-					aggr.insertInPlace(pos, value);
-					break;
-				}
-
-				// Flow control opcodes
-				case OpCode.JumpIfTrue:
-				case OpCode.JumpIfFalse:
-				case OpCode.JumpIfTrueOrPop:
-				case OpCode.JumpIfFalseOrPop:
-				{
-					// This is actual condition to test
-					bool jumpCond = (
-						instr.opcode == OpCode.JumpIfTrue || instr.opcode == OpCode.JumpIfTrueOrPop
-					) == this._stack.back.toBoolean();
-
-					if( 
-						instr.opcode == OpCode.JumpIfTrue || instr.opcode == OpCode.JumpIfFalse || !jumpCond
-					) {
-						// In JumpIfTrue, JumpIfFalse we should drop condition from stack anyway
-						// But for JumpIfTrueOrPop, JumpIfFalseOrPop drop it only if jumpCond is false
-						this._stack.pop();
-					}
-
-					if( jumpCond )
-					{
-						this.setJump(instr.arg);
-						continue execution_loop; // Skip _pk increment
-					}
-					break;
-				}
-
-				case OpCode.Jump:
-				{
-					this.setJump(instr.arg);
-					continue execution_loop; // Skip _pk increment
-				}
-
-				case OpCode.Return:
-				{
-					// Set instruction index at the end of code object in order to finish 
-					this.setJump(this._codeRange.length);
-					IvyData result = this._stack.back;
-					// Erase all from the current stack
-					this._stack.popN(this._stack.length);
-					this._stack.push(result); // Put result on the stack
-					continue execution_loop; // Skip _pk increment
-				}
-
-				case OpCode.GetDataRange:
-				{
-					import ivy.types.data.range.array: ArrayRange;
-					import ivy.types.data.range.assoc_array: AssocArrayRange;
-
-					IvyData aggr = this._stack.pop();
-					IvyData res;
-					switch( aggr.type )
-					{
-						case IvyDataType.Array:
-						{
-							res = new ArrayRange(aggr.array);
-							break;
-						}
-						case IvyDataType.AssocArray:
-						{
-							res = new AssocArrayRange(aggr.assocArray);
-							break;
-						}
-						case IvyDataType.ClassNode:
-						{
-							res = aggr.classNode[];
-							break;
-						}
-						case IvyDataType.DataNodeRange:
-						{
-							res = aggr;
-							break;
-						}
-						default:
-							this.log.internalError("Expected iterable aggregate, but got: ", aggr);
-					}
-					this._stack.push(res); // Push range onto stack
-					break;
-				}
-
-				case OpCode.RunLoop:
-				{
-					auto dataRange = this._stack.back.dataRange;
-					if( dataRange.empty )
-					{
-						this._stack.pop(); // Drop data range when iteration finished
-						// Jump to instruction after loop
-						this.setJump(instr.arg);
+						aggr[attrName] = attrVal;
 						break;
 					}
-
-					this._stack.push(dataRange.front);
-					dataRange.popFront();
-					break;
-				}
-
-				case OpCode.ImportModule:
-				{
-					string moduleName = this._stack.pop().str;
-					ModuleObject moduleObject = this._moduleObjCache.get(moduleName);
-					ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
-					this.log.internalAssert(moduleObject !is null, "No such module object: ", moduleName);
-
-					if( moduleFrame )
+					case IvyDataType.ClassNode:
 					{
-						// Module is imported already. Just use it..
-						// Put module root frame into previous execution frame (it will be stored with StoreGlobalName)
-						this._stack.push(moduleFrame); 
-						// As long as module returns some value at the end of execution, so put fake value there for consistency
-						this._stack.push(IvyData());
+						aggr.classNode.__setAttr__(attrVal, attrName);
+						break;
 					}
-					else
-					{
-						// Run module here
-						CodeObject codeObject = moduleObject.mainCodeObject;
-
-						this.newFrame(new CallableObject(codeObject), true); // Create entry point module frame
-
-						// Put module root frame into previous execution frame`s stack block (it will be stored with StoreGlobalName)
-						this._stack.push(this.currentFrame);
-						// Decided to put return address into parent frame`s stack block instead of current
-						this._stack.push(this._pk+1);
-
-						this._stack.addStackBlock(); // Add new stack block for execution frame
-
-						// Preparing to run code object in newly created frame
-						this._codeRange = codeObject.instrs[];
-						this.setJump(0);
-
-						continue execution_loop; // Skip _pk increment
-					}
-					break;
 				}
+				break;
+			}
 
-				case OpCode.FromImport:
+			// 
+			case OpCode.LoadAttr:
+			{
+				string attrName = this._stack.pop().str;
+				IvyData aggr = this._stack.pop();
+
+				final switch( aggr.type )
 				{
-					IvyData[] importList = this._stack.pop().array;
-					ExecutionFrame moduleFrame = this._stack.pop().execFrame;
-
-					foreach( nameNode; importList )
+					case IvyDataType.Undef:
+					case IvyDataType.Null:
+					case IvyDataType.Boolean:
+					case IvyDataType.Integer:
+					case IvyDataType.Floating:
+					case IvyDataType.String:
+					case IvyDataType.Array:
+					case IvyDataType.CodeObject:
+					case IvyDataType.Callable:
+					case IvyDataType.DataNodeRange:
+					case IvyDataType.AsyncResult:
+					case IvyDataType.ModuleObject:
+						this.log.internalError("Unable to get attribute of value with type: ", aggr.type);
+						break;
+					case IvyDataType.AssocArray:
 					{
-						string name = nameNode.str;
-						this.setValue(name, moduleFrame.getValue(name));
+						IvyData* valPtr = attrName in aggr;
+						this._stack.push(valPtr is null? IvyData(): *valPtr);
+						break;
 					}
-					break;
-				}
-
-				case OpCode.LoadDirective:
-				{
-					import ivy.types.call_spec: CallSpec;
-
-					CallSpec callSpec = CallSpec(instr.arg);
-					this.log.internalAssert(
-						callSpec.posAttrsCount == 0,
-						"Positional default attribute values are not expected");
-
-					CodeObject codeObject = this._stack.pop().codeObject;
-
-					// Get dict of default attr values from stack if exists
-					// We shall not check for odd values here, because we believe compiler can handle it
-					IvyData[string] defaults = callSpec.hasKwAttrs? this._stack.pop().assocArray: null;
-
-					this.setValue(codeObject.symbol.name, IvyData(new CallableObject(codeObject, defaults))); // Put this directive in context
-					this._stack.push(IvyData()); // We should return something
-					break;
-				}
-
-				case OpCode.RunCallable:
-				{
-					import ivy.types.call_spec: CallSpec;
-					import ivy.types.data.utils: deeperCopy;
-
-					this.log.write("RunCallable stack on init: : ", this._stack);
-					CallSpec callSpec = CallSpec(instr.arg);
-					CallableObject callable = this._stack.pop().callable;
-					DirAttr[] attrSymbols = callable.symbol.attrs;
-					IvyData[string] kwAttrs = callSpec.hasKwAttrs? this._stack.pop().assocArray: null;
-					IvyData[string] defaults = callable.defaults;
-
-					this.log.write("RunCallable name: ", callable.symbol.name);
-
-					this.log.internalAssert(
-						callSpec.posAttrsCount <= attrSymbols.length,
-						"Positional parameters count is more than expected arguments count");
-
-					this.newFrame(callable);
-
-					// Getting positional arguments from stack (in reverse order)
-					for( size_t idx = callSpec.posAttrsCount; idx > 0; --idx ) {
-						this.setValue(attrSymbols[idx - 1].name, this._stack.pop());
-					}
-
-					// Getting named parameters from kwArgs
-					for( size_t idx = callSpec.posAttrsCount; idx < attrSymbols.length; ++idx )
+					case IvyDataType.ClassNode:
 					{
-						DirAttr attr = attrSymbols[idx];
-						if( IvyData* valPtr = attr.name in kwAttrs ) {
-							this.setValue(attr.name, *valPtr);
-						}
-						else
+						this._stack.push(aggr.classNode.__getAttr__(attrName));
+						break;
+					}
+					case IvyDataType.ExecutionFrame:
+					{
+						this._stack.push(aggr.execFrame.getValue(attrName));
+						break;
+					}
+				}
+				break;
+			}
+
+			case OpCode.MakeArray:
+			{
+				IvyData[] newArray = [IvyData()];
+
+				newArray.length = instr.arg; // Preallocating is good ;)
+				for( size_t i = instr.arg; i > 0; --i ) {
+					// We take array items from the tail, so we must consider it!
+					newArray[i-1] = this._stack.pop();
+				}
+				this._stack.push(newArray);
+				break;
+			}
+
+			case OpCode.MakeAssocArray:
+			{
+				IvyData[string] res;
+				for( size_t i = 0; i < instr.arg; ++i )
+				{
+					IvyData val = this._stack.pop();
+					string key = this._stack.pop().str;
+
+					res[key] = val;
+				}
+				this._stack.push(res);
+				break;
+			}
+
+			// Set property of object, array item or class object with writeable attribute
+			// by passed property name or index
+			case OpCode.StoreSubscr:
+			{
+				IvyData index = this._stack.pop();
+				IvyData value = this._stack.pop();
+				IvyData aggr = this._stack.pop();
+
+				switch( aggr.type )
+				{
+					case IvyDataType.Array:
+						this.log.internalAssert(
+							index.integer < aggr.length,
+							"Index is out of bounds of array");
+						aggr[index.integer] = value;
+						break;
+					case IvyDataType.AssocArray:
+						aggr[index.str] = value;
+						break;
+					case IvyDataType.ClassNode: {
+						switch( index.type )
 						{
-							// We should get default value if no value is passed from outside
-							IvyData* defValPtr = attr.name in defaults;
-							this.log.internalAssert(
-								defValPtr !is null,
-								"Expected value for attr: ",
-								attr.name,
-								", that has no default value"
-							);
-							this.setValue(attr.name, deeperCopy(*defValPtr));
+							case IvyDataType.Integer:
+								aggr[index.integer] = value;
+								break;
+							case IvyDataType.String:
+								aggr[index.str] = value;
+								break;
+							default:
+								this.log.error("Index for class node must be string or integer!");
+								break;
 						}
+						break;
 					}
+					default:
+						this.log.error("Unexpected aggregate type");
+				}
+				break;
+			}
 
-					this.log.write("this._stack after parsing all arguments: ", this._stack);
-					if( callable.isNative )
+			// Load constant from programme data table into stack
+			case OpCode.LoadSubscr:
+			{
+				import std.utf: toUTFindex, decode;
+
+				IvyData index = this._stack.pop();
+				IvyData aggr = this._stack.pop();
+
+				switch( aggr.type )
+				{
+					case IvyDataType.String:
 					{
-						this._stack.addStackBlock();
-						callable.dirInterp.interpret(this); // Run native directive interpreter
+						// Index operation for string in D is little more complicated
+						string aggrStr = aggr.str;
+						size_t startIndex = aggrStr.toUTFindex(index.integer); // Get code unit index by index of symbol
+						size_t endIndex = startIndex;
 
-						// Else we expect to have result of directive on the stack
-						this.log.internalAssert(this._stack.length, "Stack should contain 1 item empty now!");
-
-						// If frame stack contains last frame - it means that we have done with programme
-						if( this._frameStack.length == exitFrames ) {
-							fResult.resolve(this._stack.back());
-							return;
+						aggrStr.decode(endIndex); // decode increases passed index
+						this.log.internalAssert(
+							startIndex < aggr.length,
+							"String slice start index must be less than str length");
+						this.log.internalAssert(
+							endIndex <= aggr.length,
+							"String slice end index must be less or equal to str length");
+						this._stack.push(aggrStr[startIndex..endIndex]);
+						break;
+					}
+					case IvyDataType.Array:
+					{
+						this.log.internalAssert(
+							index.integer < aggr.array.length,
+							"Array index must be less than array length");
+						this._stack.push(aggr.array[index.integer]);
+						break;
+					}
+					case IvyDataType.AssocArray:
+					{
+						auto valPtr = index.str in aggr.assocArray;
+						this.log.internalAssert(
+							valPtr !is null,
+							"Key in associative array is not found: ", index);
+						this._stack.push(*valPtr);
+						break;
+					}
+					case IvyDataType.ClassNode:
+					{
+						this._stack.push(aggr.classNode[index]);
+						break;
+					}
+					case IvyDataType.Callable:
+					{
+						if( index.str == "moduleName" ) {
+							this._stack.push(aggr.callable.moduleSymbol.name);
+						} else {
+							this.log.internalError("Callable object has no property: ", index);
 						}
-						IvyData result = this._stack.pop();
-						this.removeFrame(); // Drop frame from stack after end of execution
-						this._stack.push(result); // Get result back
+						break;
+					}
+					default:
+						this.log.internalError("Unexpected type of aggregate: ", aggr.type);
+				}
+				break;
+			}
+
+			// Load data node slice for array-like nodes onto stack
+			case OpCode.LoadSlice:
+			{
+				size_t end = this._stack.pop().integer;
+				size_t begin = this._stack.pop().integer;
+				IvyData aggr = this._stack.pop();
+
+				switch( aggr.type )
+				{
+					case IvyDataType.String:
+					{
+						import std.utf: toUTFindex, decode;
+
+						size_t startIndex = aggr.str.toUTFindex(begin); // Get code unit index by index of symbol
+						size_t endIndex = end;
+						aggr.str.decode(endIndex); // decode increases passed index
+
+						this._stack.push(aggr.str[startIndex..endIndex]);
+						break;
+					}
+					case IvyDataType.Array:
+						this._stack.push(aggr.array[begin..end]);
+						break;
+					case IvyDataType.ClassNode:
+						// Class node must have it's own range checks
+						this._stack.push(aggr.classNode[begin..end]);
+						break;
+					default:
+						this.log.internalError("Unexpected aggregate type");
+				}
+				break;
+			}
+
+			// Concatenates two arrays or strings and puts result onto stack
+			case OpCode.Concat:
+			{
+				IvyData right = this._stack.pop();
+				IvyData left = this._stack.pop();
+
+				this.log.internalAssert(
+					left.type == right.type,
+					"Left and right operands for concatenation operation must have the same type!");
+
+				switch( left.type )
+				{
+					case IvyDataType.String:
+						this._stack.push(left.str ~ right.str);
+						break;
+					case IvyDataType.Array:
+						this._stack.push(left.array ~ right.array);
+						break;
+					default:
+						this.log.internalError("Unexpected type of operand");
+				}
+				break;
+			}
+
+			case OpCode.Append:
+			{
+				IvyData value = this._stack.pop();
+				this._stack.back.array ~= value;
+				break;
+			}
+
+			case OpCode.Insert:
+			{
+				import std.array: insertInPlace;
+
+				IvyData posNode = this._stack.pop();
+				IvyData value = this._stack.pop();
+				IvyData[] aggr = this._stack.back.array;
+
+				size_t pos;
+				switch( posNode.type )
+				{
+					case IvyDataType.Integer:
+						pos = posNode.integer;
+						break;
+					case IvyDataType.Undef:
+					case IvyDataType.Null:
+						pos = aggr.length; // Act like append
+						break;
+					default:
+						this.log.internalError("Position argument expected to be an integer or empty (for append), but got: ", posNode);
+				}
+				this.log.internalAssert(
+					pos <= aggr.length,
+					"Insert position is wrong: ", pos);
+				aggr.insertInPlace(pos, value);
+				break;
+			}
+
+			// Flow control opcodes
+			case OpCode.JumpIfTrue:
+			case OpCode.JumpIfFalse:
+			case OpCode.JumpIfTrueOrPop:
+			case OpCode.JumpIfFalseOrPop:
+			{
+				// This is actual condition to test
+				bool jumpCond = (
+					instr.opcode == OpCode.JumpIfTrue || instr.opcode == OpCode.JumpIfTrueOrPop
+				) == this._stack.back.toBoolean();
+
+				if( 
+					instr.opcode == OpCode.JumpIfTrue || instr.opcode == OpCode.JumpIfFalse || !jumpCond
+				) {
+					// In JumpIfTrue, JumpIfFalse we should drop condition from stack anyway
+					// But for JumpIfTrueOrPop, JumpIfFalseOrPop drop it only if jumpCond is false
+					this._stack.pop();
+				}
+
+				if( jumpCond )
+				{
+					this.setJump(instr.arg);
+					return; // Skip _pk increment
+				}
+				break;
+			}
+
+			case OpCode.Jump:
+			{
+				this.setJump(instr.arg);
+				return; // Skip _pk increment
+			}
+
+			case OpCode.Return:
+			{
+				// Set instruction index at the end of code object in order to finish 
+				this.setJump(this._codeRange.length);
+				IvyData result = this._stack.back;
+				// Erase all from the current stack
+				this._stack.popN(this._stack.length);
+				this._stack.push(result); // Put result on the stack
+				return; // Skip _pk increment
+			}
+
+			case OpCode.GetDataRange:
+			{
+				import ivy.types.data.range.array: ArrayRange;
+				import ivy.types.data.range.assoc_array: AssocArrayRange;
+
+				IvyData aggr = this._stack.pop();
+				IvyData res;
+				switch( aggr.type )
+				{
+					case IvyDataType.Array:
+					{
+						res = new ArrayRange(aggr.array);
+						break;
+					}
+					case IvyDataType.AssocArray:
+					{
+						res = new AssocArrayRange(aggr.assocArray);
+						break;
+					}
+					case IvyDataType.ClassNode:
+					{
+						res = aggr.classNode[];
+						break;
+					}
+					case IvyDataType.DataNodeRange:
+					{
+						res = aggr;
+						break;
+					}
+					default:
+						this.log.internalError("Expected iterable aggregate, but got: ", aggr);
+				}
+				this._stack.push(res); // Push range onto stack
+				break;
+			}
+
+			case OpCode.RunLoop:
+			{
+				auto dataRange = this._stack.back.dataRange;
+				if( dataRange.empty )
+				{
+					this._stack.pop(); // Drop data range when iteration finished
+					// Jump to instruction after loop
+					this.setJump(instr.arg);
+					break;
+				}
+
+				this._stack.push(dataRange.front);
+				dataRange.popFront();
+				break;
+			}
+
+			case OpCode.ImportModule:
+			{
+				string moduleName = this._stack.pop().str;
+				ModuleObject moduleObject = this._moduleObjCache.get(moduleName);
+				ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
+				this.log.internalAssert(moduleObject !is null, "No such module object: ", moduleName);
+
+				if( moduleFrame )
+				{
+					// Module is imported already. Just use it..
+					// Put module root frame into previous execution frame (it will be stored with StoreGlobalName)
+					this._stack.push(moduleFrame); 
+					// As long as module returns some value at the end of execution, so put fake value there for consistency
+					this._stack.push(IvyData());
+				}
+				else
+				{
+					// Run module here
+					CodeObject codeObject = moduleObject.mainCodeObject;
+
+					this.newFrame(new CallableObject(codeObject), true); // Create entry point module frame
+
+					// Put module root frame into previous execution frame`s stack block (it will be stored with StoreGlobalName)
+					this._stack.push(this.currentFrame);
+					// Decided to put return address into parent frame`s stack block instead of current
+					this._stack.push(this._pk+1);
+
+					this._stack.addStackBlock(); // Add new stack block for execution frame
+
+					// Preparing to run code object in newly created frame
+					this._codeRange = codeObject.instrs[];
+					this.setJump(0);
+
+					return; // Skip _pk increment
+				}
+				break;
+			}
+
+			case OpCode.FromImport:
+			{
+				IvyData[] importList = this._stack.pop().array;
+				ExecutionFrame moduleFrame = this._stack.pop().execFrame;
+
+				foreach( nameNode; importList )
+				{
+					string name = nameNode.str;
+					this.setValue(name, moduleFrame.getValue(name));
+				}
+				break;
+			}
+
+			case OpCode.LoadDirective:
+			{
+				import ivy.types.call_spec: CallSpec;
+
+				CallSpec callSpec = CallSpec(instr.arg);
+				this.log.internalAssert(
+					callSpec.posAttrsCount == 0,
+					"Positional default attribute values are not expected");
+
+				CodeObject codeObject = this._stack.pop().codeObject;
+
+				// Get dict of default attr values from stack if exists
+				// We shall not check for odd values here, because we believe compiler can handle it
+				IvyData[string] defaults = callSpec.hasKwAttrs? this._stack.pop().assocArray: null;
+
+				this.setValue(codeObject.symbol.name, IvyData(new CallableObject(codeObject, defaults))); // Put this directive in context
+				this._stack.push(IvyData()); // We should return something
+				break;
+			}
+
+			case OpCode.RunCallable:
+			{
+				import ivy.types.call_spec: CallSpec;
+				import ivy.types.data.utils: deeperCopy;
+
+				this.log.write("RunCallable stack on init: : ", this._stack);
+				CallSpec callSpec = CallSpec(instr.arg);
+				CallableObject callable = this._stack.pop().callable;
+				DirAttr[] attrSymbols = callable.symbol.attrs;
+				IvyData[string] kwAttrs = callSpec.hasKwAttrs? this._stack.pop().assocArray: null;
+				IvyData[string] defaults = callable.defaults;
+
+				this.log.write("RunCallable name: ", callable.symbol.name);
+
+				this.log.internalAssert(
+					callSpec.posAttrsCount <= attrSymbols.length,
+					"Positional parameters count is more than expected arguments count");
+
+				this.newFrame(callable);
+
+				// Getting positional arguments from stack (in reverse order)
+				for( size_t idx = callSpec.posAttrsCount; idx > 0; --idx ) {
+					this.setValue(attrSymbols[idx - 1].name, this._stack.pop());
+				}
+
+				// Getting named parameters from kwArgs
+				for( size_t idx = callSpec.posAttrsCount; idx < attrSymbols.length; ++idx )
+				{
+					DirAttr attr = attrSymbols[idx];
+					if( IvyData* valPtr = attr.name in kwAttrs ) {
+						this.setValue(attr.name, *valPtr);
 					}
 					else
 					{
-						this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
-						this._stack.addStackBlock();
-						this._codeRange = callable.codeObject.instrs[]; // Set new instruction range to execute
-						this.setJump(0);
-						continue execution_loop;
+						// We should get default value if no value is passed from outside
+						IvyData* defValPtr = attr.name in defaults;
+						this.log.internalAssert(
+							defValPtr !is null,
+							"Expected value for attr: ",
+							attr.name,
+							", that has no default value"
+						);
+						this.setValue(attr.name, deeperCopy(*defValPtr));
 					}
-					break;
 				}
 
-				case OpCode.Await: {
-					import ivy.types.data.utils: errorToIvyData;
+				this.log.write("this._stack after parsing all arguments: ", this._stack);
 
-					AsyncResult aResult = this._stack.pop().asyncResult;
-					this.log.internalAssert(
-						aResult.state != AsyncResultState.pending,
-						"Async operations in server-side interpreter are fake and actually not supported");
-					aResult.then(
-						(IvyData data) {
-							this._stack.push([
-								`isError`: IvyData(false),
-								`data`: data
-							]);
-						},
-						(Throwable error) {
-							IvyData ivyError = errorToIvyData(error);
-							ivyError[`isError`] = true;
-							this._stack.push(ivyError);
-						}
-					);
-					break;
+				this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
+				this._stack.addStackBlock();
+
+				// Set new instruction range to execute
+				this._codeRange = callable.isNative? [Instruction(OpCode.Nop)]: callable.codeObject.instrs[];
+				this.setJump(0);
+
+				if( callable.isNative ) {
+					callable.dirInterp.interpret(this); // Run native directive interpreter
+				} else {
+					return; // Skip _pk increment
 				}
+				break;
+			}
 
-				case OpCode.MarkForEscape: {
-					import ivy.types.data: NodeEscapeState;
-					this._stack.back.escapeState = cast(NodeEscapeState) instr.arg;
-					break;
-				}
-			} // switch
-			++this._pk;
+			case OpCode.Await: {
+				import ivy.types.data.utils: errorToIvyData;
 
-		} // execution_loop:
-	} // void execLoop()
+				AsyncResult aResult = this._stack.pop().asyncResult;
+				this.log.internalAssert(
+					aResult.state != AsyncResultState.pending,
+					"Async operations in server-side interpreter are fake and actually not supported");
+				aResult.then(
+					(IvyData data) {
+						this._stack.push([
+							`isError`: IvyData(false),
+							`data`: data
+						]);
+					},
+					(Throwable error) {
+						IvyData ivyError = errorToIvyData(error);
+						ivyError[`isError`] = true;
+						this._stack.push(ivyError);
+					}
+				);
+				break;
+			}
+
+			case OpCode.MarkForEscape: {
+				import ivy.types.data: NodeEscapeState;
+				this._stack.back.escapeState = cast(NodeEscapeState) instr.arg;
+				break;
+			}
+		} // switch
+
+		++this._pk;
+	} // execLoopBody
 
 
 	auto log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)

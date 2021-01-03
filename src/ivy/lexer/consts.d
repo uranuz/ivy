@@ -64,7 +64,7 @@ enum LexemeType {
 
 	CodeBlockEnd = LexemeType.RBrace,
 	CodeListEnd = LexemeType.RBrace
-};
+}
 
 
 enum LexemeFlag: uint
