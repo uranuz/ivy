@@ -9,7 +9,7 @@ class ScopeDirInterpreter: BaseDirectiveInterpreter
 		DirBodyAttrs bodyAttrs;
 		bodyAttrs.isNoscope = true;
 		bodyAttrs.isNoescape = false;
-		_symbol = new DirectiveSymbol("scope", null, bodyAttrs);
+		this._symbol = new DirectiveSymbol("scope", null, bodyAttrs);
 	}
 
 	override void interpret(Interpreter interp)

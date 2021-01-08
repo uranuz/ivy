@@ -7,6 +7,7 @@ class BaseClassNode: IClassNode
 	import ivy.types.data.iface.range: IvyDataRange;
 	import ivy.types.data: IvyData;
 	import ivy.types.data.exception: NotImplException;
+	import ivy.types.iface.callable_object: ICallableObject;
 
 protected:
 	string _getClassName() {
@@ -32,6 +33,9 @@ public:
 			mixin(notImplMixin);
 		}
 		IvyData __serialize__() {
+			mixin(notImplMixin);
+		}
+		ICallableObject __call__() {
 			mixin(notImplMixin);
 		}
 		size_t length() @property {

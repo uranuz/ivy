@@ -1,8 +1,10 @@
 define('ivy/types/callable_object', [
+	'ivy/types/iface/callable_object',
 	'ivy/types/code_object',
 	'ivy/utils',
 	'ivy/exception'
 ], function(
+	ICallableObject,
 	CodeObject,
 	iutil,
 	IvyException
@@ -19,7 +21,7 @@ return FirClass(
 			this._dirInterp = codeObjectOrDirInterp;
 		}
 		this._defaults = defaults || {};
-	}, {
+	}, ICallableObject, {
 		isNative: firProperty(function() {
 			return this._dirInterp != null;
 		}),
@@ -50,6 +52,10 @@ return FirClass(
 
 		defaults: firProperty(function() {
 			return this._defaults;
+		}),
+
+		context: firProperty(function() {
+			return;
 		})
 	});
 });

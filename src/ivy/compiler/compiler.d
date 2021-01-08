@@ -165,7 +165,7 @@ public:
 		
 		log.write(`Starting compiling module AST: ` ~ moduleName);
 		moduleNode.accept(this);
-		log.write(`Finished compiling module AST`);
+		log.write(`Finished compiling module AST: ` ~ moduleName);
 		return _moduleObjCache.get(moduleName);
 	}
 
@@ -181,7 +181,7 @@ public:
 		_codeObjStack ~= moduleObject.mainCodeObject;
 	}
 
-	size_t enterNewCodeObject(DirectiveSymbol symbol)
+	size_t enterNewCodeObject(ICallableSymbol symbol)
 	{
 		CodeObject codeObject = new CodeObject(symbol, this.currentModule());
 		_codeObjStack ~= codeObject;

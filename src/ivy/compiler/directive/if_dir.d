@@ -5,12 +5,16 @@ import ivy.ast.iface: INameExpression, IExpression;
 
 class IfCompiler: BaseDirectiveCompiler
 {
+	static struct IfSect
+	{
+		IExpression cond;
+		IExpression stmt;
+	}
+
 public:
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
-		import std.typecons: Tuple;
 		import std.range: back, empty;
-		alias IfSect = Tuple!(IExpression, "cond", IExpression, "stmt");
 
 		IfSect[] ifSects;
 		IExpression elseBody;

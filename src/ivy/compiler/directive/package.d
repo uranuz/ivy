@@ -19,3 +19,4 @@ public import ivy.compiler.directive.set_at: SetAtCompiler;
 public import ivy.compiler.directive.set: SetCompiler;
 public import ivy.compiler.directive.slice: SliceCompiler;
 public import ivy.compiler.directive.var: VarCompiler;
+public import ivy.compiler.directive.decl_class: DeclClassCompiler;

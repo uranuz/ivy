@@ -5,7 +5,7 @@ import ivy.interpreter.directive.utils;
 class TypeStrDirInterpreter: BaseDirectiveInterpreter
 {
 	this() {
-		_symbol = new DirectiveSymbol("typestr", [DirAttr("value", IvyAttrType.Any)]);
+		this._symbol = new DirectiveSymbol("typestr", [DirAttr("value", IvyAttrType.Any)]);
 	}
 
 	override void interpret(Interpreter interp)

@@ -8,7 +8,7 @@ class RangeDirInterpreter: BaseDirectiveInterpreter
 
 	this()
 	{
-		_symbol = new DirectiveSymbol("range", [
+		this._symbol = new DirectiveSymbol("range", [
 			DirAttr("begin", IvyAttrType.Any),
 			DirAttr("end", IvyAttrType.Any)
 		]);

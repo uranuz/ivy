@@ -16,8 +16,10 @@ class Interpreter
 {
 	import ivy.types.code_object: CodeObject;
 	import ivy.types.module_object: ModuleObject;
+	import ivy.types.iface.callable_object: ICallableObject;
 	import ivy.types.callable_object: CallableObject;
 	import ivy.types.data: IvyDataType, IvyData;
+	import ivy.types.data.decl_class: DeclClass;
 	import ivy.interpreter.execution_frame: ExecutionFrame;
 	import ivy.interpreter.exec_stack: ExecStack;
 	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
@@ -110,7 +112,7 @@ public:
 				this.execLoopBody();
 
 			// We expect to have only the result of directive on the stack
-			this.log.internalAssert(this._stack.length == 1, "Frame stack should contain 1 item now");
+			this.log.internalAssert(this._stack.length == 1, "Exec stack should contain 1 item now");
 
 			// If there is the last frame it means that it is the last module frame.
 			// We need to leave frame here for case when we want to execute specific function of module
@@ -413,6 +415,15 @@ public:
 				break;
 			}
 
+			case OpCode.MakeClass:
+			{
+				IvyData[string] classDataDict = this._stack.pop().assocArray;
+				string className = this._stack.pop().str;
+
+				this._stack.push(new DeclClass(className, classDataDict));
+				break;
+			}
+
 			// Set property of object, array item or class object with writeable attribute
 			// by passed property name or index
 			case OpCode.StoreSubscr:
@@ -500,15 +511,6 @@ public:
 					case IvyDataType.ClassNode:
 					{
 						this._stack.push(aggr.classNode[index]);
-						break;
-					}
-					case IvyDataType.Callable:
-					{
-						if( index.str == "moduleName" ) {
-							this._stack.push(aggr.callable.moduleSymbol.name);
-						} else {
-							this.log.internalError("Callable object has no property: ", index);
-						}
 						break;
 					}
 					default:
@@ -756,7 +758,7 @@ public:
 				break;
 			}
 
-			case OpCode.LoadDirective:
+			case OpCode.MakeCallable:
 			{
 				import ivy.types.call_spec: CallSpec;
 
@@ -771,8 +773,7 @@ public:
 				// We shall not check for odd values here, because we believe compiler can handle it
 				IvyData[string] defaults = callSpec.hasKwAttrs? this._stack.pop().assocArray: null;
 
-				this.setValue(codeObject.symbol.name, IvyData(new CallableObject(codeObject, defaults))); // Put this directive in context
-				this._stack.push(IvyData()); // We should return something
+				this._stack.push(new CallableObject(codeObject, defaults));
 				break;
 			}
 
@@ -783,7 +784,20 @@ public:
 
 				this.log.write("RunCallable stack on init: : ", this._stack);
 				CallSpec callSpec = CallSpec(instr.arg);
-				CallableObject callable = this._stack.pop().callable;
+
+				IvyData callableOrClass = this._stack.pop();
+				ICallableObject callable;
+				if( callableOrClass.type == IvyDataType.ClassNode )
+				{
+					// If class node passed there, then we shall get callable from it by calling "__call__"
+					callable = callableOrClass.classNode.__call__();
+				}
+				else
+				{
+					// Else we expect that callable passed here
+					callable = callableOrClass.callable;
+				}
+
 				DirAttr[] attrSymbols = callable.symbol.attrs;
 				IvyData[string] kwAttrs = callSpec.hasKwAttrs? this._stack.pop().assocArray: null;
 				IvyData[string] defaults = callable.defaults;
@@ -821,6 +835,10 @@ public:
 						this.setValue(attr.name, deeperCopy(*defValPtr));
 					}
 				}
+
+				// Set "context-variable" for callables that has it...
+				if( callable.context.type != IvyDataType.Undef )
+					this.setValue("this", callable.context);
 
 				this.log.write("this._stack after parsing all arguments: ", this._stack);
 
@@ -923,13 +941,13 @@ public:
 		assert(false);
 	}
 
-	CallableObject currentCallable() @property {
+	ICallableObject currentCallable() @property {
 		return this.currentFrame.callable;
 	}
 
 	CodeObject currentCodeObject()
 	{
-		CallableObject callable = this.currentCallable;
+		ICallableObject callable = this.currentCallable;
 		if( !callable.isNative ) {
 			return callable.codeObject;
 		}
@@ -974,7 +992,7 @@ public:
 		string[] res;
 		for( size_t i = this._frameStack.length; i > 0; --i )
 		{
-			CallableObject callable = this._frameStack[i-1].callable;
+			ICallableObject callable = this._frameStack[i-1].callable;
 			res ~= "Module: " ~ callable.moduleSymbol.name ~ ", Directive: " ~ callable.symbol.name;
 		}
 		return res;
@@ -1028,7 +1046,7 @@ public:
 		assert(false);
 	}
 
-	void newFrame(CallableObject callable, bool isModule = false)
+	void newFrame(ICallableObject callable, bool isModule = false)
 	{
 		this._frameStack ~= new ExecutionFrame(callable);
 		string symbolName = callable.symbol.name;
@@ -1109,7 +1127,7 @@ public:
 		this.findValueFrameGlobal(varName).setValue(varName, value);
 	}
 
-	ExecutionFrame _getModuleFrame(CallableObject callable)
+	ExecutionFrame _getModuleFrame(ICallableObject callable)
 	{
 		string moduleName = callable.moduleSymbol.name;
 		ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
@@ -1124,7 +1142,7 @@ public:
 		import ivy.types.call_spec: CallSpec;
 
 		// Find desired directive by name in current module frame
-		CallableObject callable = this.currentFrame.getValue(name).callable;
+		ICallableObject callable = this.currentFrame.getValue(name).callable;
 
 		this.log.internalAssert(this._stack.length < 2, "Expected 0 or 1 items in stack!");
 		if( this._stack.length == 1 ) {
@@ -1137,7 +1155,15 @@ public:
 		}
 		this._stack.push(callable);
 
-		this._codeRange = [Instruction(OpCode.RunCallable, callSpec.encode())];
+		// We need to ensure that callable's module is loaded
+		this._stack.push(callable.moduleSymbol.name);
+
+		this._codeRange = [
+			Instruction(OpCode.ImportModule),
+			Instruction(OpCode.PopTop), // Drop module's return value...
+			Instruction(OpCode.PopTop), // Drop module's execution frame...
+			Instruction(OpCode.RunCallable, callSpec.encode())
+		];
 		this.setJump(0);
 		AsyncResult fResult = new AsyncResult();
 		try {
@@ -1153,7 +1179,7 @@ public:
 		import std.range: empty;
 		import std.algorithm: canFind;
 
-		CallableObject callable = this.currentFrame.getValue(name).callable;
+		ICallableObject callable = this.currentFrame.getValue(name).callable;
 		DirAttr[] attrs = callable.symbol.attrs;
 		IvyData[string] defaults = callable.defaults;
 		InterpDirAttr[string] res;

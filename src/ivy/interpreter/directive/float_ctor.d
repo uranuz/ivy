@@ -5,7 +5,7 @@ import ivy.interpreter.directive.utils;
 class FloatCtorDirInterpreter: BaseDirectiveInterpreter
 {
 	this() {
-		_symbol = new DirectiveSymbol("float", [DirAttr("value", IvyAttrType.Any)]);
+		this._symbol = new DirectiveSymbol("float", [DirAttr("value", IvyAttrType.Any)]);
 	}
 
 	override void interpret(Interpreter interp) {

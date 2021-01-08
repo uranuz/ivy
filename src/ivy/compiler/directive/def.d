@@ -191,7 +191,13 @@ public:
 			compiler.addInstr(OpCode.LoadConst, codeObjIndex);
 
 			// Add instruction to create directive object
-			compiler.addInstr(OpCode.LoadDirective, CallSpec(0, defValCount > 0).encode());
+			compiler.addInstr(OpCode.MakeCallable, CallSpec(0, defValCount > 0).encode());
+
+			// Save callable in scope by name
+			compiler.addInstr(OpCode.StoreName, compiler.addConst( IvyData(dirSymbol.name) ));
+
+			// For now we expect that directive should return some value on the stack
+			compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 		}
 	}
 

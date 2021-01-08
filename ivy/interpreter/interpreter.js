@@ -90,7 +90,7 @@ function Interpreter(
 				this.execLoopBody();
 
 			// We expect to have only the result of directive on the stack
-			this.log.internalAssert(this._stack.length == 1, "Frame stack should contain 1 item now");
+			this.log.internalAssert(this._stack.length == 1, "Exec stack should contain 1 item now");
 
 			// If there is the last frame it means that it is the last module frame.
 			// We need to leave frame here for case when we want to execute specific function of module
@@ -366,6 +366,14 @@ function Interpreter(
 				this._stack.push(newAA);
 				break;
 			}
+			case OpCode.MakeClass: {
+				var
+					classDataDict = idat.assocArray(this._stack.pop()),
+					className = idat.str(this._stack.pop());
+
+				this._stack.push(new DeclClass(className, classDataDict));
+				break;
+			}
 
 			case OpCode.StoreSubscr: {
 				var
@@ -427,14 +435,6 @@ function Interpreter(
 					}
 					case IvyDataType.ClassNode: {
 						this._stack.push(aggr.at(index));
-						break;
-					}
-					case IvyDataType.Callable: {
-						if( idat.str(index) === "moduleName" ) {
-							this._stack.push(idat.callable(aggr).moduleSymbol.name);
-						} else {
-							this.log.internalError("Callable object has no property: ", index);
-						}
 						break;
 					}
 					default:
@@ -654,7 +654,7 @@ function Interpreter(
 			}
 
 			// Preparing and calling directives
-			case OpCode.LoadDirective: {
+			case OpCode.MakeCallable: {
 				var callSpec = CallSpec(instr.arg);
 				this.log.internalAssert(
 					callSpec.posAttrsCount == 0,
@@ -666,8 +666,7 @@ function Interpreter(
 				// We shall not check for odd values here, because we believe compiler can handle it
 				var defaults = callSpec.hasKwAttrs? idat.assocArray(this._stack.pop()): {};
 
-				this.setValue(codeObject.symbol.name, new CallableObject(codeObject, defaults)); // Put this directive in context
-				this._stack.push(); // We should return something
+				this._stack.push(new CallableObject(codeObject, defaults));
 				break;
 			}
 
@@ -675,10 +674,22 @@ function Interpreter(
 				this.log.write("RunCallable stack on init: : ", this._stack);
 				var
 					callSpec = CallSpec(instr.arg),
-					callable = idat.callable(this._stack.pop()),
+					callableOrClass = this._stack.pop(),
 					attrSymbols = callable.symbol.attrs,
 					kwAttrs = callSpec.hasKwAttrs? idat.assocArray(this._stack.pop()): {},
-					defaults = callable.defaults;
+					defaults = callable.defaults,
+					callable;
+
+				if( idat.type(callableOrClass) == IvyDataType.ClassNode )
+				{
+					// If class node passed there, then we shall get callable from it by calling "__call__"
+					callable = idat.classNode(callableOrClass).__call__();
+				}
+				else
+				{
+					// Else we expect that callable passed here
+					callable = idat.callable(callableOrClass);
+				}
 
 				this.log.write("RunCallable name: ", callable.symbol.name);
 				
@@ -712,6 +723,10 @@ function Interpreter(
 						this.setValue(attr.name, dutil.deeperCopy(defaults[attr.name]));
 					}
 				}
+
+				// Set "context-variable" for callables that has it...
+				if( idat.type(callable.context) != IvyDataType.Undef )
+					this.setValue("this", callable.context);
 
 				this.log.write("this._stack after parsing all arguments: ", this._stack);
 				this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
@@ -961,7 +976,15 @@ function Interpreter(
 		}
 		this._stack.push(callable);
 
-		this._codeRange = [Instruction(OpCode.RunCallable, callSpec.encode())];
+		// We need to ensure that callable's module is loaded
+		this._stack.push(callable.moduleSymbol.name);
+
+		this._codeRange = [
+			Instruction(OpCode.ImportModule),
+			Instruction(OpCode.PopTop), // Drop module's return value...
+			Instruction(OpCode.PopTop), // Drop module's execution frame...
+			Instruction(OpCode.RunCallable, callSpec.encode())
+		];
 		this.setJump(0);
 		var fResult = new AsyncResult();
 		try {

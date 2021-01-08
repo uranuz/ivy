@@ -25,5 +25,6 @@ auto makeStandardDirCompilerFactory()
 	factory.set(`set`, new SetCompiler);
 	factory.set(`slice`, new SliceCompiler);
 	factory.set(`var`, new VarCompiler);
+	factory.set(`class`, new DeclClassCompiler);
 	return factory;
 }

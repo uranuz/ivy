@@ -6,7 +6,7 @@ class HasDirInterpreter: BaseDirectiveInterpreter
 {
 	this()
 	{
-		_symbol = new DirectiveSymbol("has", [
+		this._symbol = new DirectiveSymbol("has", [
 			DirAttr("collection", IvyAttrType.Any),
 			DirAttr("key", IvyAttrType.Any)
 		]);

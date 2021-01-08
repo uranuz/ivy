@@ -1,10 +1,12 @@
 module ivy.types.callable_object;
 
+import ivy.types.iface.callable_object: ICallableObject;
+
 /**
 	Callable object is representation of directive or module prepared for execution.
 	Consists of it's code object (that will be executed) and some context (module for example)
 */
-class CallableObject
+class CallableObject: ICallableObject
 {
 	import ivy.types.code_object: CodeObject;
 	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
@@ -37,6 +39,7 @@ public:
 		enforce(this._dirInterp !is null, "Expected native dir interpreter");
 	}
 
+override {
 	bool isNative() @property {
 		return this._dirInterp !is null;
 	}
@@ -72,4 +75,10 @@ public:
 	ref IvyData[string] defaults() @property {
 		return this._defaults;
 	}
+
+	IvyData context() @property {
+		return IvyData();
+	}
+}
+
 }

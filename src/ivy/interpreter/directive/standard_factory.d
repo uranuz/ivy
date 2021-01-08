@@ -19,5 +19,6 @@ InterpreterDirectiveFactory makeStandardInterpreterDirFactory()
 	factory.add(new ScopeDirInterpreter);
 	factory.add(new RangeDirInterpreter);
 	factory.add(new ToJSONStrDirInterpreter);
+	factory.add(new NewAllocDirInterpreter);
 	return factory;
 }

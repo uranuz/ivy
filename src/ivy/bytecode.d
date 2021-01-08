@@ -47,6 +47,7 @@ enum OpCode: ubyte
 	// Data construction opcodes
 	MakeArray,
 	MakeAssocArray,
+	MakeClass,
 
 	// Array or assoc array operations
 	StoreSubscr,
@@ -75,7 +76,7 @@ enum OpCode: ubyte
 	FromImport,
 
 	// Preparing and calling directives
-	LoadDirective,
+	MakeCallable,
 	RunCallable,
 	Await,
 

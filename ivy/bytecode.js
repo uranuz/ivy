@@ -46,6 +46,7 @@ var
 		// Data construction opcodes
 		'MakeArray',
 		'MakeAssocArray',
+		'MakeClass',
 
 		// Array or assoc array operations
 		'StoreSubscr',
@@ -74,7 +75,7 @@ var
 		'FromImport',
 
 		// Preparing and calling directives
-		'LoadDirective',
+		'MakeCallable',
 		'RunCallable',
 		'Await',
 

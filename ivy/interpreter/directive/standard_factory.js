@@ -9,7 +9,8 @@ define('ivy/interpreter/directive/standard_factory', [
 	'ivy/interpreter/directive/range',
 	'ivy/interpreter/directive/scope',
 	'ivy/interpreter/directive/str_ctor',
-	'ivy/interpreter/directive/typestr'
+	'ivy/interpreter/directive/typestr',
+	'ivy/interpreter/directive/new_alloc'
 ], function(
 	DirectiveFactory,
 	Empty,
@@ -21,7 +22,8 @@ define('ivy/interpreter/directive/standard_factory', [
 	Range,
 	Scope,
 	StrCtor,
-	TypeStr
+	TypeStr,
+	NewAlloc
 ) {
 	return (function StandardFactory() {
 		var factory = new DirectiveFactory();
@@ -35,6 +37,7 @@ define('ivy/interpreter/directive/standard_factory', [
 		factory.add(new Scope);
 		factory.add(new StrCtor);
 		factory.add(new TypeStr);
+		factory.add(new NewAlloc);
 		return factory;
 	});
 });

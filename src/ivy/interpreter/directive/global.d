@@ -7,7 +7,7 @@ private class GlobalDirInterpreter: BaseDirectiveInterpreter
 	import ivy.types.symbol.global: globalSymbol;
 	
 	this() {
-		_symbol = globalSymbol;
+		this._symbol = globalSymbol;
 	}
 	
 	override void interpret(Interpreter interp) {
@@ -15,10 +15,11 @@ private class GlobalDirInterpreter: BaseDirectiveInterpreter
 	}
 }
 
+import ivy.types.iface.callable_object: ICallableObject;
 import ivy.types.callable_object: CallableObject;
 
 private __gshared IDirectiveInterpreter globalDirective;
-__gshared CallableObject globalCallable;
+__gshared ICallableObject globalCallable;
 
 shared static this()
 {

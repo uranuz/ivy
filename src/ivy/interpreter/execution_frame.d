@@ -15,19 +15,19 @@ class ExecutionFrame
 {
 	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 	import ivy.types.data: IvyData, IvyDataType;
-	import ivy.types.callable_object: CallableObject;
+	import ivy.types.iface.callable_object: ICallableObject;
 
 	import std.exception: enforce;
 
 	alias enf = enforce!IvyExecutionFrameException;
 
 private:
-	CallableObject _callable;
+	ICallableObject _callable;
 
 public IvyData _dataDict;
 
 public:
-	this(CallableObject callable)
+	this(ICallableObject callable)
 	{
 		this._callable = callable;
 		enf(this._callable !is null, "Expected callable object for exec frame");
@@ -57,7 +57,7 @@ public:
 		return !this._callable.symbol.bodyAttrs.isNoscope;
 	}
 
-	CallableObject callable() @property
+	ICallableObject callable() @property
 	{
 		enf(this._callable !is null, "No callable for global execution frame");
 		return this._callable;

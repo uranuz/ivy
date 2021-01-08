@@ -5,7 +5,7 @@ import ivy.interpreter.directive.utils;
 class ToJSONStrDirInterpreter: BaseDirectiveInterpreter
 {
 	this() {
-		_symbol = new DirectiveSymbol("to_json_str", [DirAttr("value", IvyAttrType.Any)]);
+		this._symbol = new DirectiveSymbol("to_json_str", [DirAttr("value", IvyAttrType.Any)]);
 	}
 
 	override void interpret(Interpreter interp)

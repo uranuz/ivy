@@ -4,7 +4,7 @@ define('ivy/types/data/iface/class_node', [
 var NotImplException = DataExc.NotImplException;
 return FirClass(
 	function IClassNode() {
-		throw new Error('Cannot create instance of abstract class!');
+		throw new NotImplException('Cannot create instance of abstract class!');
 	}, {
 		/** Analogue to IvyNodeRange opSlice(); in D impl */
 		__range__: function() {
@@ -31,6 +31,10 @@ return FirClass(
 		},
 		/** Analogue to IvyData __serialize__(); in D impl */
 		__serialize__: function() {
+			throw new NotImplException('Not implemented!');
+		},
+		/** Analogue to ICallableObject __call__(); in D impl */
+		__call__: function() {
 			throw new NotImplException('Not implemented!');
 		},
 		/** Analogue to size_t length() @property; in D impl */
