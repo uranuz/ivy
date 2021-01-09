@@ -445,6 +445,7 @@ public:
 		import ivy.types.call_spec: CallSpec;
 
 		import std.range: empty, front, popFront;
+		import std.array: split;
 
 		if( auto comp = this._compilerFactory.get(node.name) ) {
 			comp.compile(node, this);
@@ -452,10 +453,10 @@ public:
 		}
 		auto attrRange = node[];
 
-		ICallableSymbol symb = cast(ICallableSymbol) this.symbolLookup(node.name);
-		log.internalAssert(symb, `Expected callable symbol`);
+		//ICallableSymbol symb = cast(ICallableSymbol) this.symbolLookup(node.name);
+		//log.internalAssert(symb, `Expected callable symbol`);
 
-		DirAttr[] attrs = symb.attrs[]; // Getting slice of list
+		//DirAttr[] attrs = symb.attrs[]; // Getting slice of list
 
 		bool[string] attrsSet;
 
@@ -467,27 +468,27 @@ public:
 			if( IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front )
 			{
 				log.internalAssert(posAttrCount == 0, `Keyword attributes cannot be before positional in directive call`);
-				DirAttr attr = symb.getAttr(keyValueAttr.name);
+				//DirAttr attr = symb.getAttr(keyValueAttr.name);
 
-				if( attr.name in attrsSet )
-					log.error(`Duplicate named attribute "` ~ attr.name ~ `" detected`);
+				if( keyValueAttr.name in attrsSet )
+					log.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
 
 				// Add name of named argument into stack
-				addInstr(OpCode.LoadConst, addConst( IvyData(attr.name) ));
+				addInstr(OpCode.LoadConst, addConst( IvyData(keyValueAttr.name) ));
 
 				// Compile value expression (it should put result value on the stack)
 				keyValueAttr.value.accept(this);
 
-				attrsSet[attr.name] = true;
+				attrsSet[keyValueAttr.name] = true;
 				attrRange.popFront();
 				++kwAttrCount;
 			}
 			else if( IExpression exprAttr = cast(IExpression) attrRange.front )
 			{
-				log.internalAssert(!attrs.empty, `No more attrs expected for directive call`);
+				//log.internalAssert(!attrs.empty, `No more attrs expected for directive call`);
 
-				attrsSet[attrs.front.name] = true;
-				attrs.popFront();
+				//attrsSet[attrs.front.name] = true;
+				//attrs.popFront();
 
 				exprAttr.accept(this);
 				attrRange.popFront();
@@ -506,14 +507,27 @@ public:
 			addInstr(OpCode.MakeAssocArray, kwAttrCount);
 		}
 
+		string[] varPath = node.name.split('.');
+
 		// Add instruction to load directive object from context by name
-		addInstr(OpCode.LoadName, addConst( IvyData(node.name) ));
+		addInstr(OpCode.LoadName, addConst( IvyData(varPath.front) ));
+		// Drop var path part...
+		varPath.popFront();
+
+		while( !varPath.empty )
+		{
+			// Put attr name on the stack...
+			addInstr(OpCode.LoadConst, addConst( IvyData(varPath.front) ));
+			// Load attribute by name...
+			addInstr(OpCode.LoadAttr);
+			varPath.popFront(); // Drop attr name
+		}
 
 		// After all preparations add instruction to call directive
 		addInstr(OpCode.RunCallable, CallSpec(posAttrCount, kwAttrCount > 0).encode());
-		if( symb.bodyAttrs.isNoscope ) {
-			addInstr(OpCode.MarkForEscape, NodeEscapeState.Safe);
-		}
+		//if( symb.bodyAttrs.isNoscope ) {
+		//	addInstr(OpCode.MarkForEscape, NodeEscapeState.Safe);
+		//}
 	}
 
 	void _visit(IDataFragmentStatement node)
