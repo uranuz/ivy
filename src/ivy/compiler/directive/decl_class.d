@@ -20,6 +20,15 @@ class DeclClassCompiler: IDirectiveCompiler
 		IAttributeRange classAttrsRange = stmt[];
 
 		INameExpression classNameExpr = classAttrsRange.takeFrontAs!INameExpression("Expected directive name");
+
+		if( INameExpression extendsExpr = cast(INameExpression) classAttrsRange.front )
+		{
+			if( extendsExpr.name != "extends" )
+				collector.log.error("Expected 'extends' keyword");
+			classAttrsRange.popFront(); // Drop "extends"
+			classAttrsRange.takeFrontAs!INameExpression("Expected base class name");
+		}
+
 		ICodeBlockStatement classBodyStmt = classAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
 
 		// Add directive definition into existing frame
@@ -55,6 +64,16 @@ class DeclClassCompiler: IDirectiveCompiler
 		IAttributeRange classAttrsRange = stmt[];
 
 		INameExpression classNameExpr = classAttrsRange.takeFrontAs!INameExpression("Expected directive name");
+
+		INameExpression baseClassNameExpr;
+		if( INameExpression extendsExpr = cast(INameExpression) classAttrsRange.front )
+		{
+			if( extendsExpr.name != "extends" )
+				compiler.log.error("Expected 'extends' keyword");
+			classAttrsRange.popFront(); // Drop "extends"
+			baseClassNameExpr = classAttrsRange.takeFrontAs!INameExpression("Expected base class name");
+		}
+
 		ICodeBlockStatement classBodyStmt = classAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
 
 		DirectiveSymbol makeClassSymbol = new DirectiveSymbol("__make_" ~ classNameExpr.name ~ "__", classNameExpr.location);
@@ -142,8 +161,12 @@ class DeclClassCompiler: IDirectiveCompiler
 			compiler.addInstr(OpCode.LoadName, compiler.addConst( IvyData("scope") ));
 			compiler.addInstr(OpCode.RunCallable, CallSpec().encode());
 
-			// Build class. It will be result of code object
-			compiler.addInstr(OpCode.MakeClass);
+			// Compile base class name expression in order to get base class
+			if( baseClassNameExpr !is null )
+				baseClassNameExpr.accept(compiler);
+
+			// Build class. It will be result of code object. Put opcode arg that says if there is a base class
+			compiler.addInstr(OpCode.MakeClass, (baseClassNameExpr is null)? 0: 1);
 		}
 
 		// Add instruction to load *make class* code object from module constants

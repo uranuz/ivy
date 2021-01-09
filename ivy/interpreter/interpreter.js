@@ -368,10 +368,11 @@ function Interpreter(
 			}
 			case OpCode.MakeClass: {
 				var
+					baseClass = (instr.arg? idat.classNode(this._stack.pop()): null);
 					classDataDict = idat.assocArray(this._stack.pop()),
 					className = idat.str(this._stack.pop());
 
-				this._stack.push(new DeclClass(className, classDataDict));
+				this._stack.push(new DeclClass(className, classDataDict, baseClass));
 				break;
 			}
 

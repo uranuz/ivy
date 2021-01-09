@@ -7,18 +7,24 @@ define('ivy/types/data/decl_class', [
 	BindedCallable,
 	idat
 ) {
+var CallableKV = FirClass(
+	function CallableKV(name, callable) {
+		var inst = firPODCtor(this, arguments);
+		if( inst ) return inst;
+
+		this.name = name;
+		this.callable = callable;
+	});
+
 return FirClass(
-	function DeclClass(name, dataDict) {
+	function DeclClass(name, dataDict, baseClass) {
 		this._name = name;
 		this._dataDict = dataDict;
+		this._baseClass = baseClass || null;
 
 		// Bind all callables to this class
-		for( var key in this._dataDict )
-		{
-			if( idat.type(val) === IvyDataType.Callable ) {
-				this._dataDict[key] = new BindedCallable(idat.type(val), this);
-			}
-		}
+		for( var it in this._getThisMethods() )
+			this._dataDict[it.name] = new BindedCallable(it.callable, this);
 	}, BaseClassNode, {
 		__getAttr__: function(field) {
 			if( this._dataDict.hasOwnproperty(field) ) {
@@ -39,12 +45,21 @@ return FirClass(
 			return "<class " + this._name + ">";
 		},
 
-		_getMethods: function()
-		{
+		_getThisMethods: function() {
 			// Return all class callables except for "__new__"
 			return Object.entries(this._dataDict).filter(function(it) {
 				return it[1].type == IvyDataType.Callable && it[0] != "__new__"
+			}).map(function(it) {
+				return CallableKV(it[0], idat.callable(it[1]));
 			});
+		},
+	
+		_getBaseMethods: function() {
+			return (this._baseClass == null)? []: this._baseClass._getMethods();
+		},
+	
+		_getMethods: function() {
+			return Array.prototype.concat(this._getBaseMethods(), this._getThisMethods());
 		},
 
 		name: firProperty(function() {

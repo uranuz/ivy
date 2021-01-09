@@ -20,9 +20,8 @@ public:
 		this._type = type;
 
 		// Bind all class callables to class instance
-		foreach (it; this._type._getMethods()) {
-			this._dataDict[it.key] = new BindedCallable(it.value.callable, IvyData(this));
-		}
+		foreach (it; this._type._getMethods())
+			this._dataDict[it.name] = new BindedCallable(it.callable, IvyData(this));
 	}
 
 override {

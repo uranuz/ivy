@@ -417,10 +417,11 @@ public:
 
 			case OpCode.MakeClass:
 			{
+				DeclClass baseClass = (instr.arg? cast(DeclClass) this._stack.pop().classNode: null);
 				IvyData[string] classDataDict = this._stack.pop().assocArray;
 				string className = this._stack.pop().str;
 
-				this._stack.push(new DeclClass(className, classDataDict));
+				this._stack.push(new DeclClass(className, classDataDict, baseClass));
 				break;
 			}
 

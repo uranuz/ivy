@@ -12,9 +12,8 @@ return FirClass(
 		this._type = type;
 
 		// Bind all class callables to class instance
-		this._type._getMethods().forEach(function(it) {
-			this._dataDict[it[0]] = new BindedCallable(idat.callable(it[1]), this);
-		});
+		for( var it in this._type._getMethods() )
+			this._dataDict[it.name] = new BindedCallable(it.callable, this);
 	}, BaseClassNode, {
 		__getAttr__: function(field) {
 			if( this._dataDict.hasOwnProperty(field) ) {
