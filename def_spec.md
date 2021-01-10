@@ -19,8 +19,8 @@ In current stage of development of Ivy lang *def* directive syntax consists (at 
 	#);
 
 For this stage of development followed definition directives are subject to implement (their name still can change):
-1. def.kv - definition of block of key-value attributes. Basic syntax consists of directive name and list of attribute definitions:
-	def.kv <attr definition>...
+1. var - definition of block of key-value attributes. Basic syntax consists of directive name and list of attribute definitions:
+	var <attr definition>...
 	Each attribute definition can follow one of the following forms.
 	<attr name>
 	<attr name> : <default value>
@@ -28,7 +28,7 @@ For this stage of development followed definition directives are subject to impl
 	<attr name> : <default value> as <attr type>
 	So attribut name is essential, but other attribute properties as default value or type are optional
 	Let's paint some stupid example with list of definitions using forms descibed above:
-	(# def.kv 
+	(# var 
 		attrName1
 		attrName2: "default str"
 		attrName3 as int
@@ -36,8 +36,8 @@ For this stage of development followed definition directives are subject to impl
 	#)
 
 
-2. def.pos - definition of block of positional attributes. Syntax is exactly the same as for key-value attributes,
-	but `def.pos` word is used. 
+2. var - definition of block of positional attributes. Syntax is exactly the same as for key-value attributes,
+	but `var` word is used. 
 
 3. def.kwd - definition of keyword. Exactly this name should be present in specified position
 	Syntax is:
@@ -49,5 +49,5 @@ For this stage of development followed definition directives are subject to impl
 4. def.names - definition of list of symbols that will be used to declare some identifiers inside directive.
 	Spec is not developed and not implement yet
 
-5. def.body - definition of block or expression that will not be calculated and shall be passed directly to dir body as AST
-	Example: {# def.body #}
+5. do - definition of block or expression that will not be calculated and shall be passed directly to dir body as AST
+	Example: {# do #}

@@ -2,11 +2,6 @@ module ivy.compiler.directive.def;
 
 import ivy.compiler.directive.utils;
 
-static immutable string[] ATTR_KEYWORDS = [
-	"var",
-	"def.kv",
-	"def.pos"
-];
 
 /// Defines directive using ivy language
 class DefCompiler: IDirectiveCompiler
@@ -59,14 +54,14 @@ public:
 
 		DirAttr[] attrs;
 		IDirectiveStatement attrsStmt = defStmtRange.front; // Current attributes definition statement
-		if( ATTR_KEYWORDS.canFind(attrsStmt.name)  )
+		if( attrsStmt.name == "var"  )
 		{
 			IAttributeRange attrsStmtRange = attrsStmt[]; // Range of attribute definitions
 			while( !attrsStmtRange.empty )
 			{
 				attrs ~= _analyzeValueAttr(attrsStmtRange, collector).attr;
 			}
-			defStmtRange.popFront(); // Consume def.kv/ def.pos statement
+			defStmtRange.popFront(); // Consume "var" statement
 		}
 
 		if( defStmtRange.empty )
@@ -130,7 +125,7 @@ public:
 		IDirectiveStatement attrsStmt = defStmtRange.front; // Current attributes definition statement
 
 		size_t defValCount = 0;
-		if( ATTR_KEYWORDS.canFind(attrsStmt.name)  )
+		if( attrsStmt.name == "var"  )
 		{
 			IAttributeRange attrsStmtRange = attrsStmt[]; // Range of attribute definitions
 
@@ -146,7 +141,7 @@ public:
 					++defValCount; // Increase default values counter
 				}
 			}
-			defStmtRange.popFront(); // Consume def.kv/ def.pos statement
+			defStmtRange.popFront(); // Consume "var" statement
 
 			// If there are attributes with defaults then create assoc array of them
 			if( defValCount > 0 )
@@ -259,7 +254,7 @@ public:
 
 		CompilerDirBodyAttrs res;
 
-		if( !["def.body", "do"].canFind(bodyDefStmt.name) )
+		if( bodyDefStmt.name != "do" )
 			compiler.log.error(`Expected directive body, but got:`, bodyDefStmt.name);
 
 		IAttributeRange bodyStmtRange = bodyDefStmt[]; // Range on attributes of attributes definition statement
@@ -283,7 +278,7 @@ public:
 		}
 
 		if( bodyStmtRange.empty )
-			compiler.log.error("Unexpected end of def.body directive!");
+			compiler.log.error("Unexpected end of do directive!");
 
 		// Getting body AST for statement just for check if it is there
 		res.statement = cast(ICompoundStatement) bodyStmtRange.front;
