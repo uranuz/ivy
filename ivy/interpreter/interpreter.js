@@ -726,7 +726,9 @@ function Interpreter(
 				}
 
 				// Set "context-variable" for callables that has it...
-				if( idat.type(callable.context) != IvyDataType.Undef )
+				if( kwAttrs.hasOwnProperty("this") )
+					this.setValue("this", kwAttrs["this"]);
+				else if( idat.type(callable.context) != IvyDataType.Undef )
 					this.setValue("this", callable.context);
 
 				this.log.write("this._stack after parsing all arguments: ", this._stack);

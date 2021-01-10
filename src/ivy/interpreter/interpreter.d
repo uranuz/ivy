@@ -838,7 +838,9 @@ public:
 				}
 
 				// Set "context-variable" for callables that has it...
-				if( callable.context.type != IvyDataType.Undef )
+				if( auto thisArgPtr = "this" in kwAttrs )
+					this.setValue("this", *thisArgPtr);
+				else if( callable.context.type != IvyDataType.Undef )
 					this.setValue("this", callable.context);
 
 				this.log.write("this._stack after parsing all arguments: ", this._stack);
