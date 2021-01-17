@@ -8,6 +8,7 @@ class ExecutableProgramme
 
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.data.async_result: AsyncResult, AsyncResultState;
+	import ivy.types.data.utils: errorToIvyData;
 
 	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
 	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
@@ -60,7 +61,8 @@ public:
 		IvyData ivyRes = this.runSaveStateSync(extraGlobals)._stack.back();
 		if( ivyRes.type == IvyDataType.AsyncResult ) {
 			ivyRes.asyncResult.then(
-				(IvyData methodRes) => ivyRes = methodRes
+				(IvyData methodRes) => ivyRes = methodRes,
+				(Throwable error) => ivyRes = errorToIvyData(error)
 			);
 		}
 		return ivyRes;
@@ -68,16 +70,13 @@ public:
 
 	SaveStateResult runSaveState(IvyData[string] extraGlobals = null)
 	{
-		import ivy.interpreter.interpreter: Interpreter;
-
 		Interpreter interp = new Interpreter(
-			this._mainModuleName,
 			this._moduleObjCache,
 			this._directiveFactory,
 			this._logerMethod
 		);
 		interp.addExtraGlobals(extraGlobals);
-		return SaveStateResult(interp, interp.execLoop());
+		return SaveStateResult(interp, interp.importModule(this._mainModuleName));
 	}
 
 	Interpreter runSaveStateSync(IvyData[string] extraGlobals = null)
@@ -92,7 +91,7 @@ public:
 
 	AsyncResult runMethod(
 		string methodName,
-		IvyData methodParams = IvyData(),
+		IvyData[string] methodParams = null,
 		IvyData[string] extraGlobals = null
 	) {
 		AsyncResult fResult = new AsyncResult();
@@ -101,7 +100,7 @@ public:
 		moduleExecRes.asyncResult.then(
 			(IvyData modRes) {
 				// Module executed successfuly, then call method
-				moduleExecRes.interp.runModuleDirective(methodName, methodParams).then(fResult);
+				moduleExecRes.interp.execModuleDirective(methodName, methodParams).then(fResult);
 			},
 			&fResult.reject);
 		return fResult;
@@ -109,18 +108,21 @@ public:
 
 	IvyData runMethodSync(
 		string methodName,
-		IvyData methodParams = IvyData(),
+		IvyData[string] methodParams = null,
 		IvyData[string] extraGlobals = null
 	) {
 		import std.exception: enforce;
 		AsyncResult asyncRes =
 			this.runSaveStateSync(extraGlobals)
-			.runModuleDirective(methodName, methodParams);
+			.execModuleDirective(methodName, methodParams);
 		enforce(
 			asyncRes.state == AsyncResultState.resolved,
 			`Expected method execution async result resolved state`);
 		IvyData ivyRes;
-		asyncRes.then((IvyData methodRes) => ivyRes = methodRes);
+		asyncRes.then(
+			(IvyData methodRes) => ivyRes = methodRes,
+			(Throwable error) => ivyRes = errorToIvyData(error)
+		);
 		return ivyRes;
 	}
 

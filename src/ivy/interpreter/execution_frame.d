@@ -27,15 +27,14 @@ private:
 public IvyData _dataDict;
 
 public:
-	this(ICallableObject callable)
+	this(ICallableObject callable, IvyData[string] dataDict = null)
 	{
 		this._callable = callable;
 		enf(this._callable !is null, "Expected callable object for exec frame");
 
-		this._dataDict = [
-			"_ivyMethod": this._callable.symbol.name,
-			"_ivyModule": this._callable.moduleSymbol.name
-		];
+		this._dataDict = dataDict;
+		this._dataDict["_ivyMethod"] = this._callable.symbol.name;
+		this._dataDict["_ivyModule"] = this._callable.moduleSymbol.name;
 	}
 
 	bool hasValue(string varName) {

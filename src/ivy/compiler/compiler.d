@@ -166,6 +166,11 @@ public:
 		log.write(`Starting compiling module AST: ` ~ moduleName);
 		moduleNode.accept(this);
 		log.write(`Finished compiling module AST: ` ~ moduleName);
+
+		// Drop result of module execution
+		addInstr(OpCode.PopTop);
+		// We want that result of module execution module frame
+		addInstr(OpCode.LoadFrame);
 		return _moduleObjCache.get(moduleName);
 	}
 

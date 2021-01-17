@@ -48,7 +48,7 @@ return FirClass(
 		_getThisMethods: function() {
 			// Return all class callables except for "__new__"
 			return Object.entries(this._dataDict).filter(function(it) {
-				return it[1].type == IvyDataType.Callable && it[0] != "__new__"
+				return it[1].type == IvyDataType.Callable //&& it[0] != "__new__"
 			}).map(function(it) {
 				return CallableKV(it[0], idat.callable(it[1]));
 			});

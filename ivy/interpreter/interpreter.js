@@ -33,12 +33,12 @@ define('ivy/interpreter/interpreter', [
 ) {
 var
 	GLOBAL_SYMBOL_NAME = SymbolConsts.GLOBAL_SYMBOL_NAME,
+	SymbolKind = SymbolConsts.SymbolKind,
 	IvyDataType = DataConsts.IvyDataType,
 	OpCode = Bytecode.OpCode,
 	Instruction = Bytecode.Instruction;
 return FirClass(
 function Interpreter(
-	mainModuleName,
 	moduleObjCache,
 	directiveFactory
 ) {
@@ -52,14 +52,7 @@ function Interpreter(
 	this._pk = 0;
 	this._codeRange = [];
 
-	var mainModuleObj = this._moduleObjCache.get(mainModuleName);
-	this.log.internalAssert(mainModuleObj != null, "Cannot get main module from module objects!");
-
 	this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(globalCallable);
-
-	// Create entry point module frame
-	this.newFrame(new CallableObject(mainModuleObj.mainCodeObject), true);
-	this._stack.addStackBlock();
 
 	// Add custom native directive interpreters to global scope
 	directiveFactory.interps.forEach(function(dirInterp) {
@@ -605,40 +598,8 @@ function Interpreter(
 
 			// Import another module
 			case OpCode.ImportModule: {
-				var
-					moduleName = idat.str(this._stack.pop()),
-					moduleObject = this._moduleObjCache.get(moduleName),
-					moduleFrame = this._moduleFrames[moduleName];
-				this.log.internalAssert(moduleObject != null, "No such module object: ", moduleName);
-
-				if( moduleFrame )
-				{
-					// Module is imported already. Just use it..
-					// Put module root frame into previous execution frame (it will be stored with StoreGlobalName)
-					this._stack.push(moduleFrame); 
-					// As long as module returns some value at the end of execution, so put fake value there for consistency
-					this._stack.push();
-				}
-				else
-				{
-					// Run module here
-					var codeObject = moduleObject.mainCodeObject;
-
-					this.newFrame(new CallableObject(codeObject), true); // Create entry point module frame
-
-					// Put module root frame into previous execution frame`s stack block (it will be stored with StoreGlobalName)
-					this._stack.push(this.currentFrame);
-					// Decided to put return address into parent frame`s stack block instead of current
-					this._stack.push(this._pk+1);
-
-					this._stack.addStackBlock(); // Add new stack block for execution frame
-
-					// Preparing to run code object in newly created frame
-					this._codeRange = codeObject.instrs;
-					this.setJump(0);
-
+				if( this.runImportModule(idat.str(this._stack.pop())) )
 					return; // Skip _pk increment
-				}
 				break;
 			}
 
@@ -651,6 +612,11 @@ function Interpreter(
 					var name = idat.str(importList[i]);
 					this.setValue(name, moduleFrame.getValue(name));
 				}
+				break;
+			}
+
+			case OpCode.LoadFrame: {
+				this._stack.push(this.currentFrame);
 				break;
 			}
 
@@ -671,79 +637,11 @@ function Interpreter(
 				break;
 			}
 
-			case OpCode.RunCallable: {
+			case OpCode.RunCallable:
+			{
 				this.log.write("RunCallable stack on init: : ", this._stack);
-				var
-					callSpec = CallSpec(instr.arg),
-					callableOrClass = this._stack.pop(),
-					attrSymbols = callable.symbol.attrs,
-					kwAttrs = callSpec.hasKwAttrs? idat.assocArray(this._stack.pop()): {},
-					defaults = callable.defaults,
-					callable;
-
-				if( idat.type(callableOrClass) == IvyDataType.ClassNode )
-				{
-					// If class node passed there, then we shall get callable from it by calling "__call__"
-					callable = idat.classNode(callableOrClass).__call__();
-				}
-				else
-				{
-					// Else we expect that callable passed here
-					callable = idat.callable(callableOrClass);
-				}
-
-				this.log.write("RunCallable name: ", callable.symbol.name);
-				
-				this.log.internalAssert(
-					callSpec.posAttrsCount <= attrSymbols.length,
-					"Positional parameters count is more than expected arguments count");
-
-				this.newFrame(callable);
-
-				// Getting positional arguments from stack (in reverse order)
-				for( var idx = callSpec.posAttrsCount; idx > 0; --idx ) {
-					this.setValue(attrSymbols[idx - 1].name, this._stack.pop());
-				}
-
-				// Getting named parameters from kwArgs
-				for( var idx = callSpec.posAttrsCount; idx < attrSymbols.length; ++idx )
-				{
-					var attr = attrSymbols[idx];
-					if( kwAttrs.hasOwnProperty(attr.name) ) {
-						this.setValue(attr.name, kwAttrs[attr.name]);
-					}
-					else
-					{
-						// We should get default value if no value is passed from outside
-						this.log.internalAssert(
-							defaults.hasOwnProperty(attr.name),
-							`Expected value for attr: `,
-							attr.name,
-							`, that has no default value`
-						);
-						this.setValue(attr.name, dutil.deeperCopy(defaults[attr.name]));
-					}
-				}
-
-				// Set "context-variable" for callables that has it...
-				if( kwAttrs.hasOwnProperty("this") )
-					this.setValue("this", kwAttrs["this"]);
-				else if( idat.type(callable.context) != IvyDataType.Undef )
-					this.setValue("this", callable.context);
-
-				this.log.write("this._stack after parsing all arguments: ", this._stack);
-				this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
-				this._stack.addStackBlock();
-
-				// Set new instruction range to execute
-				this._codeRange = callable.isNative? [Instruction(OpCode.Nop)]: callable.codeObject.instrs;
-				this.setJump(0);
-
-				if( callable.isNative ) {
-					callable.dirInterp.interpret(this); // Run native directive interpreter
-				} else {
+				if( this.runCallableNode(this._stack.pop(), CallSpec(instr.arg)) )
 					return; // Skip _pk increment
-				}
 				break;
 			}
 
@@ -878,19 +776,22 @@ function Interpreter(
 		}
 	},
 
-	newFrame: function(callable, isModule) {
-		this._frameStack.push(new ExecutionFrame(callable));
+	newFrame: function(callable, dataDict) {
 		var symbolName = callable.symbol.name;
-		if( isModule )
+
+		this._frameStack.push(new ExecutionFrame(callable, dataDict));
+		this._stack.addStackBlock();
+		this.log.write("Enter new execution frame for callable: ", symbolName);
+
+		if( callable.symbol.kind == SymbolKind.module_ )
 		{
-			this.log.internalAssert(symbolName !== GLOBAL_SYMBOL_NAME, "Cannot create module name with name: ", GLOBAL_SYMBOL_NAME);
+			this.log.internalAssert(symbolName != GLOBAL_SYMBOL_NAME, "Cannot create module name with name: ", GLOBAL_SYMBOL_NAME);
 			this._moduleFrames[symbolName] = this.currentFrame;
 		}
-		this.log.write("Enter new execution frame for callable: ", symbolName);
 	},
 
 	removeFrame: function() {
-		this.log.internalAssert(this._frameStack.length > 0, `Execution frame stack is empty!`);
+		this.log.internalAssert(this._frameStack.length > 0, "Execution frame stack is empty!");
 		this._stack.removeStackBlock();
 		this._frameStack.pop();
 	},
@@ -963,7 +864,131 @@ function Interpreter(
 		return moduleFrame;
 	},
 
-	runModuleDirective: function(name, args)
+	_extractCallArgs: function(callable, kwAttrs, callSpec)
+	{
+		kwAttrs = kwAttrs || {};
+		callSpec = callSpec || CallSpec();
+
+		var
+			attrSymbols = callable.symbol.attrs,
+			defaults = callable.defaults;
+
+		if( callSpec.hasKwAttrs )
+			kwAttrs = idat.assocArray(this._stack.pop());
+
+		this.log.internalAssert(
+			callSpec.posAttrsCount <= attrSymbols.length,
+			"Positional parameters count is more than expected arguments count");
+
+		var callArgs = {};
+
+		// Getting positional arguments from stack (in reverse order)
+		for( var idx = callSpec.posAttrsCount; idx > 0; --idx ) {
+			callArgs[attrSymbols[idx - 1].name] = this._stack.pop();
+		}
+
+		// Getting named parameters from kwArgs
+		for( var idx = callSpec.posAttrsCount; idx < attrSymbols.length; ++idx )
+		{
+			var attr = attrSymbols[idx];
+			if( kwAttrs.hasOwnProperty(attr.name) ) {
+				callArgs[attr.name] = kwAttrs[attr.name];
+			}
+			else
+			{
+				// We should get default value if no value is passed from outside
+				this.log.internalAssert(
+					defaults.hasOwnProperty(attr.name),
+					"Expected value for attr: ",
+					attr.name,
+					", that has no default value"
+				);
+				callArgs[attr.name] = dutil.deeperCopy(defaults[attr.name]);
+			}
+		}
+
+		// Set "context-variable" for callables that has it...
+		if( kwAttrs.hasOwnProperty("this") )
+			callArgs["this"] =  kwAttrs["this"];
+		else if( idat.type(callable.context) != IvyDataType.Undef )
+			callArgs["this"] = callable.context;
+
+		return callArgs;
+	},
+
+	runCallableNode: function(callableNode, callSpec)
+	{
+		var callable;
+		if( idat.type(callableNode) == IvyDataType.ClassNode )
+		{
+			// If class node passed there, then we shall get callable from it by calling "__call__"
+			callable = idat.classNode(callableNode).__call__();
+		}
+		else
+		{
+			// Else we expect that callable passed here
+			callable = idat.callable(callableNode);
+		}
+
+		return this._runCallableImpl(callable, null, callSpec); // Skip _pk increment
+	},
+
+	runCallable: function(callable, kwAttrs) {
+		return this._runCallableImpl(callable, kwAttrs); // Skip _pk increment
+	},
+
+	_runCallableImpl: function(callable, kwAttrs, callSpec)
+	{
+		this.log.write("RunCallable name: ", callable.symbol.name);
+
+		var callArgs = this._extractCallArgs(callable, kwAttrs, callSpec);
+
+		this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
+
+		this.newFrame(callable, callArgs);
+
+		// Set new instruction range to execute
+		this._codeRange = callable.isNative? [Instruction(OpCode.Nop)]: callable.codeObject.instrs;
+		this.setJump(0);
+
+		if( callable.isNative )
+		{
+			// Run native directive interpreter
+			callable.dirInterp.interpret(this);
+			return false;
+		}
+		return true; // Skip _pk increment
+	},
+
+	runImportModule: function(moduleName)
+	{
+		var
+			moduleObject = this._moduleObjCache.get(moduleName),
+			moduleFrame = this._moduleFrames[moduleName];
+
+		this.log.internalAssert(moduleObject != null, "No such module object: ", moduleName);
+		if( moduleFrame )
+		{
+			// Module is imported already. Just push it's frame onto stack
+			this._stack.push(moduleFrame); 
+			return false;
+		}
+		return this.runCallable(new CallableObject(moduleObject.mainCodeObject));
+	},
+
+	importModule: function(moduleName)
+	{
+		var fResult = new AsyncResult();
+		try {
+			this.runImportModule(moduleName);
+			this.execLoopImpl(fResult, 1);
+		} catch(ex) {
+			fResult.reject(ex);
+		}
+		return fResult;
+	},
+
+	execModuleDirective(name, kwArgs)
 	{
 		// Find desired directive by name in current module frame
 		var callable = idat.callable(this.currentFrame.getValue(name));
@@ -973,24 +998,9 @@ function Interpreter(
 			this._stack.pop(); // Drop old result from stack
 		}
 
-		var callSpec = CallSpec(0, idat.type(args) === IvyDataType.AssocArray);
-		if( callSpec.hasKwAttrs ) {
-			this._stack.push(args);
-		}
-		this._stack.push(callable);
-
-		// We need to ensure that callable's module is loaded
-		this._stack.push(callable.moduleSymbol.name);
-
-		this._codeRange = [
-			Instruction(OpCode.ImportModule),
-			Instruction(OpCode.PopTop), // Drop module's return value...
-			Instruction(OpCode.PopTop), // Drop module's execution frame...
-			Instruction(OpCode.RunCallable, callSpec.encode())
-		];
-		this.setJump(0);
 		var fResult = new AsyncResult();
 		try {
+			this.runCallable(callable, kwArgs);
 			this.execLoopImpl(fResult, 2);
 		} catch(ex) {
 			fResult.reject(ex);

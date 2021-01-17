@@ -20,6 +20,8 @@ class Interpreter
 	import ivy.types.callable_object: CallableObject;
 	import ivy.types.data: IvyDataType, IvyData;
 	import ivy.types.data.decl_class: DeclClass;
+	import ivy.types.call_spec: CallSpec;
+	import ivy.types.data.utils: deeperCopy;
 	import ivy.interpreter.execution_frame: ExecutionFrame;
 	import ivy.interpreter.exec_stack: ExecStack;
 	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
@@ -55,7 +57,6 @@ public:
 	Instruction[] _codeRange; // Current code range we executing
 
 	this(
-		string mainModuleName,
 		ModuleObjectsCache moduleObjCache,
 		InterpreterDirectiveFactory directiveFactory,
 		LogerMethod logerMethod = null
@@ -67,15 +68,8 @@ public:
 		this.log.internalAssert(this._moduleObjCache !is null, "Expected module objects cache");
 		this.log.internalAssert(this._directiveFactory !is null, "Expected directive factory");
 
-		ModuleObject mainModuleObj = this._moduleObjCache.get(mainModuleName);
-		this.log.internalAssert(mainModuleObj !is null, "Cannot get main module from module objects!");
-
 		// Add global execution frame. Do not add it to _frameStack!
 		this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(globalCallable);
-
-		// Create entry point module frame
-		this.newFrame(new CallableObject(mainModuleObj.mainCodeObject), true);
-		this._stack.addStackBlock();
 
 		// Add custom native directive interpreters to global scope
 		foreach( dirInterp; directiveFactory.interps ) {
@@ -710,39 +704,8 @@ public:
 
 			case OpCode.ImportModule:
 			{
-				string moduleName = this._stack.pop().str;
-				ModuleObject moduleObject = this._moduleObjCache.get(moduleName);
-				ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
-				this.log.internalAssert(moduleObject !is null, "No such module object: ", moduleName);
-
-				if( moduleFrame )
-				{
-					// Module is imported already. Just use it..
-					// Put module root frame into previous execution frame (it will be stored with StoreGlobalName)
-					this._stack.push(moduleFrame); 
-					// As long as module returns some value at the end of execution, so put fake value there for consistency
-					this._stack.push(IvyData());
-				}
-				else
-				{
-					// Run module here
-					CodeObject codeObject = moduleObject.mainCodeObject;
-
-					this.newFrame(new CallableObject(codeObject), true); // Create entry point module frame
-
-					// Put module root frame into previous execution frame`s stack block (it will be stored with StoreGlobalName)
-					this._stack.push(this.currentFrame);
-					// Decided to put return address into parent frame`s stack block instead of current
-					this._stack.push(this._pk+1);
-
-					this._stack.addStackBlock(); // Add new stack block for execution frame
-
-					// Preparing to run code object in newly created frame
-					this._codeRange = codeObject.instrs[];
-					this.setJump(0);
-
+				if( this.runImportModule(this._stack.pop().str) )
 					return; // Skip _pk increment
-				}
 				break;
 			}
 
@@ -759,10 +722,14 @@ public:
 				break;
 			}
 
+			case OpCode.LoadFrame:
+			{
+				this._stack.push(this.currentFrame);
+				break;
+			}
+
 			case OpCode.MakeCallable:
 			{
-				import ivy.types.call_spec: CallSpec;
-
 				CallSpec callSpec = CallSpec(instr.arg);
 				this.log.internalAssert(
 					callSpec.posAttrsCount == 0,
@@ -780,83 +747,9 @@ public:
 
 			case OpCode.RunCallable:
 			{
-				import ivy.types.call_spec: CallSpec;
-				import ivy.types.data.utils: deeperCopy;
-
 				this.log.write("RunCallable stack on init: : ", this._stack);
-				CallSpec callSpec = CallSpec(instr.arg);
-
-				IvyData callableOrClass = this._stack.pop();
-				ICallableObject callable;
-				if( callableOrClass.type == IvyDataType.ClassNode )
-				{
-					// If class node passed there, then we shall get callable from it by calling "__call__"
-					callable = callableOrClass.classNode.__call__();
-				}
-				else
-				{
-					// Else we expect that callable passed here
-					callable = callableOrClass.callable;
-				}
-
-				DirAttr[] attrSymbols = callable.symbol.attrs;
-				IvyData[string] kwAttrs = callSpec.hasKwAttrs? this._stack.pop().assocArray: null;
-				IvyData[string] defaults = callable.defaults;
-
-				this.log.write("RunCallable name: ", callable.symbol.name);
-
-				this.log.internalAssert(
-					callSpec.posAttrsCount <= attrSymbols.length,
-					"Positional parameters count is more than expected arguments count");
-
-				this.newFrame(callable);
-
-				// Getting positional arguments from stack (in reverse order)
-				for( size_t idx = callSpec.posAttrsCount; idx > 0; --idx ) {
-					this.setValue(attrSymbols[idx - 1].name, this._stack.pop());
-				}
-
-				// Getting named parameters from kwArgs
-				for( size_t idx = callSpec.posAttrsCount; idx < attrSymbols.length; ++idx )
-				{
-					DirAttr attr = attrSymbols[idx];
-					if( IvyData* valPtr = attr.name in kwAttrs ) {
-						this.setValue(attr.name, *valPtr);
-					}
-					else
-					{
-						// We should get default value if no value is passed from outside
-						IvyData* defValPtr = attr.name in defaults;
-						this.log.internalAssert(
-							defValPtr !is null,
-							"Expected value for attr: ",
-							attr.name,
-							", that has no default value"
-						);
-						this.setValue(attr.name, deeperCopy(*defValPtr));
-					}
-				}
-
-				// Set "context-variable" for callables that has it...
-				if( auto thisArgPtr = "this" in kwAttrs )
-					this.setValue("this", *thisArgPtr);
-				else if( callable.context.type != IvyDataType.Undef )
-					this.setValue("this", callable.context);
-
-				this.log.write("this._stack after parsing all arguments: ", this._stack);
-
-				this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
-				this._stack.addStackBlock();
-
-				// Set new instruction range to execute
-				this._codeRange = callable.isNative? [Instruction(OpCode.Nop)]: callable.codeObject.instrs[];
-				this.setJump(0);
-
-				if( callable.isNative ) {
-					callable.dirInterp.interpret(this); // Run native directive interpreter
-				} else {
+				if( this.runCallableNode(this._stack.pop(), CallSpec(instr.arg)) )
 					return; // Skip _pk increment
-				}
 				break;
 			}
 
@@ -1049,22 +942,26 @@ public:
 		assert(false);
 	}
 
-	void newFrame(ICallableObject callable, bool isModule = false)
+	void newFrame(ICallableObject callable, IvyData[string] dataDict = null)
 	{
-		this._frameStack ~= new ExecutionFrame(callable);
+		import ivy.types.symbol.consts: SymbolKind;
 		string symbolName = callable.symbol.name;
-		if( isModule )
+
+		this._frameStack ~= new ExecutionFrame(callable, dataDict);
+		this._stack.addStackBlock();
+		this.log.write("Enter new execution frame for callable: ", symbolName);
+
+		if( callable.symbol.kind == SymbolKind.module_ )
 		{
 			this.log.internalAssert(symbolName != GLOBAL_SYMBOL_NAME, "Cannot create module name with name: ", GLOBAL_SYMBOL_NAME);
-			this._moduleFrames[symbolName] = this.currentFrame();
+			this._moduleFrames[symbolName] = this.currentFrame;
 		}
-		this.log.write("Enter new execution frame for callable: ", symbolName);
 	}
 
 	void removeFrame()
 	{
 		import std.range: empty, back, popBack;
-		this.log.internalAssert(!this._frameStack.empty, `Execution frame stack is empty!`);
+		this.log.internalAssert(!this._frameStack.empty, "Execution frame stack is empty!");
 		this._stack.removeStackBlock();
 		this._frameStack.popBack();
 	}
@@ -1140,10 +1037,133 @@ public:
 		return moduleFrame;
 	}
 
-	AsyncResult runModuleDirective(string name, IvyData args = IvyData())
-	{
-		import ivy.types.call_spec: CallSpec;
+	IvyData[string] _extractCallArgs(
+		ICallableObject callable,
+		IvyData[string] kwAttrs = null,
+		CallSpec callSpec = CallSpec()
+	) {
+		DirAttr[] attrSymbols = callable.symbol.attrs;
+		IvyData[string] defaults = callable.defaults;
 
+		if( callSpec.hasKwAttrs )
+			kwAttrs = this._stack.pop().assocArray;
+
+		this.log.internalAssert(
+			callSpec.posAttrsCount <= attrSymbols.length,
+			"Positional parameters count is more than expected arguments count");
+
+		IvyData[string] callArgs;
+
+		// Getting positional arguments from stack (in reverse order)
+		for( size_t idx = callSpec.posAttrsCount; idx > 0; --idx ) {
+			callArgs[attrSymbols[idx - 1].name] = this._stack.pop();
+		}
+
+		// Getting named parameters from kwArgs
+		for( size_t idx = callSpec.posAttrsCount; idx < attrSymbols.length; ++idx )
+		{
+			DirAttr attr = attrSymbols[idx];
+			if( IvyData* valPtr = attr.name in kwAttrs ) {
+				callArgs[attr.name] = *valPtr;
+			}
+			else
+			{
+				// We should get default value if no value is passed from outside
+				IvyData* defValPtr = attr.name in defaults;
+				this.log.internalAssert(
+					defValPtr !is null,
+					"Expected value for attr: ",
+					attr.name,
+					", that has no default value"
+				);
+				callArgs[attr.name] = deeperCopy(*defValPtr);
+			}
+		}
+
+		// Set "context-variable" for callables that has it...
+		if( auto thisArgPtr = "this" in kwAttrs )
+			callArgs["this"] =  *thisArgPtr;
+		else if( callable.context.type != IvyDataType.Undef )
+			callArgs["this"] = callable.context;
+
+		this.log.write("this._stack after parsing all arguments: ", this._stack);
+
+		return callArgs;
+	}
+
+	bool runCallableNode(IvyData callableNode, CallSpec callSpec)
+	{
+		ICallableObject callable;
+		if( callableNode.type == IvyDataType.ClassNode )
+		{
+			// If class node passed there, then we shall get callable from it by calling "__call__"
+			callable = callableNode.classNode.__call__();
+		}
+		else
+		{
+			// Else we expect that callable passed here
+			callable = callableNode.callable;
+		}
+
+		return this._runCallableImpl(callable, null, callSpec); // Skip _pk increment
+	}
+
+	bool runCallable(ICallableObject callable, IvyData[string] kwAttrs = null) {
+		return this._runCallableImpl(callable, kwAttrs); // Skip _pk increment
+	}
+
+	bool _runCallableImpl(ICallableObject callable, IvyData[string] kwAttrs = null, CallSpec callSpec = CallSpec())
+	{
+		this.log.write("RunCallable name: ", callable.symbol.name);
+
+		IvyData[string] callArgs = this._extractCallArgs(callable, kwAttrs, callSpec);
+
+		this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
+
+		this.newFrame(callable, callArgs);
+
+		// Set new instruction range to execute
+		this._codeRange = callable.isNative? [Instruction(OpCode.Nop)]: callable.codeObject.instrs[];
+		this.setJump(0);
+
+		if( callable.isNative )
+		{
+			// Run native directive interpreter
+			callable.dirInterp.interpret(this);
+			return false;
+		}
+		return true; // Skip _pk increment
+	}
+
+	bool runImportModule(string moduleName)
+	{
+		ModuleObject moduleObject = this._moduleObjCache.get(moduleName);
+		ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
+
+		this.log.internalAssert(moduleObject !is null, "No such module object: ", moduleName);
+		if( moduleFrame )
+		{
+			// Module is imported already. Just push it's frame onto stack
+			this._stack.push(moduleFrame); 
+			return false;
+		}
+		return this.runCallable(new CallableObject(moduleObject.mainCodeObject));
+	}
+
+	AsyncResult importModule(string moduleName)
+	{
+		AsyncResult fResult = new AsyncResult();
+		try {
+			this.runImportModule(moduleName);
+			this.execLoopImpl(fResult, 1);
+		} catch( Throwable ex ) {
+			fResult.reject(ex);
+		}
+		return fResult;
+	}
+
+	AsyncResult execModuleDirective(string name, IvyData[string] kwArgs = null)
+	{
 		// Find desired directive by name in current module frame
 		ICallableObject callable = this.currentFrame.getValue(name).callable;
 
@@ -1152,24 +1172,9 @@ public:
 			this._stack.pop(); // Drop old result from stack
 		}
 
-		CallSpec callSpec = CallSpec(0, args.type == IvyDataType.AssocArray);
-		if( callSpec.hasKwAttrs ) {
-			this._stack.push(args);
-		}
-		this._stack.push(callable);
-
-		// We need to ensure that callable's module is loaded
-		this._stack.push(callable.moduleSymbol.name);
-
-		this._codeRange = [
-			Instruction(OpCode.ImportModule),
-			Instruction(OpCode.PopTop), // Drop module's return value...
-			Instruction(OpCode.PopTop), // Drop module's execution frame...
-			Instruction(OpCode.RunCallable, callSpec.encode())
-		];
-		this.setJump(0);
 		AsyncResult fResult = new AsyncResult();
 		try {
+			this.runCallable(callable, kwArgs);
 			this.execLoopImpl(fResult, 2);
 		} catch( Throwable ex ) {
 			fResult.reject(ex);

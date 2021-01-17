@@ -73,6 +73,7 @@ var
 		// Import another module
 		'ImportModule',
 		'FromImport',
+		'LoadFrame',
 
 		// Preparing and calling directives
 		'MakeCallable',

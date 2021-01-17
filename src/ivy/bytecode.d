@@ -74,6 +74,7 @@ enum OpCode: ubyte
 	// Import another module
 	ImportModule,
 	FromImport,
+	LoadFrame,
 
 	// Preparing and calling directives
 	MakeCallable,

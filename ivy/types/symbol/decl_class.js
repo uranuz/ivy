@@ -1,24 +1,21 @@
-define('ivy/types/symbol/module_', [
+define('ivy/types/symbol/decl_class', [
 	'ivy/types/symbol/iface/callable',
-	'ivy/types/symbol/dir_body_attrs',
 	'ivy/location',
 	'ivy/types/symbol/consts'
 ], function(
 	ICallableSymbol,
-	DirBodyAttrs,
 	Location,
 	SymbolConsts
 ) {
-var
-	emptyBodyAttrs = DirBodyAttrs(),
-	SymbolKind = SymbolConsts.SymbolKind;
+var SymbolKind = SymbolConsts.SymbolKind;
 return FirClass(
-	function ModuleSymbol(name, loc) {
+	function DeclClassSymbol(name, loc) {
 		this._name = name;
-		this._loc = Location();
+		this._loc = loc;
+		this._initSymbol = null;
 
 		if( !this._name.length ) {
-			throw new Error('Expected module symbol name');
+			throw new Error('Expected directive symbol name');
 		}
 		if( !(this._loc instanceof Location) ) {
 			throw new Error('Expected instance of Location');
@@ -33,19 +30,25 @@ return FirClass(
 		}),
 
 		kind: firProperty(function() {
-			return SymbolKind.module_;
+			return SymbolKind.declClass;
 		}),
 
 		attrs: firProperty(function() {
-			return [];
+			return this.initSymbol.attrs;
 		}),
 
-		getAttr: function() {
-			throw new Error('Module symbol has no attributes');
+		getAttr: function(attrName) {
+			return this.initSymbol.getAttr(attrName);
 		},
 
 		bodyAttrs: firProperty(function() {
-			return emptyBodyAttrs;
+			return this._bodyAttrs;
+		}),
+
+		initSymbol: firProperty(function() {
+			return this._initSymbol;
+		}, function(symb) {
+			this._initSymbol = symb;
 		})
 	}
 );

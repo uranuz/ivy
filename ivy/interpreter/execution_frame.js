@@ -4,16 +4,16 @@ define('ivy/interpreter/execution_frame', [
 	IvyException
 ) {
 return FirClass(
-function ExecutionFrame(callable) {
+function ExecutionFrame(callable, dataDict) {
+	dataDict = dataDict || {};
 	this._callable = callable;
 	if( this._callable == null ) {
 		throw new IvyException("Expected callable object for exec frame");
 	}
 
-	this._dataDict = {
-		"_ivyMethod": this._callable.symbol.name,
-		"_ivyModule": this._callable.moduleSymbol.name
-	};
+	this._dataDict = dataDict;
+	this._dataDict["_ivyMethod"] = this._callable.symbol.name;
+	this._dataDict["_ivyModule"] = this._callable.moduleSymbol.name;
 }, {
 	hasValue: function(varName) {
 		return this._dataDict.hasOwnProperty(varName);

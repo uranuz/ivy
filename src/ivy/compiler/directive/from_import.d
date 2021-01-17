@@ -69,13 +69,11 @@ public:
 		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
 
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(moduleNameExpr.name) ));
-
 		compiler.addInstr(OpCode.ImportModule);
-		compiler.addInstr(OpCode.SwapTwo); // Swap module return value and imported execution frame
-		//compiler.addInstr(OpCode.PopTop); // Drop return value of module importing, because it is meaningless
+
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(varNames) )); // Put list of imported names on the stack
 		compiler.addInstr(OpCode.FromImport); // Store names from module exec frame into current frame
 		// OpCode.FromImport  does not put value on the stack so do it there
-		//compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ) );
+		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ) );
 	}
 }

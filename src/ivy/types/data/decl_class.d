@@ -96,7 +96,7 @@ override {
 
 		// Return all class callables except for "__new__"
 		return this._dataDict.byKeyValue.filter!(
-			(it) => it.value.type == IvyDataType.Callable && it.key != "__new__"
+			(it) => it.value.type == IvyDataType.Callable //&& it.key != "__new__"
 		).map!(
 			(it) => CallableKV(it.key, it.value.callable)
 		).array;

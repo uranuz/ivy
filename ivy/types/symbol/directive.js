@@ -1,12 +1,15 @@
 define('ivy/types/symbol/directive', [
 	'ivy/types/symbol/iface/callable',
 	'ivy/location',
-	'ivy/types/symbol/dir_body_attrs'
+	'ivy/types/symbol/dir_body_attrs',
+	'ivy/types/symbol/consts'
 ], function(
 	ICallableSymbol,
 	Location,
-	DirBodyAttrs
+	DirBodyAttrs,
+	SymbolConsts
 ) {
+var SymbolKind = SymbolConsts.SymbolKind;
 return FirClass(
 	function DirectiveSymbol(name, locOrAttrs, attrsOrBodyAttrs, bodyAttrs) {
 		if( locOrAttrs instanceof Location ) {
@@ -52,11 +55,15 @@ return FirClass(
 			return this._loc;
 		}),
 
+		kind: firProperty(function() {
+			return SymbolKind.directive;
+		}),
+
 		attrs: firProperty(function() {
 			return this._attrs;
 		}),
 
-		__getAttr__: function(attrName) {
+		getAttr: function(attrName) {
 			var idx = this._attrIndexes[attrName];
 			if( idx == null ) {
 				throw new Error('No attribute with name "' + attrName + '" for directive "' + this._name + '"');

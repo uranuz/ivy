@@ -6,3 +6,9 @@ enum IvyAttrType: string
 }
 
 static immutable GLOBAL_SYMBOL_NAME = "__global__";
+
+enum SymbolKind: ubyte {
+	directive,
+	module_,
+	declClass
+}

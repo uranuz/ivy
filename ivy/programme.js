@@ -33,14 +33,13 @@ return FirClass(
 
 		runSaveState: function(extraGlobals) {
 			var interp = new Interpreter(
-				this._mainModuleName,
 				this._moduleObjCache,
 				this._directiveFactory
 			);
 			interp.addExtraGlobals(extraGlobals);
 			return {
 				interp: interp,
-				asyncResult: interp.execLoop()
+				asyncResult: interp.importModule(this._mainModuleName)
 			};
 		},
 
@@ -60,7 +59,7 @@ return FirClass(
 			moduleExecRes.asyncResult.then(
 				function(modRes) {
 					// Module executed successfuly, then call method
-					moduleExecRes.interp.runModuleDirective(methodName, methodParams).then(
+					moduleExecRes.interp.execModuleDirective(methodName, methodParams).then(
 						function(methodRes) {
 							fResult.resolve(methodRes); // Successfully called method
 						},
@@ -78,7 +77,7 @@ return FirClass(
 			var
 				ivyRes,
 				asyncRes = this.runSaveStateSync(extraGlobals)
-					.runModuleDirective(methodName, methodParams);
+					.execModuleDirective(methodName, methodParams);
 			if( asyncRes.state !== AsyncResultState.resolved ) {
 				throw new Error('Expected method execution async result resolved state');
 			}

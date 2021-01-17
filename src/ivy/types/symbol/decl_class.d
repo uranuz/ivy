@@ -10,6 +10,7 @@ class DeclClassSymbol: ICallableSymbol
 
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
+	import ivy.types.symbol.consts: SymbolKind;
 
 private:
 	string _name;
@@ -31,6 +32,10 @@ override
 
 	Location location() @property {
 		return _loc;
+	}
+
+	SymbolKind kind() @property {
+		return SymbolKind.declClass;
 	}
 
 	DirAttr[] attrs() @property {

@@ -8,6 +8,7 @@ class DirectiveSymbol: ICallableSymbol
 
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
+	import ivy.types.symbol.consts: SymbolKind;
 
 	import std.exception: enforce;
 	import std.json: JSONValue;
@@ -56,6 +57,10 @@ public:
 
 		Location location() @property {
 			return _loc;
+		}
+
+		SymbolKind kind() @property {
+			return SymbolKind.directive;
 		}
 
 		DirAttr[] attrs() @property {
