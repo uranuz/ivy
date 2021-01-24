@@ -1,13 +1,17 @@
 define('ivy/types/data/decl_class', [
 	'ivy/types/data/base_class_node',
 	'ivy/types/binded_callable',
-	'ivy/types/data/data'
+	'ivy/types/data/data',
+	'ivy/types/data/consts'
 ], function(
 	BaseClassNode,
 	BindedCallable,
-	idat
+	idat,
+	IvyConsts
 ) {
-var CallableKV = FirClass(
+var
+	IvyDataType = IvyConsts.IvyDataType,
+	CallableKV = FirClass(
 	function CallableKV(name, callable) {
 		var inst = firPODCtor(this, arguments);
 		if( inst ) return inst;
@@ -23,11 +27,12 @@ return FirClass(
 		this._baseClass = baseClass || null;
 
 		// Bind all callables to this class
-		for( var it in this._getThisMethods() )
+		this._getThisMethods().forEach(function(it) {
 			this._dataDict[it.name] = new BindedCallable(it.callable, this);
+		}, this);
 	}, BaseClassNode, {
 		__getAttr__: function(field) {
-			if( this._dataDict.hasOwnproperty(field) ) {
+			if( !this._dataDict.hasOwnProperty(field) ) {
 				throw new Error("No attribute with name: " + field + " for class: " + this.name);
 			}
 			return this._dataDict[field];
@@ -48,7 +53,7 @@ return FirClass(
 		_getThisMethods: function() {
 			// Return all class callables except for "__new__"
 			return Object.entries(this._dataDict).filter(function(it) {
-				return it[1].type == IvyDataType.Callable //&& it[0] != "__new__"
+				return idat.type(it[1]) === IvyDataType.Callable //&& it[0] != "__new__"
 			}).map(function(it) {
 				return CallableKV(it[0], idat.callable(it[1]));
 			});

@@ -3,18 +3,18 @@ define('ivy/types/data/data', [
 	'ivy/types/data/consts',
 	'ivy/interpreter/execution_frame',
 	'ivy/types/code_object',
-	'ivy/types/callable_object',
+	'ivy/types/iface/callable_object',
 	'ivy/types/data/iface/range',
-	'ivy/types/data/base_class_node',
+	'ivy/types/data/iface/class_node',
 	'ivy/types/data/async_result'
 ], function(
 	idat,
 	Consts,
 	ExecutionFrame,
 	CodeObject,
-	CallableObject,
+	ICallableObject,
 	DataNodeRange,
-	ClassNode,
+	IClassNode,
 	AsyncResult
 ) {
 var IvyDataType = Consts.IvyDataType;
@@ -97,13 +97,13 @@ Object.assign(idat, {
 			return IvyDataType.CodeObject;
 		} else if( val instanceof AsyncResult ) {
 			return IvyDataType.AsyncResult;
-		} else if( val instanceof CallableObject ) {
+		} else if( val instanceof ICallableObject ) {
 			return IvyDataType.Callable;
 		} else if( val instanceof ExecutionFrame ) {
 			return IvyDataType.ExecutionFrame;
 		} else if( val instanceof DataNodeRange ) {
 			return IvyDataType.DataNodeRange;
-		} else if( val instanceof ClassNode ) {
+		} else if( val instanceof IClassNode ) {
 			return IvyDataType.ClassNode;
 		} else if( val instanceof Object ) {
 			return IvyDataType.AssocArray;

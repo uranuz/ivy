@@ -20,6 +20,7 @@ class Interpreter
 	import ivy.types.callable_object: CallableObject;
 	import ivy.types.data: IvyDataType, IvyData;
 	import ivy.types.data.decl_class: DeclClass;
+	import ivy.types.decl_class_factory: DeclClassFactory;
 	import ivy.types.call_spec: CallSpec;
 	import ivy.types.data.utils: deeperCopy;
 	import ivy.interpreter.execution_frame: ExecutionFrame;
@@ -48,6 +49,8 @@ public:
 
 	InterpreterDirectiveFactory _directiveFactory;
 
+	DeclClassFactory _declClassFactory;
+
 	ExecStack _stack;
 
 	// LogWriter method used to send error and debug messages
@@ -63,6 +66,7 @@ public:
 	) {
 		this._moduleObjCache = moduleObjCache;
 		this._directiveFactory = directiveFactory;
+		this._declClassFactory = new DeclClassFactory;
 		this._logerMethod = logerMethod;
 
 		this.log.internalAssert(this._moduleObjCache !is null, "Expected module objects cache");
@@ -415,7 +419,7 @@ public:
 				IvyData[string] classDataDict = this._stack.pop().assocArray;
 				string className = this._stack.pop().str;
 
-				this._stack.push(new DeclClass(className, classDataDict, baseClass));
+				this._stack.push(this._declClassFactory.makeClass(className, classDataDict, baseClass));
 				break;
 			}
 

@@ -1,4 +1,4 @@
-define('ivy/types/callable_object', [
+define('ivy/types/iface/callable_object', [
 	'ivy/types/data/exception'
 ], function(
 	DataExc

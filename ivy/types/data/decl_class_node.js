@@ -10,10 +10,12 @@ define('ivy/types/data/decl_class_node', [
 return FirClass(
 	function DeclClassNode(type) {
 		this._type = type;
+		this._dataDict = {};
 
 		// Bind all class callables to class instance
-		for( var it in this._type._getMethods() )
+		this._type._getMethods().forEach(function(it) {
 			this._dataDict[it.name] = new BindedCallable(it.callable, this);
+		}, this);
 	}, BaseClassNode, {
 		__getAttr__: function(field) {
 			if( this._dataDict.hasOwnProperty(field) ) {

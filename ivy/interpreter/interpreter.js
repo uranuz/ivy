@@ -8,6 +8,7 @@ define('ivy/interpreter/interpreter', [
 	'ivy/interpreter/exec_stack',
 	'ivy/interpreter/execution_frame',
 	'ivy/types/callable_object',
+	'ivy/types/decl_class_factory',
 	'ivy/types/data/range/array',
 	'ivy/types/data/range/assoc_array',
 	'ivy/types/data/async_result',
@@ -24,6 +25,7 @@ define('ivy/interpreter/interpreter', [
 	ExecStack,
 	ExecutionFrame,
 	CallableObject,
+	DeclClassFactory,
 	ArrayRange,
 	AssocArrayRange,
 	AsyncResult,
@@ -48,6 +50,7 @@ function Interpreter(
 	this._moduleFrames = {};
 	this._moduleObjCache = moduleObjCache;
 	this._directiveFactory = directiveFactory;
+	this._declClassFactory = new DeclClassFactory();
 	this._stack = new ExecStack();
 	this._pk = 0;
 	this._codeRange = [];
@@ -361,11 +364,11 @@ function Interpreter(
 			}
 			case OpCode.MakeClass: {
 				var
-					baseClass = (instr.arg? idat.classNode(this._stack.pop()): null);
+					baseClass = (instr.arg? idat.classNode(this._stack.pop()): null),
 					classDataDict = idat.assocArray(this._stack.pop()),
 					className = idat.str(this._stack.pop());
 
-				this._stack.push(new DeclClass(className, classDataDict, baseClass));
+				this._stack.push(this._declClassFactory.makeClass(className, classDataDict, baseClass));
 				break;
 			}
 
