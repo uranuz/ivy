@@ -79,10 +79,7 @@ enum OpCode: ubyte
 	// Preparing and calling directives
 	MakeCallable,
 	RunCallable,
-	Await,
-
-	// Other stuff
-	MarkForEscape
+	Await
 }
 
 // Minimal element of bytecode is instruction opcode with optional arg

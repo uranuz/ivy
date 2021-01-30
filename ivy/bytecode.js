@@ -78,10 +78,7 @@ var
 		// Preparing and calling directives
 		'MakeCallable',
 		'RunCallable',
-		'Await',
-
-		// Other stuff
-		'MarkForEscape'
+		'Await'
 	],
 	EnumConsts = [
 		'OpCode'

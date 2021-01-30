@@ -530,9 +530,6 @@ public:
 
 		// After all preparations add instruction to call directive
 		addInstr(OpCode.RunCallable, CallSpec(posAttrCount, kwAttrCount > 0).encode());
-		//if( symb.bodyAttrs.isNoscope ) {
-		//	addInstr(OpCode.MarkForEscape, NodeEscapeState.Safe);
-		//}
 	}
 
 	void _visit(IDataFragmentStatement node)

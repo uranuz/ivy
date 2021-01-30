@@ -38,11 +38,8 @@ class Interpreter
 public:
 	alias LogerMethod = void delegate(LogInfo);
 
-	// Stack of execution frames with directives or modules local data
-	ExecutionFrame[] _frameStack;
-
-	// Storage for execution frames of imported modules
-	ExecutionFrame[string] _moduleFrames;
+	// LogWriter method used to send error and debug messages
+	LogerMethod _logerMethod;
 
 	// Storage for bytecode code and initial constant data for modules
 	ModuleObjectsCache _moduleObjCache;
@@ -51,13 +48,17 @@ public:
 
 	DeclClassFactory _declClassFactory;
 
+	// Storage for execution frames of imported modules
+	ExecutionFrame[string] _moduleFrames;
+
+	// Stack of execution frames with directives or modules local data
+	ExecutionFrame[] _frameStack;
+
 	ExecStack _stack;
 
-	// LogWriter method used to send error and debug messages
-	LogerMethod _logerMethod;
+	Instruction[] _codeRange; // Current code range we executing
 
 	size_t _pk; // Programme counter
-	Instruction[] _codeRange; // Current code range we executing
 
 	this(
 		ModuleObjectsCache moduleObjCache,
@@ -777,12 +778,6 @@ public:
 						this._stack.push(ivyError);
 					}
 				);
-				break;
-			}
-
-			case OpCode.MarkForEscape: {
-				import ivy.types.data: NodeEscapeState;
-				this._stack.back.escapeState = cast(NodeEscapeState) instr.arg;
 				break;
 			}
 		} // switch

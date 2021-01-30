@@ -46,14 +46,15 @@ function Interpreter(
 ) {
 	this._log = new LogProxy();
 
-	this._frameStack = [];
-	this._moduleFrames = {};
 	this._moduleObjCache = moduleObjCache;
 	this._directiveFactory = directiveFactory;
 	this._declClassFactory = new DeclClassFactory();
+	this._moduleFrames = {};
+
+	this._frameStack = [];
 	this._stack = new ExecStack();
-	this._pk = 0;
 	this._codeRange = [];
+	this._pk = 0;
 
 	this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(globalCallable);
 
@@ -667,13 +668,6 @@ function Interpreter(
 				return; // Wait for resuming execution
 			}
 
-			case OpCode.MarkForEscape: {
-				this.log.internalAssert(
-					instr.arg < DataConsts.NodeEscapeStateItems.length,
-					"Incorrect escape state provided");
-				this._stack.back.escapeState = instr.arg;
-				break;
-			}
 			default: this.log.internalError("Unexpected opcode!!!");
 		} // switch
 		++(this._pk);
