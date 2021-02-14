@@ -7,7 +7,6 @@ class ModuleSymbol: ICallableSymbol
 	import trifle.location: Location;
 	
 	import ivy.types.symbol.dir_attr: DirAttr;
-	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 	import ivy.types.symbol.consts: SymbolKind;
 
 	import std.exception: enforce;
@@ -46,10 +45,6 @@ public:
 
 		DirAttr getAttr(string attrName) {
 			assert(false, `Module symbol has no attributes`);
-		}
-
-		DirBodyAttrs bodyAttrs() @property {
-			return DirBodyAttrs.init;
 		}
 
 		JSONValue toStdJSON() @property {

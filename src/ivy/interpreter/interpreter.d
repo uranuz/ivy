@@ -3,15 +3,6 @@ module ivy.interpreter.interpreter;
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyInterpreterDebug;
 
-struct InterpDirAttr
-{
-	import ivy.types.data: IvyData;
-	import ivy.types.symbol.dir_attr: DirAttr;
-
-	DirAttr attr;
-	IvyData defaultValue;
-}
-
 class Interpreter
 {
 	import ivy.types.code_object: CodeObject;
@@ -32,6 +23,7 @@ class Interpreter
 	import ivy.bytecode: Instruction, OpCode;
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.global: GLOBAL_SYMBOL_NAME;
+	import ivy.types.symbol.iface.callable: ICallableSymbol;
 	import ivy.interpreter.directive.global: globalCallable;
 	import ivy.log: LogInfo;
 
@@ -82,57 +74,50 @@ public:
 		}
 	}
 
-	AsyncResult execLoop() 
+	enum LoopAction: byte
 	{
-		AsyncResult fResult = new AsyncResult;
-		CodeObject codeObject = this.currentCodeObject;
-		this.log.internalAssert(codeObject !is null, "Expected current code object to run");
-
-		this._codeRange = codeObject.instrs[];
-		this.setJump(0);
-		try {
-			this.execLoopImpl(fResult);
-		} catch(Throwable ex) {
-			debug {
-				import std.stdio: writeln;
-				import std.array: join;
-				writeln("ERROR: ", this.callStackInfo.join("\n\n"));
-			}
-			fResult.reject(ex);
-		}
-		return fResult;
+		skipPKIncr, // Do not increment pk after loop body execution
+		normal, // Increment pk after loop body execution
+		await // Increment pk after loop body execution and await
 	}
 
-	void execLoopImpl(AsyncResult fResult, size_t exitFrames = 1)
+	void execLoop(AsyncResult fResult)
 	{
-		while( true )
+		import std.range: empty;
+
+		while( !this._frameStack.empty )
 		{
 			while( this._pk < this._codeRange.length )
-				this.execLoopBody();
+			{
+				LoopAction la = this.execLoopBody();
+				if( la == LoopAction.skipPKIncr )
+					continue;
+				++this._pk;
+				if( la == LoopAction.await )
+					return;
+			}
 
 			// We expect to have only the result of directive on the stack
 			this.log.internalAssert(this._stack.length == 1, "Exec stack should contain 1 item now");
 
-			// If there is the last frame it means that it is the last module frame.
-			// We need to leave frame here for case when we want to execute specific function of module
-			if( this._frameStack.length <= exitFrames )
-				break;
-
 			IvyData result = this._stack.pop(); // Take result
 			this.removeFrame(); // Exit out of this frame
 
-			CodeObject codeObject = this.currentCodeObject;
-			this.log.internalAssert(codeObject !is null, "Expected code object");
+			// If there is the last frame it means that it is the last module frame.
+			// We need to leave frame here for case when we want to execute specific function of module
+			if( this._frameStack.empty )
+			{
+				fResult.resolve(result);
+				return;
+			}
 
-			this._codeRange = codeObject.instrs[]; // Set old instruction range back
+			this._codeRange = this.currentCodeObject.instrs[]; // Set old instruction range back
 			this.setJump(this._stack.pop().integer);
 			this._stack.push(result); // Put result back
 		}
-
-		fResult.resolve(this._stack.back);
 	}
 
-	void execLoopBody()
+	LoopAction execLoopBody()
 	{
 		import std.range: empty, back, popBack;
 		import std.conv: to, text;
@@ -633,7 +618,7 @@ public:
 				if( jumpCond )
 				{
 					this.setJump(instr.arg);
-					return; // Skip _pk increment
+					return LoopAction.skipPKIncr;
 				}
 				break;
 			}
@@ -641,7 +626,7 @@ public:
 			case OpCode.Jump:
 			{
 				this.setJump(instr.arg);
-				return; // Skip _pk increment
+				return LoopAction.skipPKIncr;
 			}
 
 			case OpCode.Return:
@@ -652,7 +637,7 @@ public:
 				// Erase all from the current stack
 				this._stack.popN(this._stack.length);
 				this._stack.push(result); // Put result on the stack
-				return; // Skip _pk increment
+				return LoopAction.skipPKIncr;
 			}
 
 			case OpCode.GetDataRange:
@@ -710,7 +695,7 @@ public:
 			case OpCode.ImportModule:
 			{
 				if( this.runImportModule(this._stack.pop().str) )
-					return; // Skip _pk increment
+					return LoopAction.skipPKIncr;
 				break;
 			}
 
@@ -754,7 +739,7 @@ public:
 			{
 				this.log.write("RunCallable stack on init: : ", this._stack);
 				if( this.runCallableNode(this._stack.pop(), CallSpec(instr.arg)) )
-					return; // Skip _pk increment
+					return LoopAction.skipPKIncr;
 				break;
 			}
 
@@ -779,12 +764,12 @@ public:
 					}
 				);
 				break;
+				//return LoopAction.await;
 			}
 		} // switch
 
-		++this._pk;
+		return LoopAction.normal;
 	} // execLoopBody
-
 
 	auto log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)
 	{
@@ -819,21 +804,11 @@ public:
 		return this._frameStack.back;
 	}
 
-	/++ Returns nearest independent execution frame that is not marked `noscope`+/
-	ExecutionFrame independentFrame() @property
+	/++ Returns previous execution frame +/
+	ExecutionFrame previousFrame() @property
 	{
-		import std.range: empty;
-		this.log.internalAssert(!this._frameStack.empty, "Execution frame stack is empty!");
-
-		for( size_t i = this._frameStack.length; i > 0; --i )
-		{
-			ExecutionFrame frame = this._frameStack[i-1];
-			if( frame.hasOwnScope ) {
-				return frame;
-			}
-		}
-		this.log.internalError("Cannot get current independent execution frame!");
-		assert(false);
+		this.log.internalAssert(this._frameStack.length > 1, "No previous execution frame exists!");
+		return this._frameStack[$-2];
 	}
 
 	ICallableObject currentCallable() @property {
@@ -976,38 +951,27 @@ public:
 	// Returns execution frame for variable
 	ExecutionFrame findValueFrameImpl(bool globalSearch = false)(string varName)
 	{
-		import std.range: back;
 		this.log.write("Starting to search for variable: ", varName);
 
-		for( size_t i = this._frameStack.length; i > 0; --i )
-		{
-			ExecutionFrame frame = this._frameStack[i-1];
+		ExecutionFrame currFrame = this.currentFrame;
 
-			if( frame.hasValue(varName) ) {
-				return frame;
-			}
-
-			static if( globalSearch )
-			{
-				ExecutionFrame modFrame = this._getModuleFrame(frame.callable);
-				if( modFrame.hasValue(varName) ) {
-					return modFrame;
-				}
-			}
-
-			if( frame.hasOwnScope ) {
-				break;
-			}
+		if( currFrame.hasValue(varName) ) {
+			return currFrame;
 		}
 
 		static if( globalSearch )
 		{
+			ExecutionFrame modFrame = this._getModuleFrame(currFrame.callable);
+			if( modFrame.hasValue(varName) ) {
+				return modFrame;
+			}
+
 			if( this.globalFrame.hasValue(varName) ) {
 				return this.globalFrame;
 			}
 		}
 		// By default store vars in local frame
-		return this._frameStack.back;
+		return currFrame;
 	}
 
 	IvyData getValue(string varName) {
@@ -1073,7 +1037,8 @@ public:
 					defValPtr !is null,
 					"Expected value for attr: ",
 					attr.name,
-					", that has no default value"
+					", that has no default value for callable: ",
+					callable.symbol.name
 				);
 				callArgs[attr.name] = deeperCopy(*defValPtr);
 			}
@@ -1090,21 +1055,8 @@ public:
 		return callArgs;
 	}
 
-	bool runCallableNode(IvyData callableNode, CallSpec callSpec)
-	{
-		ICallableObject callable;
-		if( callableNode.type == IvyDataType.ClassNode )
-		{
-			// If class node passed there, then we shall get callable from it by calling "__call__"
-			callable = callableNode.classNode.__call__();
-		}
-		else
-		{
-			// Else we expect that callable passed here
-			callable = callableNode.callable;
-		}
-
-		return this._runCallableImpl(callable, null, callSpec); // Skip _pk increment
+	bool runCallableNode(IvyData callableNode, CallSpec callSpec) {
+		return this._runCallableImpl(this.asCallable(callableNode), null, callSpec); // Skip _pk increment
 	}
 
 	bool runCallable(ICallableObject callable, IvyData[string] kwAttrs = null) {
@@ -1152,60 +1104,52 @@ public:
 	AsyncResult importModule(string moduleName)
 	{
 		AsyncResult fResult = new AsyncResult();
-		try {
-			this.runImportModule(moduleName);
-			this.execLoopImpl(fResult, 1);
+		try
+		{
+			if( this.runImportModule(moduleName) )
+				// Need to run interpreter to import module
+				this.execLoop(fResult);
+			else
+				// Module is imported already. Just return it
+				fResult.resolve(this._stack.back);
 		} catch( Throwable ex ) {
 			fResult.reject(ex);
 		}
 		return fResult;
 	}
 
-	AsyncResult execModuleDirective(string name, IvyData[string] kwArgs = null)
+	AsyncResult execCallable(ICallableObject callable, IvyData[string] kwArgs = null)
 	{
-		// Find desired directive by name in current module frame
-		ICallableObject callable = this.currentFrame.getValue(name).callable;
-
 		this.log.internalAssert(this._stack.length < 2, "Expected 0 or 1 items in stack!");
-		if( this._stack.length == 1 ) {
-			this._stack.pop(); // Drop old result from stack
-		}
+		// Clear stack
+		this._stack.popN(this._stack.length);
 
 		AsyncResult fResult = new AsyncResult();
 		try {
 			this.runCallable(callable, kwArgs);
-			this.execLoopImpl(fResult, 2);
+			this.execLoop(fResult);
 		} catch( Throwable ex ) {
 			fResult.reject(ex);
 		}
 		return fResult;
 	}
 
-	InterpDirAttr[string] getDirAttrs(string name, string[] attrNames = null)
+
+	static ICallableObject asCallable(IvyData callableNode)
 	{
-		import std.range: empty;
-		import std.algorithm: canFind;
+		// If class node passed there, then we shall get callable from it by calling "__call__"
+		if( callableNode.type == IvyDataType.ClassNode )
+			return callableNode.classNode.__call__();
 
-		ICallableObject callable = this.currentFrame.getValue(name).callable;
-		DirAttr[] attrs = callable.symbol.attrs;
-		IvyData[string] defaults = callable.defaults;
-		InterpDirAttr[string] res;
-
-		for( size_t i = 0; i < attrs.length; ++i )
-		{
-			DirAttr attr = attrs[i];
-			if( attrNames.length && !attrNames.canFind(attr.name) ) {
-				continue;
-			}
-			InterpDirAttr ida;
-			ida.attr = attr;
-			if( auto defValPtr = attr.name in defaults ) {
-				ida.defaultValue = *defValPtr;
-			}
-			res[attr.name] = ida;
+		/*
+		debug {
+			import std.stdio;
+			writeln("CALLABLE: ", callableNode);
 		}
+		*/
 
-		return res;
+		// Else we expect that callable passed here
+		return callableNode.callable;
 	}
 }
 

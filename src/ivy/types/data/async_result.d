@@ -7,25 +7,19 @@ class AsyncResult
 {
 	alias CalbackMethod = void delegate(IvyData data);
 	alias ErrbackMethod = void delegate(Throwable error);
+
 	void then(CalbackMethod doneFn, ErrbackMethod failFn = null)
 	{
 		if( doneFn !is null )
-		{
-			if( _state == AsyncResultState.resolved ) {
-				doneFn(_value);
-			} else {
-				_callbacks ~= doneFn;
-			}
-		}
-
+			this._callbacks ~= doneFn;
 		if( failFn !is null )
-		{
-			if( _state == AsyncResultState.rejected ) {
-				failFn(_error);
-			} else {
-				_errbacks ~= failFn;
-			}
-		}
+			this._errbacks ~= failFn;
+
+		// If already resolved or rejected then notify immediately
+		if( this.isResolved )
+			this._resolveImpl();
+		else if( this.isRejected )
+			this._rejectImpl();
 	}
 
 	void then(AsyncResult other)
@@ -39,19 +33,15 @@ class AsyncResult
 		this.then(null, failFn);
 	}
 
-	void resolve(IvyData value)
+	void resolve(IvyData value = IvyData())
 	{
-		if( _state != AsyncResultState.pending )
+		if( !this.isPending )
 			return; // Already resolved or rejected
 
-		_state = AsyncResultState.resolved;
-		_value = value;
+		this._state = AsyncResultState.resolved;
+		this._value = value;
 
-		foreach( fn; _callbacks ) {
-			fn(_value);
-		}
-
-		_callbacks.length = 0;
+		this._resolveImpl();
 	}
 
 	void reject(Throwable error)
@@ -59,21 +49,47 @@ class AsyncResult
 		if( error is null )
 			return; // No error - no problemmes
 
-		if( _state != AsyncResultState.pending )
+		if( !this.isPending )
 			return; // Already resolved or rejected
 
-		_state = AsyncResultState.rejected;
-		_error = error;
+		this._state = AsyncResultState.rejected;
+		this._error = error;
 
-		foreach( fn; _errbacks ) {
-			fn(_error);
-		}
-
-		_errbacks.length = 0;
+		this._rejectImpl();
 	}
 
 	AsyncResultState state() @property {
-		return _state;
+		return this._state;
+	}
+
+	bool isPending() @property {
+		return this.state == AsyncResultState.pending;
+	}
+
+	bool isResolved() @property {
+		return this.state == AsyncResultState.resolved;
+	}
+
+	bool isRejected() @property {
+		return this.state == AsyncResultState.rejected;
+	}
+
+	private void _resolveImpl()
+	{
+		foreach( fn; this._callbacks )
+			fn(this._value);
+
+		// Remove all notified subscribers from list after notification
+		this._callbacks.length = 0;
+	}
+
+	private void _rejectImpl()
+	{
+		foreach( fn; this._errbacks )
+			fn(this._error);
+
+		// Remove all notified subscribers from list after notification
+		this._errbacks.length = 0;
 	}
 
 private:

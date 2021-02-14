@@ -2,7 +2,11 @@ module ivy.types.symbol.consts;
 
 enum IvyAttrType: string
 {
-	Any = "any"
+	Any = "any",
+	Str = "str",
+	Int = "int",
+	Bool = "bool",
+	Float = "float"
 }
 
 static immutable GLOBAL_SYMBOL_NAME = "__global__";

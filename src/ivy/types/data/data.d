@@ -93,7 +93,7 @@ struct TIvyData(S)
 	}
 
 	IClassNode classNode() @property
-	{
+{
 		enforce!DataNodeException(type == IvyDataType.ClassNode, "IvyData is not class node");
 		enforce!DataNodeException(storage.classNode !is null, "Detected null class node");
 		return storage.classNode;

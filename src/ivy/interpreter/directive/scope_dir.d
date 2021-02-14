@@ -4,17 +4,11 @@ import ivy.interpreter.directive.utils;
 
 class ScopeDirInterpreter: BaseDirectiveInterpreter
 {
-	this()
-	{
-		DirBodyAttrs bodyAttrs;
-		bodyAttrs.isNoscope = true;
-		bodyAttrs.isNoescape = false;
-		this._symbol = new DirectiveSymbol("scope", null, bodyAttrs);
+	this(){
+		this._symbol = new DirectiveSymbol("scope");
 	}
 
-	override void interpret(Interpreter interp)
-	{
-		interp.log.internalAssert(interp.independentFrame, "Current frame is null!");
-		interp._stack.push(interp.independentFrame._dataDict);
+	override void interpret(Interpreter interp) {
+		interp._stack.push(interp.previousFrame._dataDict);
 	}
 }

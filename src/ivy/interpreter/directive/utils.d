@@ -8,4 +8,3 @@ public import ivy.types.data: IvyData, IvyDataType, NodeEscapeState;
 
 public import ivy.types.symbol.directive: DirectiveSymbol;
 public import ivy.types.symbol.dir_attr: DirAttr, IvyAttrType;
-public import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;

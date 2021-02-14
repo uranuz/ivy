@@ -9,7 +9,6 @@ class DeclClassSymbol: ICallableSymbol
 	import trifle.location: Location;
 
 	import ivy.types.symbol.dir_attr: DirAttr;
-	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 	import ivy.types.symbol.consts: SymbolKind;
 
 private:
@@ -44,10 +43,6 @@ override
 
 	DirAttr getAttr(string attrName) {
 		return this.initSymbol.getAttr(attrName);
-	}
-
-	DirBodyAttrs bodyAttrs() @property {
-		return this.initSymbol.bodyAttrs;
 	}
 
 	JSONValue toStdJSON() @property

@@ -48,7 +48,7 @@ class DeclClassCompiler: IDirectiveCompiler
 				collector.log.error("Expected \"init\" symbol");
 
 			// Add "__new__" symbol to class body scope. Copy "__init__" attrs to "__new__"
-			DirectiveSymbol newClassSymbol = new DirectiveSymbol("__new__", classBodyStmt.location, initSymbol.attrs, initSymbol.bodyAttrs);
+			DirectiveSymbol newClassSymbol = new DirectiveSymbol("__new__", classBodyStmt.location, initSymbol.attrs);
 			collector._frameStack.back.newChildFrame(newClassSymbol);
 
 			classSymbol.initSymbol = initSymbol;
@@ -131,7 +131,7 @@ class DeclClassCompiler: IDirectiveCompiler
 
 				// Load name of "__init__" function
 				compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData("__init__") ));
-				// No we have newly allocated class instance and name of "__init__" before it on the stack...
+				// Now we have newly allocated class instance and name of "__init__" before it on the stack...
 				// We shall get "__init__" function of class instance
 				compiler.addInstr(OpCode.LoadAttr);
 

@@ -34,7 +34,7 @@ struct InterpreterLogProxy
 			instrLine = interp.currentInstrLine();
 
 			// Put name of module and line where event occured
-			msg = "Ivy module: " ~ moduleName ~ ":" ~ instrLine.text ~ ", OpCode: " ~ interp.currentOpCode().text ~ "\n" ~ msg;
+			msg = "Ivy module: " ~ moduleName ~ ":" ~ instrLine.text ~ ", OpCode: " ~ interp.currentOpCode().text ~ " (pk: " ~ interp._pk.text ~ ")" ~  "\n" ~ msg;
 
 			debug {
 				if( [LogInfoType.error, LogInfoType.internalError].canFind(logInfoType) )

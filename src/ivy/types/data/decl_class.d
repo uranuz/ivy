@@ -2,39 +2,6 @@ module ivy.types.data.decl_class;
 
 import ivy.types.data.base_class_node: BaseClassNode;
 
-/++
-class DataSource {=
-
-def this {=
-	var
-		uri
-		method;
-	do {=
-		set this._uri: 
-		set this._method;
-	}
-};
-
-def list {=
-	var
-		data;
-	do {=
-		var res: {=await {=remoteCall this._uri this._method data} };
-		return res.items;
-	}
-};
-
-};
-
-def MyComponent {=
-	var
-		dataSource: {=DataSource 'http://somewhere.com/api' 'test.do'}
-}
-
-{=call DataSource {}}
-
-+/
-
 class DeclClass: BaseClassNode
 {
 	import ivy.types.data: IvyData, IvyDataType;
@@ -62,6 +29,11 @@ public:
 		// Bind all callables to this class
 		foreach( it; this._getThisMethods() )
 			this._dataDict[it.name] = new BindedCallable(it.callable, IvyData(this));
+
+		// Workaround. Put default values from __init__ to __new__
+		ICallableObject initCallable = this.__getAttr__("__init__").callable;
+		ICallableObject newCallable = this.__call__();
+		newCallable.defaults = initCallable.defaults;
 	}
 
 override {

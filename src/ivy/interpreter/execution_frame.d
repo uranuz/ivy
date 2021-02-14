@@ -52,10 +52,6 @@ public:
 		this._dataDict[varName] = value;
 	}
 
-	bool hasOwnScope() @property {
-		return !this._callable.symbol.bodyAttrs.isNoscope;
-	}
-
 	ICallableObject callable() @property
 	{
 		enf(this._callable !is null, "No callable for global execution frame");

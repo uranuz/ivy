@@ -7,7 +7,6 @@ class DirectiveSymbol: ICallableSymbol
 	import trifle.location: Location;
 
 	import ivy.types.symbol.dir_attr: DirAttr;
-	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 	import ivy.types.symbol.consts: SymbolKind;
 
 	import std.exception: enforce;
@@ -17,27 +16,25 @@ private:
 	string _name;
 	Location _loc;
 	DirAttr[] _attrs;
-	DirBodyAttrs _bodyAttrs;
 
 	size_t[string] _attrIndexes;
 
 public:
-	this(string name, Location loc, DirAttr[] attrs = null, DirBodyAttrs bodyAttrs = DirBodyAttrs.init)
+	this(string name, Location loc, DirAttr[] attrs = null)
 	{
 		this._name = name;
 		this._loc = loc;
 		this._attrs = attrs;
-		this._bodyAttrs = bodyAttrs;
 
 		enforce(this._name.length > 0, `Expected directive symbol name`);
 		this._reindexAttrs();
 	}
 
-	this(string name, DirAttr[] attrs = null, DirBodyAttrs bodyAttrs = DirBodyAttrs.init)
+	this(string name, DirAttr[] attrs = null)
 	{
 		import ivy.types.symbol.global: globalSymbol;
 		
-		this(name, globalSymbol.location, attrs, bodyAttrs);
+		this(name, globalSymbol.location, attrs);
 	}
 
 	private void _reindexAttrs()
@@ -74,10 +71,6 @@ public:
 			return this._attrs[*idxPtr];
 		}
 
-		DirBodyAttrs bodyAttrs() @property {
-			return this._bodyAttrs;
-		}
-
 		JSONValue toStdJSON() @property
 		{
 			import std.algorithm: map;
@@ -85,8 +78,7 @@ public:
 
 			return JSONValue([
 				"name": JSONValue(this._name),
-				"attrs": JSONValue(map!((attr) => attr.toStdJSON())(this._attrs).array),
-				"bodyAttrs": this._bodyAttrs.toStdJSON()
+				"attrs": JSONValue(map!((attr) => attr.toStdJSON())(this._attrs).array)
 			]);
 		}
 	}

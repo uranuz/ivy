@@ -3,6 +3,9 @@ module ivy.engine;
 /// Dump-simple in-memory cache for compiled programmes
 class IvyEngine
 {
+	import ivy.types.data: IvyData;
+	import ivy.types.data.async_result: AsyncResult;
+	import ivy.interpreter.interpreter: Interpreter;
 	import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
 	import ivy.interpreter.directive.standard_factory: makeStandardInterpreterDirFactory;
 	import ivy.engine_config: IvyConfig;
@@ -10,9 +13,14 @@ class IvyEngine
 	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
 	import ivy.compiler.compiler: ByteCodeCompiler;
 	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-	import ivy.programme: ExecutableProgramme;
 	import ivy.log.info: LogInfo;
 	import ivy.log.consts: LogInfoType;
+
+	static struct SaveStateResult
+	{
+		Interpreter interp;
+		AsyncResult asyncResult;
+	}
 
 private:
 	IvyConfig _config;
@@ -31,23 +39,24 @@ public:
 
 		enforce(!!config.importPaths.length, `List of compiler import paths must not be empty!`);
 
-		_mutex = new Mutex();
-		_config = config;
-		_initObjects();
+		this._mutex = new Mutex();
+		this._config = config;
+		this._initObjects();
 	}
 
-	/// Generate programme object or get existing from cache (if cache enabled)
-	ExecutableProgramme getByModuleName(string moduleName)
+	/// Load module by name into engine
+	AsyncResult loadModule(string moduleName)
 	{
+		AsyncResult fResult = new AsyncResult();
 		synchronized(_mutex)
 		{
-			if( _config.clearCache ) {
-				clearCache();
+			if( this._config.clearCache ) {
+				this.clearCache();
 			}
 
-			if( !_moduleObjCache.get(moduleName) )
+			if( !this._moduleObjCache.get(moduleName) )
 			{
-				_compiler.run(moduleName); // Run compilation itself
+				this._compiler.run(moduleName); // Run compilation itself
 
 				if( _config.compilerLoger ) {
 					debug _config.compilerLoger(LogInfo(
@@ -57,14 +66,61 @@ public:
 					));
 				}
 			}
+			fResult.resolve();
 		}
+		return fResult;
+	}
 
-		return new ExecutableProgramme(
-			moduleName,
+	SaveStateResult runModule(string moduleName, IvyData[string] extraGlobals = null)
+	{
+		auto interp = new Interpreter(
 			this._moduleObjCache,
 			this._config.directiveFactory,
-			_config.interpreterLoger
-		);
+			this._config.interpreterLoger);
+		
+		auto asyncResult = new AsyncResult();
+		auto res = SaveStateResult(interp, asyncResult);
+
+		this.loadModule(moduleName).then((it) {
+			interp.addExtraGlobals(extraGlobals);
+			interp.importModule(moduleName).then(asyncResult);
+		}, &asyncResult.reject);
+		return res;
+	}
+
+	AsyncResult runMethod(
+		string moduleName,
+		string methodName,
+		IvyData[string] methodParams = null,
+		IvyData[string] extraGlobals = null
+	) {
+		AsyncResult fResult = new AsyncResult();
+		SaveStateResult moduleExecRes = this.runModule(moduleName, extraGlobals);
+		
+		moduleExecRes.asyncResult.then(
+			(IvyData modRes) {
+				// Module executed successfuly, then call method
+				auto interp = moduleExecRes.interp;
+				auto methodCallable = interp.asCallable(modRes.execFrame.getValue(methodName));
+				interp.execCallable(methodCallable, methodParams).then(fResult);
+			},
+			&fResult.reject);
+		return fResult;
+	}
+
+	import std.json: JSONValue;
+	JSONValue serializeModule(string moduleName)
+	{
+		import std.algorithm: map;
+		import std.array: array;
+
+		// At first assure that module is loaded...
+		this.loadModule(moduleName);
+
+		return JSONValue([
+			"mainModuleName": JSONValue(moduleName),
+			"moduleObjects": JSONValue(map!((modObj) => modObj.toStdJSON())(this._moduleObjCache.moduleObjects.byValue).array)
+		]);
 	}
 
 	void clearCache()

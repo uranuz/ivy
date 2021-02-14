@@ -11,7 +11,6 @@ class DefCompiler: IDirectiveCompiler
 	import ivy.types.symbol.iface: IIvySymbol;
 	import ivy.types.symbol.directive: DirectiveSymbol;
 	import ivy.types.symbol.dir_attr: DirAttr;
-	import ivy.types.symbol.dir_body_attrs: DirBodyAttrs;
 
 	import ivy.ast.iface:
 		IExpression,
@@ -28,12 +27,6 @@ public:
 	{
 		DirAttr attr;
 		IExpression defaultValueExpr;
-	}
-
-	static struct CompilerDirBodyAttrs
-	{
-		DirBodyAttrs attr;
-		ICompoundStatement statement;
 	}
 
 	override void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector)
@@ -68,7 +61,7 @@ public:
 			collector.log.error("Expected directive body, but got end of input");
 
 		{
-			CompilerDirBodyAttrs res = _analyzeDirBody(defStmtRange.front, collector);
+			ICompoundStatement bodyStmt = _analyzeDirBody(defStmtRange.front, collector);
 			defStmtRange.popFront();
 
 			if( collector._frameStack.empty )
@@ -78,25 +71,14 @@ public:
 			collector.log.write(`oldScope: `, oldScope.toPrettyStr());
 
 			// Add directive definition into existing frame
-			DirectiveSymbol symb = new DirectiveSymbol(dirNameExpr.name, stmt.location, attrs, res.attr);
+			DirectiveSymbol symb = new DirectiveSymbol(dirNameExpr.name, stmt.location, attrs);
 
-			if( !res.attr.isNoscope )
-			{
-				// Create new frame for body if not forbidden
-				collector._frameStack ~= oldScope.newChildFrame(symb);
-			} else {
-				oldScope.add(symb);
-			}
-
-			scope(exit)
-			{
-				if( !res.attr.isNoscope ) {
-					collector.exitScope();
-				}
-			}
+			// Create new frame for body
+			collector._frameStack ~= oldScope.newChildFrame(symb);
+			scope(exit) collector.exitScope();
 
 			// Analyse nested tree
-			res.statement.accept(collector);
+			bodyStmt.accept(collector);
 		}
 
 		if( !defStmtRange.empty )
@@ -152,7 +134,7 @@ public:
 			compiler.log.error("Expected directive body, but got end of input");
 
 		{
-			CompilerDirBodyAttrs res = _analyzeDirBody(defStmtRange.front, compiler);
+			ICompoundStatement bodyStmt = _analyzeDirBody(defStmtRange.front, compiler);
 			defStmtRange.popFront();
 
 			DirectiveSymbol dirSymbol = cast(DirectiveSymbol) compiler.symbolLookup(dirNameExpr.name);
@@ -162,24 +144,15 @@ public:
 			size_t codeObjIndex;
 			// Compilation of CodeObject itself
 			{
-				if( !res.attr.isNoscope )
-				{
-					// Compiler should enter frame of directive body, identified by index in source code
-					compiler._symbolsCollector.enterScope(stmt.location);
-				}
-
-				scope(exit)
-				{
-					if( !res.attr.isNoscope ) {
-						compiler._symbolsCollector.exitScope();
-					}
-				}
+				// Compiler should enter frame of directive body, identified by index in source code
+				compiler._symbolsCollector.enterScope(stmt.location);
+				scope(exit) compiler._symbolsCollector.exitScope();
 
 				codeObjIndex = compiler.enterNewCodeObject(dirSymbol); // Creating code object
 				scope(exit) compiler.exitCodeObject();
 
 				// Generating code for body
-				res.statement.accept(compiler);
+				bodyStmt.accept(compiler);
 			}
 
 			// Add instruction to load code object from module constants
@@ -248,41 +221,22 @@ public:
 	}
 
 
-	CompilerDirBodyAttrs _analyzeDirBody(Compiler)(IDirectiveStatement bodyDefStmt, Compiler compiler)
+	ICompoundStatement _analyzeDirBody(Compiler)(IDirectiveStatement bodyDefStmt, Compiler compiler)
 	{
 		import std.algorithm: canFind;
 
-		CompilerDirBodyAttrs res;
+		ICompoundStatement bodyStmt;
 
 		if( bodyDefStmt.name != "do" )
 			compiler.log.error(`Expected directive body, but got:`, bodyDefStmt.name);
 
 		IAttributeRange bodyStmtRange = bodyDefStmt[]; // Range on attributes of attributes definition statement
-
-		// Try to parse noscope and noescape flags
-		body_flags_loop:
-		while( !bodyStmtRange.empty )
-		{
-			INameExpression flagExpr = cast(INameExpression) bodyStmtRange.front;
-			if( flagExpr is null ) {
-				break;
-			}
-			bodyStmtRange.popFront();
-			switch( flagExpr.name )
-			{
-				case "noscope": res.attr.isNoscope = true; break;
-				case "noescape": res.attr.isNoescape = true; break;
-				default:
-					compiler.log.error("Unexpected directive body flag: ", flagExpr.name);
-			}
-		}
-
 		if( bodyStmtRange.empty )
 			compiler.log.error("Unexpected end of do directive!");
 
 		// Getting body AST for statement just for check if it is there
-		res.statement = cast(ICompoundStatement) bodyStmtRange.front;
-		if( !res.statement )
+		bodyStmt = cast(ICompoundStatement) bodyStmtRange.front;
+		if( !bodyStmt )
 			compiler.log.error("Expected compound statement as directive body statement");
 
 		bodyStmtRange.popFront(); // Need to consume body statement to behave correctly
@@ -290,6 +244,6 @@ public:
 		if( !bodyStmtRange.empty )
 			compiler.log.error("Expected end of directive body definition");
 
-		return res;
+		return bodyStmt;
 	}
 }
