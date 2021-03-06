@@ -5,8 +5,8 @@ version(IvyTotalDebug) version = IvyParserDebug;
 
 class Parser(R)
 {
-	import trifle.text_forward_range: TextForwardRange, GetSourceRangeConfig;
-	import trifle.location: LocationConfig, CustomizedLocation;
+	import trifle.text_forward_range: TextForwardRange;
+	import trifle.location: Location;
 
 	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 	import ivy.lexer.lexer: Lexer;
@@ -22,12 +22,9 @@ class Parser(R)
 public:
 
 	alias SourceRange = R;
-	enum LocationConfig config = GetSourceRangeConfig!R;
 	alias Char = Unqual!( ElementEncodingType!R );
 	alias String = immutable(Char)[];
-	alias LexemeT = Lexeme!(config);
-	alias LexerType = Lexer!(String, config);
-	alias CustLocation = CustomizedLocation!(config);
+	alias LexerType = Lexer!String;
 	alias ParserT = Parser!R;
 	alias LogerMethod = void delegate(LogInfo);
 
@@ -51,9 +48,9 @@ public:
 		return parseDirectiveStatement();
 	}
 
-	@property CustLocation currentLocation() //const
+	@property Location currentLocation() //const
 	{
-		CustLocation loc = lexer.front.loc;
+		Location loc = lexer.front.loc;
 		loc.fileName = fileName;
 
 		return loc;
@@ -149,7 +146,7 @@ public:
 		import std.array: array;
 		import std.conv: to;
 
-		CustLocation loc = this.currentLocation;
+		Location loc = this.currentLocation;
 
 		LexerType lexerCopy = lexer.save;
 
@@ -174,7 +171,7 @@ public:
 			return null;
 		}
 
-		return new KeyValueAttribute!(config)(loc, attrName, val);
+		return new KeyValueAttribute(loc, attrName, val);
 	}
 
 	IDirectiveStatement parseDirectiveStatement()
@@ -183,7 +180,7 @@ public:
 		import std.conv: to;
 
 		IDirectiveStatement stmt = null;
-		CustLocation loc = this.currentLocation;
+		Location loc = this.currentLocation;
 
 		log.write( "Starting to parse directive statement" );
 
@@ -230,7 +227,7 @@ public:
 				lexer.popFront(); //Skip optional Comma
 		}
 
-		stmt = new DirectiveStatement!(config)(loc, statementName, attrs);
+		stmt = new DirectiveStatement(loc, statementName, attrs);
 
 		return stmt;
 	}
@@ -243,7 +240,7 @@ public:
 
 		IExpression result;
 
-		//CustLocation loc = this.currentLocation;
+		//Location loc = this.currentLocation;
 
 		switch( lexer.front.typeIndex ) with(LexemeType)
 		{
@@ -297,7 +294,7 @@ public:
 	{
 		log.write( "Start parsing expression block" );
 
-		CustLocation blockLocation = this.currentLocation;
+		Location blockLocation = this.currentLocation;
 
 		if( !lexer.front.test(LexemeType.ExprBlockBegin) )
 			log.error(`Expected ExprBlockBegin`);
@@ -325,9 +322,9 @@ public:
 			log.error("Expected semicolon as directive statements delimiter");
 		lexer.popFront(); // Skip ExprBlockEnd
 
-		IDirectiveStatement dirStmt = new DirectiveStatement!(config)(blockLocation, "expr", attrs);
+		IDirectiveStatement dirStmt = new DirectiveStatement(blockLocation, "expr", attrs);
 
-		stmt = new CodeBlockStatement!(config)(blockLocation, [dirStmt], false );
+		stmt = new CodeBlockStatement(blockLocation, [dirStmt], false );
 
 		return stmt;
 	}
@@ -339,7 +336,7 @@ public:
 		ICodeBlockStatement statement;
 		IDirectiveStatement[] statements;
 
-		CustLocation blockLocation = this.currentLocation;
+		Location blockLocation = this.currentLocation;
 
 		if( !lexer.front.test([LexemeType.CodeBlockBegin, LexemeType.CodeListBegin, LexemeType.LBrace]) )
 			log.error( "Expected CodeBlockBegin, CodeListBegin or LBrace" );
@@ -379,7 +376,7 @@ public:
 			log.error("Expected CodeBlockEnd, CodeListEnd or RBrace");
 		lexer.popFront(); //Skip RBrace
 
-		statement = new CodeBlockStatement!(config)( blockLocation, statements, beginLexemeType != LexemeType.CodeBlockBegin );
+		statement = new CodeBlockStatement( blockLocation, statements, beginLexemeType != LexemeType.CodeBlockBegin );
 
 		return statement;
 	}
@@ -394,7 +391,7 @@ public:
 
 		IStatement[] statements;
 
-		CustLocation loc = this.currentLocation;
+		Location loc = this.currentLocation;
 
 		if( !lexer.front.test( LexemeType.MixedBlockBegin ) )
 			log.error("Expected MixedBlockBegin");
@@ -402,7 +399,7 @@ public:
 
 		while( !lexer.empty && !lexer.front.test(LexemeType.MixedBlockEnd) )
 		{
-			CustLocation itemLoc = this.currentLocation;
+			Location itemLoc = this.currentLocation;
 
 			switch( lexer.front.typeIndex )
 			{
@@ -419,7 +416,7 @@ public:
 				case LexemeType.Data:
 				{
 					string data = lexer.frontValue().array.to!string;
-					statements ~= new DataFragmentStatement!(config)(itemLoc, data);
+					statements ~= new DataFragmentStatement(itemLoc, data);
 					lexer.popFront();
 					break;
 				}
@@ -432,7 +429,7 @@ public:
 			log.error("Expected MixedBlockEnd");
 		lexer.popFront(); //Skip MixedBlockEnd
 
-		statement = new MixedBlockStatement!(config)(loc, statements);
+		statement = new MixedBlockStatement(loc, statements);
 
 		return statement;
 	}
@@ -461,7 +458,7 @@ public:
 
 		log.write("Start parsing assoc array literal");
 		IExpression expr;
-		CustLocation loc = this.currentLocation;
+		Location loc = this.currentLocation;
 
 		if( !lexer.front.test(LexemeType.LBrace) )
 			log.error("Expected LBrace as beginning of assoc array literal!");
@@ -472,7 +469,7 @@ public:
 
 		while( !lexer.empty && !lexer.front.test(LexemeType.RBrace) )
 		{
-			CustLocation aaPairLoc = this.currentLocation;
+			Location aaPairLoc = this.currentLocation;
 			string aaKey;
 
 			if( lexer.front.test(LexemeType.String) )
@@ -498,7 +495,7 @@ public:
 			if( !valueExpr )
 				log.error("Expected assoc array value expression but got null");
 
-			assocPairs ~= new AssocArrayPair!(config)(loc, aaKey, valueExpr);
+			assocPairs ~= new AssocArrayPair(loc, aaKey, valueExpr);
 
 			if( lexer.front.test(LexemeType.RBrace) )
 				break;
@@ -513,7 +510,7 @@ public:
 			log.error("Expected right brace, closing assoc array literal!");
 		lexer.popFront(); // Skip right curly brace
 
-		expr = new AssocArrayLiteralExp!(config)(loc, assocPairs);
+		expr = new AssocArrayLiteralExp(loc, assocPairs);
 
 		return expr;
 	}
@@ -525,7 +522,7 @@ public:
 		import std.array: array;
 
 		IExpression expr;
-		CustLocation loc = this.currentLocation;
+		Location loc = this.currentLocation;
 
 		log.write( "Parsing of primary expression" );
 		switch( lexer.front.typeIndex ) with( LexemeType )
@@ -538,22 +535,22 @@ public:
 
 				if( frontValue.save.equal("undef") )
 				{
-					expr = new UndefExp!(config)(loc);
+					expr = new UndefExp(loc);
 					lexer.popFront();
 				}
 				else if( frontValue.save.equal("null") )
 				{
-					expr = new NullExp!(config)(loc);
+					expr = new NullExp(loc);
 					lexer.popFront();
 				}
 				else if( frontValue.save.equal("true") )
 				{
-					expr = new BooleanExp!(config)(loc, true);
+					expr = new BooleanExp(loc, true);
 					lexer.popFront();
 				}
 				else if( frontValue.save.equal("false") )
 				{
-					expr = new BooleanExp!(config)(loc, false);
+					expr = new BooleanExp(loc, false);
 					lexer.popFront();
 				}
 				else
@@ -577,7 +574,7 @@ public:
 						lexer.popFront();
 					}
 
-					expr = new IdentifierExp!(config)( loc, new Identifier(identName) );
+					expr = new IdentifierExp( loc, new Identifier(identName) );
 				}
 
 				break;
@@ -586,7 +583,7 @@ public:
 			{
 				log.write("Start parsing of integer literal");
 				//log.write("lexer.frontValue.array: ", lexer.frontValue.array);
-				expr = new IntegerExp!(config)(loc, lexer.frontValue.array.to!IntegerType);
+				expr = new IntegerExp(loc, lexer.frontValue.array.to!IntegerType);
 				lexer.popFront();
 
 				break;
@@ -595,7 +592,7 @@ public:
 			{
 				log.write("Start parsing of float literal");
 				//log.write("lexer.frontValue.array: ", lexer.frontValue.array);
-				expr = new FloatExp!(config)(loc, lexer.frontValue.array.to!FloatType);
+				expr = new FloatExp(loc, lexer.frontValue.array.to!FloatType);
 				lexer.popFront();
 
 				break;
@@ -605,7 +602,7 @@ public:
 				log.write("Start parsing of string literal");
 				string escapedStr = parseQuotedString();
 
-				expr = new StringExp!(config)(loc, escapedStr);
+				expr = new StringExp(loc, escapedStr);
 
 				break;
 			}
@@ -655,7 +652,7 @@ public:
 					log.error("Expected right bracket, closing array literal!");
 				lexer.popFront(); // Skip RBracket
 
-				expr = new ArrayLiteralExp!(config)(loc, values);
+				expr = new ArrayLiteralExp(loc, values);
 
 				break;
 			}
@@ -693,7 +690,7 @@ public:
 		import std.conv: to;
 
 		IExpression expr;
-		CustLocation loc = this.currentLocation;
+		Location loc = this.currentLocation;
 
 		log.write( "Parsing post expression for primary expression" );
 
@@ -744,7 +741,7 @@ public:
 					log.error("Expected right paren");
 				lexer.popFront();
 
-				expr = new CallExp!(config)(loc, preExpr, argList);
+				expr = new CallExp(loc, preExpr, argList);
 				break;
 			}
 			case LBracket:
@@ -767,7 +764,7 @@ public:
 				}
 				lexer.popFront(); // Skip RBracket
 
-				expr = new ArrayIndexExp!(config)(loc, preExpr, indexExpr);
+				expr = new ArrayIndexExp(loc, preExpr, indexExpr);
 
 				// Parse array index expression
 				break;
@@ -837,13 +834,13 @@ public:
 		IExpression left;
 		IExpression right;
 
-		CustLocation loc = currentLocation;
+		Location loc = currentLocation;
 		left = parseUnaryExp();
 
 		lexerRangeLoop:
 		while( !lexer.empty )
 		{
-			LexemeT lex = lexer.front;
+			Lexeme lex = lexer.front;
 
 			switch( lex.info.typeIndex ) with(LexemeType)
 			{
@@ -856,7 +853,7 @@ public:
 						`Unexpected binary arithmetic operation lexeme: `,
 						cast(LexemeType) lex.info.typeIndex
 					);
-					left = new BinaryArithmeticExp!(config)(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
+					left = new BinaryArithmeticExp(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
 					continue;
 				}
 				default:
@@ -877,13 +874,13 @@ public:
 		IExpression left;
 		IExpression right;
 
-		CustLocation loc = currentLocation;
+		Location loc = currentLocation;
 		left = parseMulExp();
 
 		lexerRangeLoop:
 		while( !lexer.empty )
 		{
-			LexemeT lex = lexer.front;
+			Lexeme lex = lexer.front;
 
 			switch( lex.info.typeIndex ) with(LexemeType)
 			{
@@ -896,7 +893,7 @@ public:
 						`Unexpected binary arithmetic operation lexeme: `,
 						cast(LexemeType) lex.info.typeIndex
 					);
-					left = new BinaryArithmeticExp!(config)(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
+					left = new BinaryArithmeticExp(loc, lexToBinaryOpMap[lex.info.typeIndex], left, right);
 					continue;
 				}
 				default:
@@ -920,9 +917,9 @@ public:
 
 		IExpression expr;
 
-		CustLocation loc = currentLocation;
+		Location loc = currentLocation;
 
-		LexemeT lex = lexer.front;
+		Lexeme lex = lexer.front;
 
 		switch( lex.info.typeIndex ) with(LexemeType)
 		{
@@ -930,14 +927,14 @@ public:
 			{
 				lexer.popFront();
 				expr = parseUnaryExp();
-				expr = new UnaryArithmeticExp!(config)(loc, Operator.UnaryPlus, expr);
+				expr = new UnaryArithmeticExp(loc, Operator.UnaryPlus, expr);
 				break;
 			}
 			case Sub:
 			{
 				lexer.popFront();
 				expr = parseUnaryExp();
-				expr = new UnaryArithmeticExp!(config)(loc, Operator.UnaryMin, expr);
+				expr = new UnaryArithmeticExp(loc, Operator.UnaryMin, expr);
 				break;
 			}
 			case Name:
@@ -946,7 +943,7 @@ public:
 				{
 					lexer.popFront();
 					expr = parseUnaryExp();
-					expr = new LogicalNotExp!(config)(loc, expr);
+					expr = new LogicalNotExp(loc, expr);
 				}
 				else
 					goto default;
@@ -984,11 +981,11 @@ public:
 		IExpression left;
 		IExpression right;
 
-		CustLocation loc = currentLocation;
+		Location loc = currentLocation;
 
 		left = parseAddExp();
 
-		LexemeT lex = lexer.front;
+		Lexeme lex = lexer.front;
 
 		switch( lex.info.typeIndex ) with(LexemeType)
 		{
@@ -1004,7 +1001,7 @@ public:
 						cast(LexemeType) lex.info.typeIndex
 					);
 				}
-				left = new CompareExp!(config)(loc, lexToCmpOpMap[lex.info.typeIndex], left, right);
+				left = new CompareExp(loc, lexToCmpOpMap[lex.info.typeIndex], left, right);
 			}
 			default:
 			{
@@ -1023,14 +1020,14 @@ public:
 
 		IExpression e;
 		IExpression e2;
-		CustLocation loc = this.currentLocation;
+		Location loc = this.currentLocation;
 
 		e = parseCompareExp();
 		while( lexer.front.test( LexemeType.Name ) && equal( lexer.frontValue, "and" ) )
 		{
 			lexer.popFront();
 			e2 = parseCompareExp();
-			e = new BinaryLogicalExp!(config)(loc, Operator.And, e, e2);
+			e = new BinaryLogicalExp(loc, Operator.And, e, e2);
 		}
 		return e;
 	}
@@ -1043,14 +1040,14 @@ public:
 
 		IExpression e;
 		IExpression e2;
-		CustLocation loc = this.currentLocation;
+		Location loc = this.currentLocation;
 
 		e = parseLogicalAndExp();
 		while( lexer.front.test( LexemeType.Name ) && equal( lexer.frontValue, "or" ) )
 		{
 			lexer.popFront();
 			e2 = parseLogicalAndExp();
-			e = new BinaryLogicalExp!(config)(loc, Operator.Or, e, e2);
+			e = new BinaryLogicalExp(loc, Operator.Or, e, e2);
 		}
 		return e;
 	}

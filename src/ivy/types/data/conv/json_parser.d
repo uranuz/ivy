@@ -1,6 +1,5 @@
 module ivy.types.data.conv.json_parse;
 
-import trifle.location: LocationConfig;
 
 class IvyJSONException: Exception
 {
@@ -18,7 +17,7 @@ auto parseIvyJSON(S)(S src)
 	return parser.parseValue();
 }
 
-struct JSONParser(S = string, LocationConfig c = LocationConfig.init)
+struct JSONParser(S = string)
 {
 	import trifle.text_forward_range: TextForwardRange;
 	import trifle.quoted_string_range: QuotedStringRange;
@@ -26,9 +25,9 @@ struct JSONParser(S = string, LocationConfig c = LocationConfig.init)
 	import ivy.types.data.data: TIvyData;
 
 	alias String = S;
-	alias SourceRange = TextForwardRange!(String, c);
+	alias SourceRange = TextForwardRange!String;
 	alias Char = SourceRange.Char;
-	alias IvyData = TIvyData!(String);
+	alias IvyData = TIvyData!String;
 
 private:
 	SourceRange _source;

@@ -1,16 +1,14 @@
 module ivy.ast.expr.literal;
 
-import trifle.location: LocationConfig;
-
 import ivy.ast.common: BaseExpressionImpl;
 import ivy.ast.iface.expr;
 
-class UndefExp(LocationConfig c): ILiteralExpression
+class UndefExp: ILiteralExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 public:
-	this(CustLocation loc)
+	this(Location loc)
 	{
 		_location = loc;
 	}
@@ -38,12 +36,12 @@ public:
 +/
 }
 
-class NullExp(LocationConfig c): ILiteralExpression
+class NullExp: ILiteralExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 public:
-	this(CustLocation loc)
+	this(Location loc)
 	{
 		_location = loc;
 	}
@@ -72,15 +70,15 @@ public:
 }
 
 
-class BooleanExp(LocationConfig c): ILiteralExpression
+class BooleanExp: ILiteralExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 private:
 	bool _value;
 
 public:
-	this(CustLocation loc, bool val)
+	this(Location loc, bool val)
 	{
 		_location = loc;
 		_value = val;
@@ -116,15 +114,15 @@ public:
 
 alias IntegerType = int;
 
-class IntegerExp(LocationConfig c): ILiteralExpression
+class IntegerExp: ILiteralExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 private:
 	IntegerType _value;
 
 public:
-	this(CustLocation loc, IntegerType val)
+	this(Location loc, IntegerType val)
 	{
 		_location = loc;
 		_value = val;
@@ -162,15 +160,15 @@ public:
 
 alias FloatType = double;
 
-class FloatExp(LocationConfig c): ILiteralExpression
+class FloatExp: ILiteralExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 private:
 	FloatType _value;
 
 public:
-	this(CustLocation loc, FloatType val)
+	this(Location loc, FloatType val)
 	{
 		_location = loc;
 		_value = val;
@@ -208,14 +206,14 @@ public:
 
 alias StringType = string;
 
-class StringExp(LocationConfig c): ILiteralExpression
+class StringExp: ILiteralExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 private:
 	StringType _str;
 
 public:
-	this(CustLocation location, StringType escapedStr)
+	this(Location location, StringType escapedStr)
 	{
 		_location = location;
 		_str = escapedStr;
@@ -242,15 +240,15 @@ public:
 	}
 }
 
-class ArrayLiteralExp(LocationConfig c): ILiteralExpression
+class ArrayLiteralExp: ILiteralExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 private:
 	IExpression[] _elements;
 
 public:
-	this(CustLocation loc, IExpression[] elements)
+	this(Location loc, IExpression[] elements)
 	{
 		_location = loc;
 		_elements = elements;
@@ -286,18 +284,18 @@ public:
 }
 
 
-class AssocArrayPair(LocationConfig c): IAssocArrayPair
+class AssocArrayPair: IAssocArrayPair
 {
 	import ivy.ast.common: BaseDeclNodeImpl;
 
-	mixin BaseDeclNodeImpl!c;
+	mixin BaseDeclNodeImpl;
 
 private:
 	string _key;
 	IExpression _valueExpr;
 
 public:
-	this(CustLocation loc, string name, IExpression value)
+	this(Location loc, string name, IExpression value)
 	{
 		_location = loc;
 		_key = name;
@@ -328,15 +326,15 @@ public:
 
 }
 
-class AssocArrayLiteralExp(LocationConfig c): ILiteralExpression
+class AssocArrayLiteralExp: ILiteralExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 private:
 	IAssocArrayPair[] _pairs;
 
 public:
-	this(CustLocation loc, IAssocArrayPair[] pairs)
+	this(Location loc, IAssocArrayPair[] pairs)
 	{
 		_location = loc;
 		_pairs = pairs;

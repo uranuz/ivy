@@ -1,13 +1,11 @@
 module ivy.ast.statement;
 
-import trifle.location: LocationConfig;
-
 import ivy.ast.common: BaseDeclNodeImpl;
 import ivy.ast.iface;
 
-mixin template PlainStatementImpl(LocationConfig c)
+mixin template PlainStatementImpl()
 {
-	mixin BaseDeclNodeImpl!c;
+	mixin BaseDeclNodeImpl;
 
 	public @property override {
 		bool isCompoundStatement()
@@ -32,9 +30,9 @@ mixin template PlainStatementImpl(LocationConfig c)
 	}
 }
 
-class DirectiveStatement(LocationConfig c): IDirectiveStatement
+class DirectiveStatement: IDirectiveStatement
 {
-	mixin PlainStatementImpl!c;
+	mixin PlainStatementImpl;
 
 private:
 	string _name;
@@ -42,7 +40,7 @@ private:
 
 public:
 
-	this( CustLocation loc, string name, IvyNode[] attributes )
+	this(Location loc, string name, IvyNode[] attributes)
 	{
 		_location = loc;
 		_name = name;
@@ -98,19 +96,19 @@ public:
 	static class Range: IAttributeRange
 	{
 	private:
-		DirectiveStatement!c _statement;
+		DirectiveStatement _statement;
 		size_t _begin;
 		size_t _end;
 
 	public:
 
-		this(DirectiveStatement!c statement)
+		this(DirectiveStatement statement)
 		{
 			_statement = statement;
 			_end = _statement._attrs.length - 1;
 		}
 
-		this(DirectiveStatement!c statement, size_t begin, size_t end)
+		this(DirectiveStatement statement, size_t begin, size_t end)
 		{
 			_statement = statement;
 			_begin = begin;
@@ -160,9 +158,9 @@ public:
 	}
 }
 
-class KeyValueAttribute(LocationConfig c): IKeyValueAttribute
+class KeyValueAttribute: IKeyValueAttribute
 {
-	mixin BaseDeclNodeImpl!c;
+	mixin BaseDeclNodeImpl;
 
 private:
 	string _name;
@@ -170,7 +168,7 @@ private:
 
 public:
 
-	this(CustLocation loc, string attrName, IvyNode val )
+	this(Location loc, string attrName, IvyNode val )
 	{
 		_location = loc;
 		_name = attrName;
@@ -202,11 +200,11 @@ public:
 	}
 }
 
-mixin template BaseBlockStatementImpl(LocationConfig c, alias IRange = IStatementRange)
+mixin template BaseBlockStatementImpl(alias IRange = IStatementRange)
 {
 	import ivy.ast.common: BaseExpressionImpl;
 
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 	//mixin BaseDeclNodeImpl!(c);
 	alias IStmt = typeof(IRange.front);
 private:
@@ -319,13 +317,13 @@ public:
 	}
 }
 
-class CodeBlockStatement(LocationConfig c): ICodeBlockStatement
+class CodeBlockStatement: ICodeBlockStatement
 {
-	mixin BaseBlockStatementImpl!(c, IDirectiveStatementRange);
+	mixin BaseBlockStatementImpl!(IDirectiveStatementRange);
 	private bool _isListBlock;
 
 public:
-	this(CustLocation loc, IDirectiveStatement[] stmts, bool isList)
+	this(Location loc, IDirectiveStatement[] stmts, bool isList)
 	{
 		_location = loc;
 		_statements = stmts;
@@ -345,13 +343,13 @@ public:
 	}
 }
 
-class MixedBlockStatement(LocationConfig c): IMixedBlockStatement
+class MixedBlockStatement: IMixedBlockStatement
 {
-	mixin BaseBlockStatementImpl!c;
+	mixin BaseBlockStatementImpl;
 private:
 
 public:
-	this(CustLocation loc, IStatement[] stmts)
+	this(Location loc, IStatement[] stmts)
 	{
 		_location = loc;
 		_statements = stmts;
@@ -366,14 +364,14 @@ public:
 
 }
 
-class DataFragmentStatement(LocationConfig c): IDataFragmentStatement
+class DataFragmentStatement: IDataFragmentStatement
 {
-	mixin PlainStatementImpl!c;
+	mixin PlainStatementImpl;
 private:
 	string _data;
 
 public:
-	this(CustLocation loc, string data)
+	this(Location loc, string data)
 	{
 		_location = loc;
 		_data = data;
@@ -395,31 +393,6 @@ public:
 		string data()
 		{
 			return _data;
-		}
-	}
-}
-
-class RawDataBlockStatement(LocationConfig c): IStatement
-{
-	mixin PlainStatementImpl!c;
-private:
-
-public:
-	this(CustLocation loc, IStatement[] stmts)
-	{
-		_location = loc;
-		_statements = stmts;
-	}
-
-	public @property override {
-		IvyNode[] children()
-		{
-			return null;
-		}
-
-		string kind()
-		{
-			return "raw data block statement";
 		}
 	}
 }

@@ -1,15 +1,12 @@
 module ivy.lexer.lexeme;
 
-import ivy.lexer.lexeme_info: LexemeInfo;
-import trifle.location: LocationConfig, CustomizedLocation;
-
 ///Minumal info about found lexeme
-struct Lexeme(LocationConfig c)
+struct Lexeme
 {
-	enum config = c;
-	alias CustLocation = CustomizedLocation!(config);
+	import ivy.lexer.lexeme_info: LexemeInfo;
+	import trifle.location: Location;
 
-	CustLocation loc; // Location of this lexeme in source text
+	Location loc; // Location of this lexeme in source text
 	LexemeInfo info; // Field containing information about this lexeme
 
 	bool test(int testType) const

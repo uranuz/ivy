@@ -1,19 +1,18 @@
 module ivy.ast.expr.unary;
 
-import trifle.location: LocationConfig;
 import ivy.ast.iface: IExpression, IUnaryExpression;
 import ivy.ast.common: BaseExpressionImpl;
 
-class UnaryArithmeticExp(LocationConfig c): IUnaryExpression
+class UnaryArithmeticExp: IUnaryExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 private:
 	IExpression _expr;
 	int _operatorIndex;
 
 public:
-	this(CustLocation loc, int op, IExpression expression)
+	this(Location loc, int op, IExpression expression)
 	{
 		_location = loc;
 		_operatorIndex = op;
@@ -56,17 +55,17 @@ public:
 }
 
 
-class LogicalNotExp(LocationConfig c): IUnaryExpression
+class LogicalNotExp: IUnaryExpression
 {
 	import ivy.ast.consts: Operator;
 
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 private:
 	IExpression _expr;
 
 public:
-	this(CustLocation loc, IExpression expression)
+	this(Location loc, IExpression expression)
 	{
 		_location = loc;
 		_expr = expression;

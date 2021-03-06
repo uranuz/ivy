@@ -1,7 +1,5 @@
 module ivy.lexer.lexer;
 
-import trifle.location: LocationConfig;
-
 import ivy.lexer.lexeme_info: LexemeInfo;
 import ivy.lexer.lexeme: Lexeme;
 import ivy.lexer.consts;
@@ -15,7 +13,7 @@ alias enf = enforce!IvyLexerException;
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyLexerDebug;
 
-struct Lexer(S, LocationConfig c = LocationConfig.init)
+struct Lexer(S)
 {
 	import trifle.text_forward_range: TextForwardRange;
 
@@ -27,14 +25,13 @@ struct Lexer(S, LocationConfig c = LocationConfig.init)
 
 	import std.typecons: BitFlags;
 
-	enum LocationConfig config = c;
-	alias SourceRange = TextForwardRange!(String, c);
-	alias LexRule = LexicalRule!(SourceRange);
-	alias LexemeT = Lexeme!(config);
+	alias SourceRange = TextForwardRange!String;
+	alias LexRule = LexicalRule!SourceRange;
+	alias LexemeT = Lexeme;
 	alias Char = SourceRange.Char;
 	alias String = S;
 	alias LogerMethod = void delegate(LogInfo);
-	alias LexerT = Lexer!(String, config);
+	alias LexerT = Lexer!String;
 
 	static auto staticRule(Flags...)(String str, LexemeType lexType, Flags extraFlags)
 	{
@@ -302,6 +299,16 @@ public:
 
 	void popFront()
 	{
+		try {
+			popFrontImpl();
+		} catch (Exception exc) {
+			this.log.error(exc);
+			throw exc;
+		}
+	}
+
+	void popFrontImpl()
+	{
 		import std.array: array;
 		import std.conv: to;
 
@@ -400,96 +407,6 @@ public:
 
 	@property auto save() {
 		return LexerT(this);
-	}
-
-	void fail_expectation(LexemeType lexType, String value, String msg, string func, string file, int line)
-	{
-		import std.conv: to;
-		import std.array: array;
-
-		String whatExpected = (msg.empty? null: msg ~ `. `) ~ `Lexeme of type "` ~ lexType.to!String ~ `"`;
-		if( !value.empty )
-			whatExpected ~= ` with value "` ~ value ~ `"`;
-		log(func, file, line).error(!this.empty, whatExpected, ` expected, but got end of input!!!`);
-
-		String whatGot = `, but got lexeme of type "` ~ (cast(LexemeType) front.info.typeIndex).to!String ~ `"`;
-		if( !front.getSlice(sourceRange).empty )
-			whatGot ~= ` with value "` ~ front.getSlice(sourceRange).array ~ `"`;
-
-		log(func, file, line).error(whatExpected, ` expected`, whatGot, `!!!`);
-	}
-
-	LexemeT expect(LexemeType lexType, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__) {
-		return expectVal(lexType, null, msg, func, file, line);
-	}
-
-	LexemeT expectVal(LexemeType lexType, String value = null, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)
-	{
-		import std.algorithm: equal;
-
-		if( this.empty )
-			fail_expectation(lexType, value, msg, func, file, line);
-
-		LexemeT lex = this.front;
-		if( lex.info.typeIndex == lexType && (value.empty || lex.getSlice(sourceRange).equal(value)) ) {
-			return lex;
-		}
-
-		fail_expectation(lexType, value, msg, func, file, line);
-		assert(false);
-	}
-
-	LexemeT consume(LexemeType lexType, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__) {
-		return consumeVal(lexType, null, msg, func, file, line);
-	}
-
-	LexemeT consumeVal(LexemeType lexType, String value = null, String msg = null, string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)
-	{
-		LexemeT lex = expect(lexType, value, func, file, line);
-		this.popFront();
-		return lex;
-	}
-
-	// TODO: Unused method - consider to remove
-	bool skipIf(LexemeType lexType)
-	{
-		if( this.empty )
-			return false;
-
-		auto lex = this.front;
-		if( lex.info.typeIndex == lexType )
-		{
-			this.popFront();
-			return true;
-		}
-		return false;
-	}
-
-	// TODO: Unused method - consider to remove
-	bool skipIf(LexemeType typeIndex, String value)
-	{
-		import std.algorithm: equal;
-
-		if( this.empty )
-			return false;
-
-		auto lex = this.front;
-		if( lex.info.typeIndex == typeIndex && lex.getSlice(sourceRange).equal(value) )
-		{
-			this.popFront();
-			return true;
-		}
-		return false;
-	}
-
-	LexemeT next() @property
-	{
-		//Creates copy of currentRange in order to not modify original one
-		SourceRange parsedRange = currentRange.save;
-		if( this.empty )
-			log.error("Cannot peek lexeme, because currentRange is empty!!!");
-
-		return parseFront(parsedRange, _ctx);
 	}
 
 	static immutable whitespaceChars = " \n\t\r";
@@ -693,53 +610,32 @@ bool isNumberChar(dchar ch)
 }
 
 // Just creates empty lexeme at specified position and of certain type (Unknown type by default)
-template createLexemeAt(SourceRange)
+Lexeme createLexemeAt(SourceRange)(ref SourceRange source, LexemeType lexType = LexemeType.Unknown)
 {
-	import trifle.text_forward_range: GetSourceRangeConfig;
+	Lexeme lex;
+	lex.info = LexemeInfo(lexType);
+	lex.loc.index = source.index;
+	lex.loc.length = 0;
 
-	alias config = GetSourceRangeConfig!SourceRange;
-	alias LexemeT = Lexeme!(config);
+	lex.loc.graphemeIndex = source.graphemeIndex;
+	lex.loc.graphemeLength = 0;
 
-	LexemeT createLexemeAt(ref SourceRange source, LexemeType lexType = LexemeType.Unknown)
-	{
-		LexemeT lex;
-		lex.info = LexemeInfo(lexType);
-		lex.loc.index = source.index;
-		lex.loc.length = 0;
+	lex.loc.lineIndex = source.lineIndex;
+	lex.loc.lineCount = 0;
 
-		static if( config.withGraphemeIndex )
-		{
-			lex.loc.graphemeIndex = source.graphemeIndex;
-			lex.loc.graphemeLength = 0;
-		}
+	lex.loc.columnIndex = source.columnIndex;
 
-		static if( config.withLineIndex )
-		{
-			lex.loc.lineIndex = source.lineIndex;
-			lex.loc.lineCount = 0;
+	lex.loc.graphemeColumnIndex = source.graphemeColumnIndex;
 
-			static if( config.withColumnIndex )
-				lex.loc.columnIndex = source.columnIndex;
-
-			static if( config.withGraphemeColumnIndex )
-				lex.loc.graphemeColumnIndex = source.graphemeColumnIndex;
-		}
-
-		return lex;
-	}
+	return lex;
 }
 
 // Universal super-duper extractor of lexemes by it's begin, end ranges and info about type of lexeme
 auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRange) endRange, ref const(LexemeInfo) lexemeInfo)
 {
-	import trifle.text_forward_range: GetSourceRangeConfig;
-	import trifle.location: IndentStyle;
-
 	import std.algorithm: canFind, min;
 
-	enum LocationConfig config = GetSourceRangeConfig!SourceRange;
-
-	Lexeme!(config) lex;
+	Lexeme lex;
 	lex.info = lexemeInfo;
 
 	// TODO: Maybe we should just add Location field for Lexeme
@@ -751,73 +647,24 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 	// Not idiomatic range maybe approach, but effective
 	lex.loc.length = endRange.index - beginRange.index;
 
-	static if( config.withGraphemeIndex )
-	{
-		lex.loc.graphemeIndex = beginRange.graphemeIndex;
+	lex.loc.graphemeIndex = beginRange.graphemeIndex;
 
-		enf(
-			endRange.graphemeIndex >= beginRange.graphemeIndex,
-			"Grapheme index for end range must not be less than for begin range!");
-		lex.loc.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
-	}
+	enf(
+		endRange.graphemeIndex >= beginRange.graphemeIndex,
+		"Grapheme index for end range must not be less than for begin range!");
+	lex.loc.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
 
-	static if( config.withLineIndex )
-	{
-		lex.loc.lineIndex = beginRange.lineIndex;
+	lex.loc.lineIndex = beginRange.lineIndex;
 
-		enf(
-			endRange.lineIndex >= beginRange.lineIndex,
-			"Line index for end range must not be less than for begin range!");
-		lex.loc.lineCount = endRange.lineIndex - beginRange.lineIndex;
+	enf(
+		endRange.lineIndex >= beginRange.lineIndex,
+		"Line index for end range must not be less than for begin range!");
+	lex.loc.lineCount = endRange.lineIndex - beginRange.lineIndex;
 
-		static if( config.withColumnIndex )
-			lex.loc.columnIndex = beginRange.columnIndex;
+	
+	lex.loc.columnIndex = beginRange.columnIndex;
 
-		static if( config.withGraphemeColumnIndex )
-			lex.loc.graphemeColumnIndex = beginRange.graphemeColumnIndex;
-	}
-
-	// Getting slice of this lexeme in order to parse indents
-	auto parsedRange = beginRange[0..lex.loc.length];
-
-	IndentStyle indentStyle;
-	size_t minIndentCount = size_t.max;
-
-	by_line_loop:
-	while( !parsedRange.empty )
-	{
-		size_t lineIndentCount;
-		IndentStyle lineIndentStyle;
-		parsedRange.parseLineIndent( lineIndentCount, lineIndentStyle );
-
-		bool isEmptyLine = true;
-		// Inner loop check if line contains meaningful characters
-		while( !parsedRange.empty )
-		{
-			auto ch = parsedRange.popChar();
-			if( !" \t\r\n".canFind(ch) )
-			{
-				isEmptyLine = false;
-			}
-
-			if( ch == ' ' && ch == '\t' )
-			{
-				continue; //Just skip rest empty spaces
-			}
-			else if( parsedRange.isNewLine || parsedRange.empty )
-			{
-				if( !isEmptyLine )
-				{
-					minIndentCount = min(minIndentCount, lineIndentCount);
-					indentStyle = lineIndentStyle;
-				}
-
-				continue by_line_loop;
-			}
-		}
-	}
-	lex.loc.indentCount = minIndentCount;
-	lex.loc.indentStyle = indentStyle;
+	lex.loc.graphemeColumnIndex = beginRange.graphemeColumnIndex;
 
 	beginRange = endRange.save; //Move start currentRange to point of end currentRange
 	return lex;

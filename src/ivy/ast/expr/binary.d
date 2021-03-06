@@ -1,7 +1,5 @@
 module ivy.ast.expr.binary;
 
-import trifle.location: LocationConfig;
-
 import ivy.ast.iface: IExpression, IBinaryExpression;
 import ivy.ast.common: BaseExpressionImpl;
 
@@ -33,16 +31,16 @@ mixin template BinaryArithmeticExpressionImpl()
 }
 
 
-class ArrayIndexExp(LocationConfig c): IExpression
+class ArrayIndexExp: IExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 
 private:
 	IExpression _arrayExp;
 	IExpression _indexExp;
 
 public:
-	this(CustLocation loc, IExpression arrayExp, IExpression indexExp )
+	this(Location loc, IExpression arrayExp, IExpression indexExp )
 	{
 		_location = loc;
 		_arrayExp = arrayExp;
@@ -64,16 +62,16 @@ public:
 
 
 
-class BinaryArithmeticExp(LocationConfig c): IBinaryExpression
+class BinaryArithmeticExp: IBinaryExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 	mixin BinaryArithmeticExpressionImpl;
 
 private:
 
 
 public:
-	this(CustLocation loc, int op, IExpression left, IExpression right)
+	this(Location loc, int op, IExpression left, IExpression right)
 	{
 		_location = loc;
 		_operatorIndex = op;
@@ -93,13 +91,13 @@ public:
 }
 
 
-class BinaryLogicalExp(LocationConfig c): IBinaryExpression
+class BinaryLogicalExp: IBinaryExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 	mixin BinaryArithmeticExpressionImpl;
 
 public:
-	this(CustLocation loc, int op, IExpression left, IExpression right)
+	this(Location loc, int op, IExpression left, IExpression right)
 	{
 		_location = loc;
 		_operatorIndex = op;
@@ -119,13 +117,13 @@ public:
 
 }
 
-class CompareExp(LocationConfig c): IBinaryExpression
+class CompareExp: IBinaryExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 	mixin BinaryArithmeticExpressionImpl;
 
 public:
-	this(CustLocation loc, int op, IExpression left, IExpression right)
+	this(Location loc, int op, IExpression left, IExpression right)
 	{
 		_location = loc;
 		_operatorIndex = op;

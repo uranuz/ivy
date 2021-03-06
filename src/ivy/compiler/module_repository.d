@@ -9,11 +9,10 @@ import ivy.compiler.errors: IvyCompilerException;
 class CompilerModuleRepository
 {
 	import trifle.text_forward_range: TextForwardRange;
-	import trifle.location: LocationConfig;
 
 	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
 
-	alias TextRange = TextForwardRange!(string, LocationConfig());
+	alias TextRange = TextForwardRange!string;
 	alias LogerMethod = void delegate(LogInfo);
 private:
 	string[] _importPaths;

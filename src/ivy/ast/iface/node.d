@@ -2,17 +2,14 @@ module ivy.ast.iface.node;
 
 interface IvyNode
 {
-	import trifle.location: LocationConfig, Location, PlainLocation, ExtendedLocation;
+	import trifle.location: Location;
 	import ivy.ast.iface.visitor: AbstractNodeVisitor;
 
 	@property {
 		IvyNode parent();
 		IvyNode[] children();
 
-		Location location() const;             // Location info for internal usage
-		PlainLocation plainLocation() const;   // Location for user info
-		ExtendedLocation extLocation() const;  // Extended location info
-		LocationConfig locationConfig() const; // Configuration of available location data
+		Location location() const; // Location info for internal usage
 
 		string kind();
 	}

@@ -5,13 +5,11 @@ mixin template NodeVisitMixin()
 {
 	import ivy.ast.iface;
 	
-	import trifle.location: ExtendedLocation;
+	import trifle.location: Location;
 	import std.algorithm: map;
 	import std.string: join;
 
-	alias CustLocation = ExtendedLocation;
-
-	private CustLocation _currentLocation;
+	private Location _currentLocation;
 
 	mixin(
 		[
@@ -34,7 +32,7 @@ mixin template NodeVisitMixin()
 		].map!(function(string typeStr) {
 			return `override void visit(` ~ typeStr ~ ` node) {
 				this.log.internalAssert(node, "node is null!");
-				this._currentLocation = node.extLocation;
+				this._currentLocation = node.location;
 				this._visit(node);
 			}
 			`;

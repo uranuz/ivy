@@ -1141,13 +1141,6 @@ public:
 		if( callableNode.type == IvyDataType.ClassNode )
 			return callableNode.classNode.__call__();
 
-		/*
-		debug {
-			import std.stdio;
-			writeln("CALLABLE: ", callableNode);
-		}
-		*/
-
 		// Else we expect that callable passed here
 		return callableNode.callable;
 	}

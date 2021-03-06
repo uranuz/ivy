@@ -1,20 +1,18 @@
 module ivy.ast.expr.misc;
 
-import trifle.location: LocationConfig;
-
 import ivy.ast.iface.expr: IExpression, INameExpression;
 import ivy.ast.iface.misc: IIdentifier;
 import ivy.ast.common: BaseExpressionImpl;
 
 //Identifier for IdentifierExp should ne registered somewhere in symbols table
-class IdentifierExp(LocationConfig c): INameExpression
+class IdentifierExp: INameExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 private:
 	IIdentifier _id;
 
 public:
-	this( CustLocation loc, IIdentifier id )
+	this( Location loc, IIdentifier id )
 	{
 		_location = loc;
 		_id = id;
@@ -38,15 +36,15 @@ public:
 }
 
 
-class CallExp(LocationConfig c): IExpression
+class CallExp: IExpression
 {
-	mixin BaseExpressionImpl!c;
+	mixin BaseExpressionImpl;
 private:
 	IExpression _callable;
 	IvyNode[] _argList;
 
 public:
-	this( CustLocation loc, IExpression callable, IvyNode[] argList )
+	this( Location loc, IExpression callable, IvyNode[] argList )
 	{
 		_location = loc;
 		_callable = callable;
@@ -64,25 +62,3 @@ public:
 	}
 
 }
-
-class BlockExp(LocationConfig c): IExpression
-{
-	mixin BaseExpressionImpl!c;
-private:
-	ICompoundStatement _blockStatement;
-
-public:
-	this( CustLocation loc, ICompoundStatement blockStmt )
-	{
-		_location = loc;
-		_blockStatement = blockStmt;
-	}
-
-	override @property {
-		ICompoundStatement statement()
-		{
-			return _blockStatement;
-		}
-	}
-}
-

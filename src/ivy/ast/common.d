@@ -1,19 +1,14 @@
 module ivy.ast.common;
 
-import trifle.location: LocationConfig;
-
-mixin template BaseDeclNodeImpl(LocationConfig c)
+mixin template BaseDeclNodeImpl()
 {
-	import trifle.location: Location, PlainLocation, ExtendedLocation, CustomizedLocation;
+	import trifle.location: Location;
 
 	import ivy.ast.iface: IvyNode;
 	import ivy.ast.iface.visitor: AbstractNodeVisitor;
-	
-	enum locConfig = c;
-	alias CustLocation = CustomizedLocation!locConfig;
 
 	private IvyNode _parentNode;
-	private CustLocation _location;
+	private Location _location;
 
 	public @property override
 	{
@@ -22,19 +17,7 @@ mixin template BaseDeclNodeImpl(LocationConfig c)
 		}
 
 		Location location() const {
-			return _location.toLocation();
-		}
-
-		PlainLocation plainLocation() const {
-			return _location.toPlainLocation();
-		}
-
-		ExtendedLocation extLocation() const {
-			return _location.toExtendedLocation();
-		}
-
-		LocationConfig locationConfig() const {
-			return _location.config;
+			return _location;
 		}
 	}
 
@@ -50,13 +33,13 @@ mixin template BaseDeclNodeImpl(LocationConfig c)
 	}
 }
 
-mixin template BaseExpressionImpl(LocationConfig c)
+mixin template BaseExpressionImpl()
 {
 	import ivy.ast.consts: LiteralType;
 	import ivy.ast.common: BaseDeclNodeImpl;
 	import ivy.ast.iface.statement: IStatement;
 
-	mixin BaseDeclNodeImpl!c;
+	mixin BaseDeclNodeImpl;
 
 	public @property override
 	{
