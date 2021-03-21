@@ -1,19 +1,21 @@
 module ivy.compiler.module_repository;
 
-
-import ivy.compiler.common;
-import ivy.parser.parser;
-import ivy.ast.iface: IvyNode;
-import ivy.compiler.errors: IvyCompilerException;
-
 class CompilerModuleRepository
 {
 	import trifle.text_forward_range: TextForwardRange;
+	import trifle.utils: ensure;
 
-	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
+	import ivy.compiler.common;
+	import ivy.parser.parser: Parser;
+	import ivy.ast.iface: IvyNode;
+
+	import ivy.compiler.errors: IvyCompilerException;
+
+	import ivy.log: LogerMethod;
 
 	alias TextRange = TextForwardRange!string;
-	alias LogerMethod = void delegate(LogInfo);
+	alias ParserT = Parser!(TextRange);
+	alias assure = ensure!IvyCompilerException;
 private:
 	string[] _importPaths;
 	string _fileExtension;
@@ -29,29 +31,6 @@ public:
 		_logerMethod = logerMethod;
 	}
 
-	version(IvyCompilerDebug)
-		enum isDebugMode = true;
-	else
-		enum isDebugMode = false;
-
-	static struct LogerProxy {
-		mixin LogProxyImpl!(IvyCompilerException, isDebugMode);
-		CompilerModuleRepository moduleRepo;
-
-		string sendLogInfo(LogInfoType logInfoType, string msg)
-		{
-			import ivy.log.utils: getShortFuncName;
-
-			if( moduleRepo._logerMethod !is null ) {
-				moduleRepo._logerMethod(LogInfo(msg, logInfoType, getShortFuncName(func), file, line));
-			}
-			return msg;
-		}
-	}
-
-	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
-		return LogerProxy(func, file, line, this);
-	}
 
 	void loadModuleFromFile(string moduleName)
 	{
@@ -60,8 +39,6 @@ public:
 		import std.range: only, chain, empty, front;
 		import std.path: buildNormalizedPath, isAbsolute;
 		import std.file: read, exists, isFile, isDir;
-
-		log.write("loadModuleFromFile attempt to load module: ", moduleName);
 
 		string fileName;
 		string[] existingFiles;
@@ -75,8 +52,9 @@ public:
 			fileName = fileNameNoExt ~ _fileExtension;
 
 			// Check if file name is not empty and located in root path
-			if( fileName.empty || !fileName.startsWith( buildNormalizedPath(importPath) ) )
-				log.error(`Incorrect path to module: `, fileName);
+			assure(
+				!fileName.empty && fileName.startsWith(buildNormalizedPath(importPath)),
+				"Incorrect path to module: ", fileName);
 
 			if( exists(fileName) && isFile(fileName) ) {
 				existingFiles ~= fileName;
@@ -84,24 +62,26 @@ public:
 				// If there is no file with exact name then try to find folder with this path
 				// and check if there is file with name <moduleName> and <_fileExtension>
 				fileName = buildNormalizedPath(fileNameNoExt, moduleName.splitter('.').back) ~ _fileExtension;
-				if( exists(fileName) && isFile(fileName) ) {
+				if( exists(fileName) && isFile(fileName) )
 					existingFiles ~= fileName;
-				}
 			}
 		}
 
 		if( existingFiles.length == 0 )
-			log.error(`Cannot load module `, moduleName, ". Searching in import paths:\n", _importPaths.join(",\n") );
+			assure(false,
+				"Cannot load module ", moduleName, ". Searching in import paths:\n", _importPaths.join(",\n") );
 		else if( existingFiles.length == 1 )
 			fileName = existingFiles.front; // Success
 		else
-			log.error(`Found multiple source files in import paths matching module name `, moduleName,
-				". Following files matched:\n", existingFiles.join(",\n") );
+			assure(false,
+				"Found multiple source files in import paths matching module name ", moduleName,
+				". Following files matched:\n", existingFiles.join(",\n"));
 
-		log.write("loadModuleFromFile loading module from file: ", fileName);
-		string fileContent = cast(string) read(fileName);
 
-		auto parser = new Parser!(TextRange)(fileContent, fileName, _logerMethod);
+		auto parser = new ParserT(
+			cast(string) read(fileName),
+			fileName,
+			_logerMethod);
 
 		_moduleTrees[moduleName] = parser.parse();
 	}
@@ -114,7 +94,7 @@ public:
 		}
 
 		node = _moduleTrees.get(moduleName, null);
-		log.internalAssert(node !is null, `Unable to get tree for module: `, moduleName);
+		assure(node, "Unable to get tree for module: ", moduleName);
 		return node;
 	}
 

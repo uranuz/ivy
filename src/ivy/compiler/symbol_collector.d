@@ -6,20 +6,22 @@ version(IvyTotalDebug) version = IvyCompilerDebug;
 
 class CompilerSymbolsCollector: AbstractNodeVisitor
 {
+	import trifle.utils: ensure;
+
 	import ivy.ast.iface;
 	import ivy.compiler.common: takeFrontAs;
 	import ivy.compiler.module_repository: CompilerModuleRepository;
 	import ivy.compiler.symbol_table: SymbolTableFrame, SymbolWithFrame;
 	import ivy.compiler.errors: IvyCompilerException;
 	import ivy.compiler.node_visit_mixin: NodeVisitMixin;
-	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
+	import ivy.log: LogInfoType, LogInfo, IvyLogProxy, LogerMethod;
 	import ivy.compiler.directive.factory: DirectiveCompilerFactory;
 	import ivy.types.symbol.iface: IIvySymbol;
 	import ivy.types.symbol.module_: ModuleSymbol;
 	
 	import trifle.location: Location;
-	
-	alias LogerMethod = void delegate(LogInfo);
+
+	alias assure = ensure!IvyCompilerException;
 protected:
 	CompilerModuleRepository _moduleRepo;
 	DirectiveCompilerFactory _compilerFactory;
@@ -27,7 +29,7 @@ protected:
 	SymbolTableFrame _globalSymbolTable;
 
 public SymbolTableFrame[] _frameStack;
-	LogerMethod _logerMethod;
+public IvyLogProxy log;
 
 public:
 	this(
@@ -36,14 +38,15 @@ public:
 		IIvySymbol[] globalSymbols,
 		LogerMethod logerMethod = null
 	) {
-		import std.exception: enforce;
-
 		_moduleRepo = moduleRepo;
 		_compilerFactory = compilerFactory;
-		_logerMethod = logerMethod;
+		log = IvyLogProxy(logerMethod? (ref LogInfo logInfo) {
+			logInfo.location = this._currentLocation;
+			logerMethod(logInfo);
+		}: null);
 
-		enforce(_moduleRepo !is null, `Expected compiler module repository`);
-		enforce(_compilerFactory !is null, `Expected directive compiler factory`);
+		assure(_moduleRepo, "Expected compiler module repository");
+		assure(_compilerFactory, "Expected directive compiler factory");
 
 		_globalSymbolTable = new SymbolTableFrame(null);
 		_addGlobalSymbols(globalSymbols);
@@ -63,35 +66,8 @@ public:
 	else
 		enum isDebugMode = false;
 
-	static struct LogerProxy {
-		mixin LogProxyImpl!(IvyCompilerException, isDebugMode);
-		CompilerSymbolsCollector collector;
 
-		string sendLogInfo(LogInfoType logInfoType, string msg)
-		{
-			import ivy.log.utils: getShortFuncName;
-
-			if( collector._logerMethod !is null )
-			{
-				collector._logerMethod(LogInfo(
-					msg,
-					logInfoType,
-					getShortFuncName(func),
-					file,
-					line,
-					collector._currentLocation.fileName,
-					collector._currentLocation.lineIndex
-				));
-			}
-			return msg;
-		}
-	}
-
-	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
-		return LogerProxy(func, file, line, this);
-	}
-
-	mixin NodeVisitMixin!();
+	mixin NodeVisitMixin;
 
 	SymbolWithFrame getModuleSymbols(string moduleName)
 	{
@@ -131,10 +107,10 @@ public:
 		SymbolWithFrame swf = getModuleSymbols(moduleName);
 
 		ModuleSymbol res = cast(ModuleSymbol) swf.symbol;
-		log.internalAssert(res !is null, `Expected module symbol`);
+		assure(res, "Expected module symbol");
 		_frameStack ~= swf.frame;
 
-		log.write(`Enter module scope: `, moduleName);
+		log.info("Enter module scope: ", moduleName);
 		_printState();
 		return res;
 	}
@@ -142,19 +118,19 @@ public:
 	void enterScope(Location loc)
 	{
 		import std.range: empty, back;
-		log.internalAssert(!_frameStack.empty, `Cannot enter nested symbol table, because symbol table stack is empty`);
+		assure(!_frameStack.empty, "Cannot enter nested symbol table, because symbol table stack is empty");
 
 		_frameStack ~= _frameStack.back.getChildFrame(loc);
-		log.write(`Enter scope for: `, loc.toString());
+		log.info("Enter scope for: ", loc.toString());
 		_printState();
 	}
 
 	void exitScope()
 	{
 		import std.range: empty, popBack, back;
-		log.internalAssert(!_frameStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!");
+		assure(!_frameStack.empty, "Cannot exit frame, because compiler symbol table stack is empty!");
 
-		log.write(`Exit scope:`);
+		log.info("Exit scope:");
 		_printState();
 		_frameStack.popBack();
 	}
@@ -162,19 +138,19 @@ public:
 	private void _printState()
 	{
 		debug {
-			log.write(`Symbol tables:`);
+			log.info("Symbol tables:");
 			foreach( lvl, table; _frameStack[] ) {
-				log.write(`	symbols lvl`, lvl, `: `, table.toPrettyStr());
+				log.info("	symbols lvl", lvl, ": ", table.toPrettyStr());
 			}
-			log.write(`_moduleSymbols:`, _moduleSymbols.toPrettyStr());
+			log.info("_moduleSymbols: ", _moduleSymbols.toPrettyStr());
 		}
 	}
 
 	IIvySymbol symbolLookup(string name)
 	{
 		import std.range: empty, back;
-		log.internalAssert(!_frameStack.empty, `Cannot look for symbol, because symbol table stack is empty`);
-		log.write(`Symbol lookup: `, name, `, in:`);
+		assure(!_frameStack.empty, "Cannot look for symbol, because symbol table stack is empty");
+		log.info("Symbol lookup: ", name, ", in:");
 		_printState();
 
 		IIvySymbol symb = _frameStack.back.lookup(name);
@@ -186,9 +162,7 @@ public:
 
 		symb = _globalSymbolTable.lookup(name);
 
-		if( !symb ) {
-			log.error(`Cannot find symbol "` ~ name ~ `"`);
-		}
+		assure(symb, "Cannot find symbol: ");
 
 		return symb;
 	}
@@ -222,8 +196,8 @@ public:
 		}
 		foreach( childNode; node[] )
 		{
-			log.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, node.name);
-			log.internalAssert(childNode, `Child node is null`);
+			log.info("Symbols collector. Analyse child of kind: ", childNode.kind, " for IDirectiveStatement node: ", node.name);
+			assure(childNode, "Child node is null");
 			childNode.accept(this);
 		}
 		// TODO: Check if needed to analyse other directive attributes scopes
@@ -233,7 +207,7 @@ public:
 	{
 		foreach( childNode; node[] )
 		{
-			log.write(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind);
+			log.info(`Symbols collector. Analyse child of kind: `, childNode.kind, ` for ICompoundStatement of kind: `, node.kind);
 			childNode.accept(this);
 		}
 

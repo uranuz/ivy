@@ -1,56 +1,77 @@
 module ivy.log.proxy;
 
-mixin template LogProxyImpl(ExceptionType, bool isDebugMode = false)
+import ivy.log.info: LogInfo;
+
+alias LogerMethod = void delegate(ref LogInfo);
+
+struct IvyLogProxy
 {
-	import std.exception: enforce;
+	import ivy.log.consts: LogInfoType;
 
-	string func;
-	string file;
-	int line;
+	/// This method need to be implemented to actualy send log message
+	LogerMethod _logerMethod;
 
-	private alias enf = enforce!ExceptionType;
-
-	string genericWrite(T...)(LogInfoType logInfoType, lazy T data)
-	{
-		import std.format: formattedWrite;
-		import std.array: appender;
-		auto logMessage = appender!string();
-		foreach(item; data) {
-			formattedWrite(logMessage, "%s", item);
-		}
-
-		return this.sendLogInfo(logInfoType, logMessage[]); /// This method need to be implemented to actualy send log message
+	this(LogerMethod logerMethod) {
+		this._logerMethod = logerMethod;
 	}
 
-	/// Writes regular log message for debug
-	void write(T...)(lazy T data) {
-		static if(isDebugMode) {
-			this.genericWrite(LogInfoType.info, data);
-		}
+	void write(A...)(
+		LogInfoType logInfoType,
+		lazy A args,
+		string file = __FILE__,
+		size_t line = __LINE__,
+		string func = __FUNCTION__
+	) {
+		import trifle.utils: aformat;
+
+		if( this._logerMethod is null )
+			return;
+		LogInfo logInfo;
+		logInfo.type = logInfoType;
+		logInfo.msg = aformat(args);
+		logInfo.sourceFileName = file;
+		logInfo.sourceLine = line;
+		logInfo.sourceFuncName = func;
+		this._logerMethod(logInfo);
+	}
+
+	/// Writes regular log message
+	void info(A...)(
+		lazy A args,
+		string file = __FILE__,
+		size_t line = __LINE__,
+		string func = __FUNCTION__
+	) {
+		this.write(LogInfoType.info, args, file, line, func);
 	}
 
 	/// Writes warning message
-	void warn(T...)(lazy T data) {
-		this.genericWrite(LogInfoType.warn, data);
+	void warn(A...)(
+		lazy A args,
+		string file = __FILE__,
+		size_t line = __LINE__,
+		string func = __FUNCTION__
+	) {
+		this.write(LogInfoType.warn, args, file, line, func);
 	}
 
-	/// Writes regular error to log and throws ExceptionType
-	void error(T...)(lazy T data) {
-		this.enforce(false, data);
+	/// Writes error
+	void error(A...)(
+		lazy A args,
+		string file = __FILE__,
+		size_t line = __LINE__,
+		string func = __FUNCTION__
+	) {
+		this.write(LogInfoType.error, args, file, line, func);
 	}
 
-	/// Tests assertion. If it's false then writes regular error to log and throws ExceptionType
-	void enforce(C, T...)(C cond, lazy T data) {
-		enf(cond, this.genericWrite(LogInfoType.error, data));
-	}
-
-	/// Writes internal error to log and throws ExceptionType
-	void internalError(T...)(lazy T data) {
-		this.internalAssert(false, data);
-	}
-
-	/// Tests assertion. If it's false then writes internal error to log and throws ExceptionType
-	void internalAssert(C, T...)(C cond, lazy T data) {
-		enf(cond, this.genericWrite(LogInfoType.internalError, data));
+	/// Writes internal error
+	void internalError(A...)(
+		lazy A args,
+		string file = __FILE__,
+		size_t line = __LINE__,
+		string func = __FUNCTION__
+	) {
+		this.write(LogInfoType.internalError, args, file, line, func);
 	}
 }

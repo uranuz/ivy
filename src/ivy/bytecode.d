@@ -87,7 +87,7 @@ struct Instruction
 {
 	import std.json: JSONValue;
 
-	OpCode opcode; // So... it's instruction opcode
+	OpCode opcode = OpCode.InvalidCode; // So... it's instruction opcode
 	size_t arg; // One arg for now
 
 	string name() @property

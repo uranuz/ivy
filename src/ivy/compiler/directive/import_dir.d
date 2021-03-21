@@ -16,13 +16,11 @@ public:
 		import std.range: back;
 
 		IAttributeRange attrRange = stmt[];
-		if( attrRange.empty )
-			collector.log.error(`Expected module name in import statement, but got end of directive`);
+		assure(!attrRange.empty, "Expected module name in import statement, but got end of directive");
 
 		INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
 
-		if( !attrRange.empty )
-			collector.log.error(`Expected end of import directive, maybe ; is missing`);
+		assure(attrRange.empty, "Expected end of \"import\" directive, maybe ; is missing");
 
 		// Add imported module symbol table as local symbol
 		collector._frameStack.back.add(collector.getModuleSymbols(moduleNameExpr.name).symbol);
@@ -32,15 +30,14 @@ public:
 	{
 		import std.array: split;
 
-		compiler.log.error(`"import" directive is not working yet. Use "from ... import ..." instead`);
+		assure(false, "'import' directive is not working yet. Use 'from ... import ...' instead");
 		/*
 		
 
 		auto stmtRange = statement[];
 
 		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
-		if( !stmtRange.empty )
-			compiler.log.error(`Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere`);
+		assure(stmtRange.empty, "Not all attributes for directive "import" were parsed. Maybe ; is missing somewhere");
 
 		
 		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it

@@ -30,11 +30,9 @@ public:
 		{
 			IKeyValueAttribute kwPair = stmtRange.takeFrontAs!IKeyValueAttribute("Key-value pair expected");
 
-			if( !kwPair.value )
-				compiler.log.error("Expected value for 'set' directive");
+			assure(kwPair.value, "Expected value for 'set' directive");
 
-			if( kwPair.name.empty )
-				compiler.log.error("Expected variable name for 'set' directive");
+			assure(!kwPair.name.empty, "Expected variable name for 'set' directive");
 			// Split full path to attr by dots...
 			string[] varPath = split(kwPair.name, '.');
 			string varName = varPath.front;
@@ -72,8 +70,7 @@ public:
 		// For now we expect that directive should return some value on the stack
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
-		if( !stmtRange.empty )
-			compiler.log.error("Expected end of directive after key-value pair. Maybe ';' is missing");
+		assure(stmtRange.empty, "Expected end of directive after key-value pair. Maybe ';' is missing");
 	}
 
 }

@@ -23,9 +23,7 @@ public:
 			compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 		}
 
-		if( !stmtRange.empty ) {
-			compiler.log.error(`Expected end of "return" directive. Maybe ';' is missing`);
-		}
+		assure(stmtRange.empty, `Expected end of "return" directive. Maybe ';' is missing`);
 
 		compiler.addInstr(OpCode.Return); // Add Return instruction that goes to the end of code object
 	}

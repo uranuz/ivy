@@ -10,15 +10,13 @@ public:
 	{
 		auto stmtRange = stmt[];
 
-		IvyNode aggregate = stmtRange.takeFrontAs!IvyNode(`Expected "at" aggregate argument`);
-		IvyNode indexValue = stmtRange.takeFrontAs!IvyNode(`Expected "at" index value`);
+		IvyNode aggregate = stmtRange.takeFrontAs!IvyNode("Expected \"at\" aggregate argument");
+		IvyNode indexValue = stmtRange.takeFrontAs!IvyNode("Expected \"at\" index value");
 
 		aggregate.accept(compiler); // Evaluate aggregate
 		indexValue.accept(compiler); // Evaluate index
 		compiler.addInstr(OpCode.LoadSubscr);
 
-		if( !stmtRange.empty )
-			compiler.log.error(`Expected end of "at" directive after index expression. Maybe ';' is missing. `
-				~ `Info: multiple index expressions are not supported yet.`);
+		assure(stmtRange.empty, "Expected end of \"at\" directive after index expression. Maybe ';' is missing");
 	}
 }

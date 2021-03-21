@@ -163,7 +163,7 @@ struct TIvyData(S)
 			case IvyDataType.DataNodeRange:
 				return this.dataRange.empty;
 			case IvyDataType.CodeObject:
-				return !this.codeObject.getInstrCount();
+				return !this.codeObject.instrCount;
 			case IvyDataType.Callable:
 			case IvyDataType.ExecutionFrame:
 			case IvyDataType.AsyncResult:
@@ -197,7 +197,7 @@ struct TIvyData(S)
 			case IvyDataType.ClassNode:
 				return this.classNode.length;
 			case IvyDataType.CodeObject:
-				return this.codeObject.getInstrCount();
+				return this.codeObject.instrCount;
 			case IvyDataType.Callable:
 			case IvyDataType.ExecutionFrame:
 			case IvyDataType.DataNodeRange:

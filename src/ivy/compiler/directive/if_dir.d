@@ -28,7 +28,7 @@ public:
 
 		while( !stmtRange.empty )
 		{
-			compiler.log.write(`IfCompiler, stmtRange.front: `, stmtRange.front);
+			compiler.log.info("IfCompiler, stmtRange.front: ", stmtRange.front);
 			INameExpression keywordExpr = stmtRange.takeFrontAs!INameExpression("'elif' or 'else' keyword expected");
 			if( keywordExpr.name == "elif" )
 			{
@@ -40,15 +40,14 @@ public:
 			else if( keywordExpr.name == "else" )
 			{
 				elseBody = stmtRange.takeFrontAs!IExpression("'else' body statement expected");
-				if( !stmtRange.empty )
-					compiler.log.error("'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
+				assure(stmtRange.empty, "'else' statement body expected to be the last 'if' attribute. Maybe ';' is missing");
 				break;
 			}
 			else
-			{
-				compiler.log.error("'elif' or 'else' keyword expected");
-			}
+				assure(false, "'elif' or 'else' keyword expected");
 		}
+
+		assure(stmtRange.empty, "Expected end of \"if\" directive. Maybe ';' is missing");
 
 		// Array used to store instr indexes of jump instructions after each
 		// if, elif block, used to jump to the end of directive after block
@@ -94,8 +93,5 @@ public:
 			// Fill all generated jump instructions with address of instr after directive end
 			compiler.setInstrArg(currIndex, afterEndInstrIndex);
 		}
-
-		if( !stmtRange.empty )
-			compiler.log.error(`Expected end of "if" directive. Maybe ';' is missing`);
 	}
 }

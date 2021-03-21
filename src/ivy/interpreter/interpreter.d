@@ -5,6 +5,9 @@ version(IvyTotalDebug) version = IvyInterpreterDebug;
 
 class Interpreter
 {
+	import trifle.location: Location;
+	import trifle.utils: ensure;
+
 	import ivy.types.code_object: CodeObject;
 	import ivy.types.module_object: ModuleObject;
 	import ivy.types.iface.callable_object: ICallableObject;
@@ -25,13 +28,17 @@ class Interpreter
 	import ivy.types.symbol.global: GLOBAL_SYMBOL_NAME;
 	import ivy.types.symbol.iface.callable: ICallableSymbol;
 	import ivy.interpreter.directive.global: globalCallable;
-	import ivy.log: LogInfo;
+	import ivy.interpreter.exec_frame_info: ExecFrameInfo;
+	import ivy.interpreter.exception: IvyInterpretException;
+	import ivy.exception: IvyException;
+
+	import ivy.log: LogInfo, IvyLogProxy, LogerMethod;
 
 public:
-	alias LogerMethod = void delegate(LogInfo);
+	alias assure = ensure!IvyInterpretException;
 
 	// LogWriter method used to send error and debug messages
-	LogerMethod _logerMethod;
+	IvyLogProxy log;
 
 	// Storage for bytecode code and initial constant data for modules
 	ModuleObjectsCache _moduleObjCache;
@@ -46,11 +53,8 @@ public:
 	// Stack of execution frames with directives or modules local data
 	ExecutionFrame[] _frameStack;
 
+	// Stack of data of frame that is used by interpreter
 	ExecStack _stack;
-
-	Instruction[] _codeRange; // Current code range we executing
-
-	size_t _pk; // Programme counter
 
 	this(
 		ModuleObjectsCache moduleObjCache,
@@ -60,10 +64,15 @@ public:
 		this._moduleObjCache = moduleObjCache;
 		this._directiveFactory = directiveFactory;
 		this._declClassFactory = new DeclClassFactory;
-		this._logerMethod = logerMethod;
 
-		this.log.internalAssert(this._moduleObjCache !is null, "Expected module objects cache");
-		this.log.internalAssert(this._directiveFactory !is null, "Expected directive factory");
+		this.log = IvyLogProxy(logerMethod? (ref LogInfo logInfo) {
+			// Add current location info to log message
+			logInfo.location = this.currentLocation;
+			logerMethod(logInfo);
+		}: null);
+
+		assure(this._moduleObjCache !is null, "Expected module objects cache");
+		assure(this._directiveFactory !is null, "Expected directive factory");
 
 		// Add global execution frame. Do not add it to _frameStack!
 		this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(globalCallable);
@@ -87,18 +96,18 @@ public:
 
 		while( !this._frameStack.empty )
 		{
-			while( this._pk < this._codeRange.length )
+			while( this.currentFrame.hasInstrs )
 			{
 				LoopAction la = this.execLoopBody();
 				if( la == LoopAction.skipPKIncr )
 					continue;
-				++this._pk;
+				this.currentFrame.nextInstr();
 				if( la == LoopAction.await )
 					return;
 			}
 
 			// We expect to have only the result of directive on the stack
-			this.log.internalAssert(this._stack.length == 1, "Exec stack should contain 1 item now");
+			assure(this._stack.length == 1, "Exec stack should contain 1 item now");
 
 			IvyData result = this._stack.pop(); // Take result
 			this.removeFrame(); // Exit out of this frame
@@ -111,8 +120,6 @@ public:
 				return;
 			}
 
-			this._codeRange = this.currentCodeObject.instrs[]; // Set old instruction range back
-			this.setJump(this._stack.pop().integer);
 			this._stack.push(result); // Put result back
 		}
 	}
@@ -123,11 +130,11 @@ public:
 		import std.conv: to, text;
 		import std.algorithm: canFind;
 
-		Instruction instr = this._codeRange[this._pk];
+		Instruction instr = this.currentInstr;
 		final switch( instr.opcode )
 		{
 			case OpCode.InvalidCode: {
-				this.log.internalError("Invalid code of operation");
+				assure(false, "Invalid code of operation");
 				break;
 			}
 			case OpCode.Nop: break;
@@ -163,7 +170,7 @@ public:
 			// Useless unary plus operation
 			case OpCode.UnaryPlus:
 			{
-				this.log.internalAssert(
+				assure(
 					[IvyDataType.Integer, IvyDataType.Floating].canFind(this._stack.back.type),
 					"Operand for unary plus operation must have integer or floating type!" );
 
@@ -173,7 +180,7 @@ public:
 
 			case OpCode.UnaryMin:
 			{
-				this.log.internalAssert(
+				assure(
 					[IvyDataType.Integer, IvyDataType.Floating].canFind(this._stack.back.type),
 					"Operand for unary minus operation must have integer or floating type!");
 
@@ -204,7 +211,7 @@ public:
 				IvyData left = this._stack.pop();
 				IvyData res;
 
-				this.log.internalAssert(
+				assure(
 					left.type == right.type,
 					"Operands of arithmetic operation must have the same type!");
 
@@ -218,7 +225,7 @@ public:
 						res = this._doBinaryOp(instr.opcode, left.floating, right.floating);
 						break;
 					default:
-						this.log.error("Unexpected types of operands");
+						assure(false, "Unexpected types of operands");
 						break;
 				}
 
@@ -244,7 +251,7 @@ public:
 				IvyData right = this._stack.pop();
 				IvyData left = this._stack.pop();
 				IvyData res;
-				this.log.internalAssert(
+				assure(
 					left.type == right.type,
 					"Operands of less or greather comparision must have the same type");
 
@@ -265,7 +272,7 @@ public:
 						res = this._doBinaryOp(instr.opcode, left.str, right.str);
 						break;
 					default:
-						this.log.internalError("Less or greater comparisions doesn't support type ", left.type, " yet!");
+						assure(false, "Less or greater comparisions doesn't support type ", left.type, " yet!");
 				}
 				this._stack.push(res);
 				break;
@@ -281,7 +288,7 @@ public:
 				switch(instr.opcode) {
 					case OpCode.StoreName: this.setValue(varName, varValue); break;
 					case OpCode.StoreGlobalName: this.setGlobalValue(varName, varValue); break;
-					default: this.log.internalError("Unexpected instruction opcode");
+					default: assure(false, "Unexpected instruction opcode");
 				}
 				break;
 			}
@@ -314,7 +321,7 @@ public:
 					case IvyDataType.AsyncResult:
 					case IvyDataType.ModuleObject:
 					case IvyDataType.ExecutionFrame:
-						this.log.internalError("Unable to set attribute of value with type: ", aggr.type);
+						assure(false, "Unable to set attribute of value with type: ", aggr.type);
 						break;
 					case IvyDataType.AssocArray:
 					{
@@ -350,7 +357,7 @@ public:
 					case IvyDataType.DataNodeRange:
 					case IvyDataType.AsyncResult:
 					case IvyDataType.ModuleObject:
-						this.log.internalError("Unable to get attribute of value with type: ", aggr.type);
+						assure(false, "Unable to get attribute of value with type: ", aggr.type);
 						break;
 					case IvyDataType.AssocArray:
 					{
@@ -420,9 +427,7 @@ public:
 				switch( aggr.type )
 				{
 					case IvyDataType.Array:
-						this.log.internalAssert(
-							index.integer < aggr.length,
-							"Index is out of bounds of array");
+						assure(index.integer < aggr.length, "Index is out of bounds of array");
 						aggr[index.integer] = value;
 						break;
 					case IvyDataType.AssocArray:
@@ -438,13 +443,13 @@ public:
 								aggr[index.str] = value;
 								break;
 							default:
-								this.log.error("Index for class node must be string or integer!");
+								assure(false, "Index for class node must be string or integer!");
 								break;
 						}
 						break;
 					}
 					default:
-						this.log.error("Unexpected aggregate type");
+						assure(false, "Unexpected aggregate type");
 				}
 				break;
 			}
@@ -467,29 +472,21 @@ public:
 						size_t endIndex = startIndex;
 
 						aggrStr.decode(endIndex); // decode increases passed index
-						this.log.internalAssert(
-							startIndex < aggr.length,
-							"String slice start index must be less than str length");
-						this.log.internalAssert(
-							endIndex <= aggr.length,
-							"String slice end index must be less or equal to str length");
+						assure(startIndex < aggr.length, "String slice start index must be less than str length");
+						assure(endIndex <= aggr.length, "String slice end index must be less or equal to str length");
 						this._stack.push(aggrStr[startIndex..endIndex]);
 						break;
 					}
 					case IvyDataType.Array:
 					{
-						this.log.internalAssert(
-							index.integer < aggr.array.length,
-							"Array index must be less than array length");
+						assure(index.integer < aggr.array.length, "Array index must be less than array length");
 						this._stack.push(aggr.array[index.integer]);
 						break;
 					}
 					case IvyDataType.AssocArray:
 					{
 						auto valPtr = index.str in aggr.assocArray;
-						this.log.internalAssert(
-							valPtr !is null,
-							"Key in associative array is not found: ", index);
+						assure(valPtr, "Key in associative array is not found: ", index);
 						this._stack.push(*valPtr);
 						break;
 					}
@@ -499,7 +496,7 @@ public:
 						break;
 					}
 					default:
-						this.log.internalError("Unexpected type of aggregate: ", aggr.type);
+						assure(false, "Unexpected type of aggregate: ", aggr.type);
 				}
 				break;
 			}
@@ -532,7 +529,7 @@ public:
 						this._stack.push(aggr.classNode[begin..end]);
 						break;
 					default:
-						this.log.internalError("Unexpected aggregate type");
+						assure(false, "Unexpected aggregate type");
 				}
 				break;
 			}
@@ -543,9 +540,7 @@ public:
 				IvyData right = this._stack.pop();
 				IvyData left = this._stack.pop();
 
-				this.log.internalAssert(
-					left.type == right.type,
-					"Left and right operands for concatenation operation must have the same type!");
+				assure(left.type == right.type, "Left and right operands for concatenation operation must have the same type!");
 
 				switch( left.type )
 				{
@@ -556,7 +551,7 @@ public:
 						this._stack.push(left.array ~ right.array);
 						break;
 					default:
-						this.log.internalError("Unexpected type of operand");
+						assure(false, "Unexpected type of operand");
 				}
 				break;
 			}
@@ -587,11 +582,9 @@ public:
 						pos = aggr.length; // Act like append
 						break;
 					default:
-						this.log.internalError("Position argument expected to be an integer or empty (for append), but got: ", posNode);
+						assure(false, "Position argument expected to be an integer or empty (for append), but got: ", posNode);
 				}
-				this.log.internalAssert(
-					pos <= aggr.length,
-					"Insert position is wrong: ", pos);
+				assure(pos <= aggr.length, "Insert position is wrong: ", pos);
 				aggr.insertInPlace(pos, value);
 				break;
 			}
@@ -632,7 +625,7 @@ public:
 			case OpCode.Return:
 			{
 				// Set instruction index at the end of code object in order to finish 
-				this.setJump(this._codeRange.length);
+				this.setJump(this.currentFrame.callable.codeObject.instrCount);
 				IvyData result = this._stack.back;
 				// Erase all from the current stack
 				this._stack.popN(this._stack.length);
@@ -670,7 +663,7 @@ public:
 						break;
 					}
 					default:
-						this.log.internalError("Expected iterable aggregate, but got: ", aggr);
+						assure(false, "Expected iterable aggregate, but got: ", aggr);
 				}
 				this._stack.push(res); // Push range onto stack
 				break;
@@ -721,9 +714,7 @@ public:
 			case OpCode.MakeCallable:
 			{
 				CallSpec callSpec = CallSpec(instr.arg);
-				this.log.internalAssert(
-					callSpec.posAttrsCount == 0,
-					"Positional default attribute values are not expected");
+				assure(callSpec.posAttrsCount == 0, "Positional default attribute values are not expected");
 
 				CodeObject codeObject = this._stack.pop().codeObject;
 
@@ -737,7 +728,6 @@ public:
 
 			case OpCode.RunCallable:
 			{
-				this.log.write("RunCallable stack on init: : ", this._stack);
 				if( this.runCallableNode(this._stack.pop(), CallSpec(instr.arg)) )
 					return LoopAction.skipPKIncr;
 				break;
@@ -747,7 +737,7 @@ public:
 				import ivy.types.data.utils: errorToIvyData;
 
 				AsyncResult aResult = this._stack.pop().asyncResult;
-				this.log.internalAssert(
+				assure(
 					aResult.state != AsyncResultState.pending,
 					"Async operations in server-side interpreter are fake and actually not supported");
 				aResult.then(
@@ -771,17 +761,6 @@ public:
 		return LoopAction.normal;
 	} // execLoopBody
 
-	auto log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)
-	{
-		import ivy.interpreter.log_proxy: InterpreterLogProxy;
-		return InterpreterLogProxy(func, file, line, this);
-	}
-
-	/// Method for setting interpreter's loger method
-	void logerMethod(LogerMethod method) @property {
-		_logerMethod = method;
-	}
-
 	ExecutionFrame globalFrame() @property {
 		return this._moduleFrames[GLOBAL_SYMBOL_NAME];
 	}
@@ -800,14 +779,14 @@ public:
 	{
 		import std.range: empty, back;
 
-		this.log.internalAssert(!this._frameStack.empty, "Execution frame stack is empty!");
+		assure(!this._frameStack.empty, "Execution frame stack is empty!");
 		return this._frameStack.back;
 	}
 
 	/++ Returns previous execution frame +/
 	ExecutionFrame previousFrame() @property
 	{
-		this.log.internalAssert(this._frameStack.length > 1, "No previous execution frame exists!");
+		assure(this._frameStack.length > 1, "No previous execution frame exists!");
 		return this._frameStack[$-2];
 	}
 
@@ -833,45 +812,46 @@ public:
 		return null;
 	}
 
-	void setJump(size_t instrIndex)
-	{
-		this.log.internalAssert(
-			instrIndex <= this._codeRange.length,
-			"Cannot jump after the end of code object");
-		this._pk = instrIndex;
+	void setJump(size_t instrIndex) {
+		this.currentFrame.setJump(instrIndex);
 	}
 
-	OpCode currentOpCode()
+	Instruction currentInstr() @property
 	{
-		if( this._pk < this._codeRange.length ) {
-			return cast(OpCode) this._codeRange[this._pk].opcode;
-		}
-		return OpCode.InvalidCode;
+		import std.range: empty;
+		if( this._frameStack.empty )
+			return typeof(return)();
+		return this.currentFrame.currentInstr;
 	}
 
-	size_t currentInstrLine()
+	size_t currentInstrLine() @property
 	{
-		if( CodeObject codeObject = this.currentCodeObject ) {
-			return codeObject.getInstrLine(this._pk);
-		}
-		return 0;
+		import std.range: empty;
+		if( this._frameStack.empty )
+			return 0;
+		return this.currentFrame.currentInstrLine;
 	}
 
-	string[] callStackInfo()
+	Location currentLocation() @property
 	{
-		string[] res;
-		for( size_t i = this._frameStack.length; i > 0; --i )
-		{
-			ICallableObject callable = this._frameStack[i-1].callable;
-			res ~= "Module: " ~ callable.moduleSymbol.name ~ ", Directive: " ~ callable.symbol.name;
-		}
-		return res;
+		import std.range: empty;
+		if( this._frameStack.empty )
+			return typeof(return)();
+		return this.currentFrame.currentLocation;
+	}
+
+	ExecFrameInfo[] frameStackInfo()
+	{
+		import std.algorithm: map;
+		import std.array: array;
+
+		return map!( (it) => it.info )(this._frameStack).array;
 	}
 
 	IvyData getModuleConst(size_t index)
 	{
 		ModuleObject moduleObject = this.currentModule;
-		log.internalAssert(moduleObject !is null, "Unable to get current module object");
+		assure(moduleObject, "Unable to get current module object");
 
 		return moduleObject.getConst(index);
 	}
@@ -911,7 +891,7 @@ public:
 				case OpCode.LTEqual: return left <= right;
 				case OpCode.GTEqual: return left >= right;
 			}
-			default: this.log.internalError("Unexpected code of binary operation");
+			default: this.log.error("Unexpected code of binary operation");
 		}
 		assert(false);
 	}
@@ -923,19 +903,18 @@ public:
 
 		this._frameStack ~= new ExecutionFrame(callable, dataDict);
 		this._stack.addStackBlock();
-		this.log.write("Enter new execution frame for callable: ", symbolName);
 
 		if( callable.symbol.kind == SymbolKind.module_ )
 		{
-			this.log.internalAssert(symbolName != GLOBAL_SYMBOL_NAME, "Cannot create module name with name: ", GLOBAL_SYMBOL_NAME);
+			assure(symbolName != GLOBAL_SYMBOL_NAME, "Cannot create module name with name: ", GLOBAL_SYMBOL_NAME);
 			this._moduleFrames[symbolName] = this.currentFrame;
 		}
 	}
 
 	void removeFrame()
 	{
-		import std.range: empty, back, popBack;
-		this.log.internalAssert(!this._frameStack.empty, "Execution frame stack is empty!");
+		import std.range: empty, popBack;
+		assure(!this._frameStack.empty, "Execution frame stack is empty!");
 		this._stack.removeStackBlock();
 		this._frameStack.popBack();
 	}
@@ -951,8 +930,6 @@ public:
 	// Returns execution frame for variable
 	ExecutionFrame findValueFrameImpl(bool globalSearch = false)(string varName)
 	{
-		this.log.write("Starting to search for variable: ", varName);
-
 		ExecutionFrame currFrame = this.currentFrame;
 
 		if( currFrame.hasValue(varName) ) {
@@ -994,9 +971,7 @@ public:
 	{
 		string moduleName = callable.moduleSymbol.name;
 		ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
-		this.log.internalAssert(
-			moduleFrame !is null,
-			"Module frame with name: ", moduleFrame, " of callable: ", callable.symbol.name, " does not exist!");
+		assure(moduleFrame, "Module frame with name: ", moduleName, " of callable: ", callable.symbol.name, " does not exist!");
 		return moduleFrame;
 	}
 
@@ -1011,7 +986,7 @@ public:
 		if( callSpec.hasKwAttrs )
 			kwAttrs = this._stack.pop().assocArray;
 
-		this.log.internalAssert(
+		assure(
 			callSpec.posAttrsCount <= attrSymbols.length,
 			"Positional parameters count is more than expected arguments count");
 
@@ -1033,13 +1008,7 @@ public:
 			{
 				// We should get default value if no value is passed from outside
 				IvyData* defValPtr = attr.name in defaults;
-				this.log.internalAssert(
-					defValPtr !is null,
-					"Expected value for attr: ",
-					attr.name,
-					", that has no default value for callable: ",
-					callable.symbol.name
-				);
+				assure(defValPtr, "Expected value for attr: ", attr.name, ", that has no default value for callable: ", callable.symbol.name);
 				callArgs[attr.name] = deeperCopy(*defValPtr);
 			}
 		}
@@ -1050,32 +1019,25 @@ public:
 		else if( callable.context.type != IvyDataType.Undef )
 			callArgs["this"] = callable.context;
 
-		this.log.write("this._stack after parsing all arguments: ", this._stack);
-
 		return callArgs;
 	}
 
 	bool runCallableNode(IvyData callableNode, CallSpec callSpec) {
-		return this._runCallableImpl(this.asCallable(callableNode), null, callSpec); // Skip _pk increment
+		return this._runCallableImpl(this.asCallable(callableNode), null, callSpec); // Skip instruction index increment
 	}
 
 	bool runCallable(ICallableObject callable, IvyData[string] kwAttrs = null) {
-		return this._runCallableImpl(callable, kwAttrs); // Skip _pk increment
+		return this._runCallableImpl(callable, kwAttrs); // Skip instruction index increment
 	}
 
 	bool _runCallableImpl(ICallableObject callable, IvyData[string] kwAttrs = null, CallSpec callSpec = CallSpec())
 	{
-		this.log.write("RunCallable name: ", callable.symbol.name);
-
 		IvyData[string] callArgs = this._extractCallArgs(callable, kwAttrs, callSpec);
 
-		this._stack.push(this._pk + 1); // Put next instruction index on the stack to return at
+		if( this._frameStack.length > 0 )
+			this.currentFrame.nextInstr(); // Set next instruction to execute after callable
 
 		this.newFrame(callable, callArgs);
-
-		// Set new instruction range to execute
-		this._codeRange = callable.isNative? [Instruction(OpCode.Nop)]: callable.codeObject.instrs[];
-		this.setJump(0);
 
 		if( callable.isNative )
 		{
@@ -1083,7 +1045,7 @@ public:
 			callable.dirInterp.interpret(this);
 			return false;
 		}
-		return true; // Skip _pk increment
+		return true; // Skip instruction index increment
 	}
 
 	bool runImportModule(string moduleName)
@@ -1091,7 +1053,7 @@ public:
 		ModuleObject moduleObject = this._moduleObjCache.get(moduleName);
 		ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
 
-		this.log.internalAssert(moduleObject !is null, "No such module object: ", moduleName);
+		assure(moduleObject, "No such module object: ", moduleName);
 		if( moduleFrame )
 		{
 			// Module is imported already. Just push it's frame onto stack
@@ -1112,24 +1074,53 @@ public:
 			else
 				// Module is imported already. Just return it
 				fResult.resolve(this._stack.back);
-		} catch( Throwable ex ) {
-			fResult.reject(ex);
+		} catch(Throwable ex) {
+			fResult.reject(this.updateNLogError(ex));
 		}
 		return fResult;
 	}
 
+	/// Updates exception with frame stack info of interpreter
+	IvyException updateError(Throwable ex)
+	{
+		import std.algorithm: castSwitch;
+		return ex.castSwitch!(
+			(IvyInterpretException interpEx) {
+				interpEx.frameStackInfo = this.frameStackInfo;
+				return interpEx;
+			},
+			(IvyException ivyEx) {
+				return ivyEx; // It's good exception. Do nothing more...
+			},
+			(Throwable anyEx) {
+				auto updEx = new IvyInterpretException(ex.msg, ex.file, ex.line, anyEx);
+				updEx.frameStackInfo = this.frameStackInfo;
+				return updEx;
+			},
+			() {
+				auto updEx = new IvyInterpretException("Unhandled error");
+				updEx.frameStackInfo = this.frameStackInfo;
+				return updEx;
+			}
+		)();
+	}
+
+	/// Updates exception with frame stack info of interpreter and writes it to log
+	IvyException updateNLogError(Throwable ex)
+	{
+		IvyException updEx = updateError(ex);
+		this.log.error(cast(string) updEx.message);
+		return updEx;
+	}
+
 	AsyncResult execCallable(ICallableObject callable, IvyData[string] kwArgs = null)
 	{
-		this.log.internalAssert(this._stack.length < 2, "Expected 0 or 1 items in stack!");
-		// Clear stack
-		this._stack.popN(this._stack.length);
-
 		AsyncResult fResult = new AsyncResult();
 		try {
 			this.runCallable(callable, kwArgs);
 			this.execLoop(fResult);
 		} catch( Throwable ex ) {
-			fResult.reject(ex);
+			fResult.reject(this.updateNLogError(ex));
 		}
 		return fResult;
 	}

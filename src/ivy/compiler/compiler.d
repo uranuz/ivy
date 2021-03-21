@@ -14,6 +14,8 @@ enum JumpKind
 
 class ByteCodeCompiler: AbstractNodeVisitor
 {
+	import trifle.utils: ensure;
+
 	import ivy.ast.iface;
 	import ivy.ast.consts: LiteralType, Operator;
 
@@ -37,17 +39,18 @@ class ByteCodeCompiler: AbstractNodeVisitor
 	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
 	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
 	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
-	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
+	import ivy.log: LogInfoType, LogInfo, IvyLogProxy, LogerMethod;
 	
 public:
-	import std.typecons: Tuple;
-	alias LogerMethod = void delegate(LogInfo);
+	alias assure = ensure!IvyCompilerException;
 
 	static struct JumpTableItem
 	{
 		JumpKind jumpKind;
 		size_t instrIndex;
 	}
+
+	IvyLogProxy log;
 
 private:
 	// Storage or factory containing compilers for certain directives
@@ -67,8 +70,6 @@ private:
 	// Current stack of code objects that compiler produces
 	CodeObject[] _codeObjStack;
 
-	LogerMethod _logerMethod;
-
 	// Stack of jump tables used to set.
 	// Stack item contains kind of jump and source instruction index from where to jump
 	public JumpTableItem[][] _jumpTableStack;
@@ -82,13 +83,16 @@ public:
 		ModuleObjectsCache moduleObjCache,
 		LogerMethod logerMethod = null
 	) {
-		_logerMethod = logerMethod; // First of all set loger method in order to not miss any log messages
+		log = IvyLogProxy(logerMethod? (ref LogInfo logInfo) {
+			logInfo.location = this._currentLocation;
+			logerMethod(logInfo);
+		}: null);
 
 		// Some internal checks goes here...
-		this.log.internalAssert(moduleRepo, `Expected module repository`);
-		this.log.internalAssert(symbolsCollector, `Expected symbols collector`);
-		this.log.internalAssert(compilerFactory, `Expected compiler factory`);
-		this.log.internalAssert(moduleObjCache, `Expected module objects cache`);
+		assure(moduleRepo, "Expected module repository");
+		assure(symbolsCollector, "Expected symbols collector");
+		assure(compilerFactory, "Expected compiler factory");
+		assure(moduleObjCache, "Expected module objects cache");
 
 		_moduleRepo = moduleRepo;
 		_symbolsCollector = symbolsCollector;
@@ -102,34 +106,6 @@ public:
 		enum isDebugMode = true;
 	else
 		enum isDebugMode = false;
-
-	static struct LogerProxy {
-		mixin LogProxyImpl!(IvyCompilerException, isDebugMode);
-		ByteCodeCompiler compiler;
-
-		string sendLogInfo(LogInfoType logInfoType, string msg)
-		{
-			import ivy.log.utils: getShortFuncName;
-
-			if( compiler._logerMethod !is null )
-			{
-				compiler._logerMethod(LogInfo(
-					msg,
-					logInfoType,
-					getShortFuncName(func),
-					file,
-					line,
-					compiler._currentLocation.fileName,
-					compiler._currentLocation.lineIndex
-				));
-			}
-			return msg;
-		}
-	}
-
-	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
-		return LogerProxy(func, file, line, this);
-	}
 
 	/++
 		Run compilation starting from specified entry-point module
@@ -145,27 +121,27 @@ public:
 		if( ModuleObject moduleObject = _moduleObjCache.get(moduleName) ) {
 			return moduleObject;
 		}
-		log.write(`Compiled module not found in cache, so try to compile`);
+		log.info("Compiled module not found in cache, so try to compile");
 		IvyNode moduleNode = _moduleRepo.getModuleTree(moduleName);
 
-		log.write(`Entering module scope`);
+		log.info("Entering module scope");
 		ModuleSymbol symb = _symbolsCollector.enterModuleScope(moduleName);
 
-		log.write(`Entering new module object`);
+		log.info("Entering new module object");
 		enterNewModuleObject(symb);
 		
 		scope(exit)
 		{
 			this.exitCodeObject();
-			log.write(`Exited module object`);
-			log.write(`Exiting compiler scopes`);
+			log.info("Exited module object");
+			log.info("Exiting compiler scopes");
 			_symbolsCollector.exitScope();
-			log.write(`Exited module scope`);
+			log.info("Exited module scope");
 		}
 		
-		log.write(`Starting compiling module AST: ` ~ moduleName);
+		log.info("Starting compiling module AST: ", moduleName);
 		moduleNode.accept(this);
-		log.write(`Finished compiling module AST: ` ~ moduleName);
+		log.info("Finished compiling module AST: ", moduleName);
 
 		// Drop result of module execution
 		addInstr(OpCode.PopTop);
@@ -176,9 +152,8 @@ public:
 
 	void enterNewModuleObject(ModuleSymbol symbol)
 	{
-		log.internalAssert(symbol !is null, `Expected module symbol`);
-		if( _moduleObjCache.get(symbol.name) )
-			log.error(`Cannot create new module object "`, symbol.name, `", because it already exists!`);
+		assure(symbol, "Expected module symbol");
+		assure(!_moduleObjCache.get(symbol.name), "Cannot create new module object \"", symbol.name, "\", because it already exists!");
 
 		ModuleObject moduleObject = new ModuleObject(symbol);
 		_moduleObjCache.add(moduleObject);
@@ -196,7 +171,7 @@ public:
 	void exitCodeObject()
 	{
 		import std.range: empty, popBack;
-		log.internalAssert(!_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!");
+		assure(!_codeObjStack.empty, "Cannot exit frame, because compiler code object stack is empty!");
 
 		_codeObjStack.popBack();
 	}
@@ -208,7 +183,7 @@ public:
 	CodeObject currentCodeObject() @property
 	{
 		import std.range: empty, back;
-		log.internalAssert(!this._codeObjStack.empty, "Compiler code object stack is empty!");
+		assure(!this._codeObjStack.empty, "Compiler code object stack is empty!");
 
 		return this._codeObjStack.back;
 	}
@@ -234,14 +209,14 @@ public:
 	}
 
 	size_t getInstrCount() {
-		return this.currentCodeObject.getInstrCount();
+		return this.currentCodeObject.instrCount;
 	}
 
 	size_t addConst(IvyData value)
 	{
 		import std.digest.md: md5Of;
 		ModuleObject mod = this.currentModule;
-		log.internalAssert(mod !is null, `Cannot add const to current module`);
+		assure(mod, "Cannot add const to current module");
 		if( mod.name !in _moduleConstHashes ) {
 			_moduleConstHashes[mod.name] = null;
 		}
@@ -320,13 +295,11 @@ public:
 				foreach( IvyNode elem; node.children )
 				{
 					IAssocArrayPair aaPair = cast(IAssocArrayPair) elem;
-					if( !aaPair )
-						log.error("Expected assoc array pair!");
+					assure(aaPair , "Expected assoc array pair!");
 
 					addInstr(OpCode.LoadConst, addConst( IvyData(aaPair.key) ));
 
-					if( !aaPair.value )
-						log.error("Expected assoc array value!");
+					assure(aaPair.value, "Expected assoc array value!");
 					aaPair.value.accept(this);
 
 					++aaLen;
@@ -334,7 +307,7 @@ public:
 				addInstr(OpCode.MakeAssocArray, aaLen);
 				return;
 			default:
-				log.internalAssert(false, "Expected literal expression node!");
+				assure(false, "Expected literal expression node!");
 				break;
 		}
 
@@ -366,7 +339,7 @@ public:
 	void _visit(IOperatorExpression node) { visit( cast(IExpression) node ); }
 	void _visit(IUnaryExpression node)
 	{
-		log.internalAssert( node.expr, "Expression expected!" );
+		assure(node.expr, "Expression expected!");
 		node.expr.accept(this);
 
 		OpCode opcode;
@@ -376,7 +349,7 @@ public:
 			case Operator.UnaryMin: opcode = OpCode.UnaryMin; break;
 			case Operator.Not: opcode = OpCode.UnaryNot; break;
 			default:
-				log.internalAssert( false, "Unexpected unary operator type!" );
+				assure(false, "Unexpected unary operator type!");
 		}
 
 		addInstr(opcode);
@@ -387,8 +360,8 @@ public:
 		import std.conv: to;
 
 		// Generate code that evaluates left and right parts of binary expression and get result on the stack
-		log.internalAssert( node.leftExpr, "Left expr expected!" );
-		log.internalAssert( node.rightExpr, "Right expr expected!" );
+		assure(node.leftExpr, "Left expr expected!");
+		assure(node.rightExpr, "Right expr expected!");
 
 		switch( node.operatorIndex )
 		{
@@ -433,7 +406,7 @@ public:
 			case Operator.LTEqual: opcode = OpCode.LTEqual; break;
 			case Operator.GTEqual: opcode = OpCode.GTEqual; break;
 			default:
-				log.internalAssert( false, "Unexpected binary operator type: ", (cast(Operator) node.operatorIndex) );
+				assure(false, "Unexpected binary operator type: ", cast(Operator) node.operatorIndex);
 		}
 
 		addInstr(opcode);
@@ -459,7 +432,7 @@ public:
 		auto attrRange = node[];
 
 		//ICallableSymbol symb = cast(ICallableSymbol) this.symbolLookup(node.name);
-		//log.internalAssert(symb, `Expected callable symbol`);
+		//assure(symb, "Expected callable symbol");
 
 		//DirAttr[] attrs = symb.attrs[]; // Getting slice of list
 
@@ -472,11 +445,10 @@ public:
 		{
 			if( IKeyValueAttribute keyValueAttr = cast(IKeyValueAttribute) attrRange.front )
 			{
-				log.internalAssert(posAttrCount == 0, `Keyword attributes cannot be before positional in directive call`);
+				assure(posAttrCount == 0, "Keyword attributes cannot be before positional in directive call");
 				//DirAttr attr = symb.getAttr(keyValueAttr.name);
 
-				if( keyValueAttr.name in attrsSet )
-					log.error(`Duplicate named attribute "` ~ keyValueAttr.name ~ `" detected`);
+				assure(keyValueAttr.name !in attrsSet, "Duplicate named attribute \"", keyValueAttr.name, "\" detected");
 
 				// Add name of named argument into stack
 				addInstr(OpCode.LoadConst, addConst( IvyData(keyValueAttr.name) ));
@@ -490,7 +462,7 @@ public:
 			}
 			else if( IExpression exprAttr = cast(IExpression) attrRange.front )
 			{
-				//log.internalAssert(!attrs.empty, `No more attrs expected for directive call`);
+				//assure(!attrs.empty, `No more attrs expected for directive call`);
 
 				//attrsSet[attrs.front.name] = true;
 				//attrs.popFront();
@@ -501,9 +473,7 @@ public:
 				++posAttrCount;
 			}
 			else
-			{
-				log.error(`Expected key-value pair or expression as directive attribute. Maybe there is missing semicolon ;`);
-			}
+				assure(false, "Expected key-value pair or expression as directive attribute. Maybe there is missing semicolon ;");
 		}
 
 		if( kwAttrCount > 0 )
@@ -539,13 +509,12 @@ public:
 	}
 
 	void _visit(ICompoundStatement node) {
-		log.internalAssert( false, `Shouldn't fall into this!` );
+		assure(false, "Shouldn't fall into this!");
 	}
 
 	void _visit(ICodeBlockStatement node)
 	{
-		if( !node )
-			log.error( "Code block statement node is null!" );
+		assure(node, "Code block statement node is null!");
 
 		if( node.isListBlock ) {
 			addInstr(OpCode.MakeArray);
@@ -567,8 +536,7 @@ public:
 
 	void _visit(IMixedBlockStatement node)
 	{
-		if( !node )
-			log.error( "Mixed block statement node is null!" );
+		assure(node, "Mixed block statement node is null!");
 
 		addInstr(OpCode.MakeArray);
 

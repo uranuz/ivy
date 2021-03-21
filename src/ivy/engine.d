@@ -1,5 +1,14 @@
 module ivy.engine;
 
+struct SaveStateResult
+{
+	import ivy.types.data.async_result: AsyncResult;
+	import ivy.interpreter.interpreter: Interpreter;
+
+	Interpreter interp;
+	AsyncResult asyncResult;
+}
+
 /// Dump-simple in-memory cache for compiled programmes
 class IvyEngine
 {
@@ -16,12 +25,6 @@ class IvyEngine
 	import ivy.log.info: LogInfo;
 	import ivy.log.consts: LogInfoType;
 
-	static struct SaveStateResult
-	{
-		Interpreter interp;
-		AsyncResult asyncResult;
-	}
-
 private:
 	IvyConfig _config;
 	CompilerModuleRepository _moduleRepo;
@@ -37,7 +40,7 @@ public:
 	{
 		import std.exception: enforce;
 
-		enforce(!!config.importPaths.length, `List of compiler import paths must not be empty!`);
+		enforce(!!config.importPaths.length, "List of compiler import paths must not be empty!");
 
 		this._mutex = new Mutex();
 		this._config = config;
@@ -55,34 +58,35 @@ public:
 			}
 
 			if( !this._moduleObjCache.get(moduleName) )
-			{
 				this._compiler.run(moduleName); // Run compilation itself
-
-				if( _config.compilerLoger ) {
-					debug _config.compilerLoger(LogInfo(
-						"compileModule:\r\n" ~ _moduleObjCache.toPrettyStr(),
-						LogInfoType.info,
-						__FUNCTION__, __FILE__, __LINE__
-					));
-				}
-			}
 			fResult.resolve();
 		}
 		return fResult;
 	}
 
-	SaveStateResult runModule(string moduleName, IvyData[string] extraGlobals = null)
+	Interpreter makeInterp(IvyData[string] extraGlobals = null)
 	{
 		auto interp = new Interpreter(
 			this._moduleObjCache,
 			this._config.directiveFactory,
 			this._config.interpreterLoger);
-		
+		interp.addExtraGlobals(extraGlobals);
+		return interp;
+	}
+
+	SaveStateResult runModule(string moduleName, IvyData[string] extraGlobals = null) {
+		return this.runModule(moduleName, makeInterp(extraGlobals));
+	}
+
+	SaveStateResult runModule(string moduleName, Interpreter interp)
+	{
+		import std.exception: enforce;
+		enforce(interp, "Interpreter is null");
+
 		auto asyncResult = new AsyncResult();
 		auto res = SaveStateResult(interp, asyncResult);
 
 		this.loadModule(moduleName).then((it) {
-			interp.addExtraGlobals(extraGlobals);
 			interp.importModule(moduleName).then(asyncResult);
 		}, &asyncResult.reject);
 		return res;

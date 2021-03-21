@@ -23,8 +23,7 @@ class DeclClassCompiler: IDirectiveCompiler
 
 		if( INameExpression extendsExpr = cast(INameExpression) classAttrsRange.front )
 		{
-			if( extendsExpr.name != "extends" )
-				collector.log.error("Expected 'extends' keyword");
+			assure(extendsExpr.name == "extends", "Expected 'extends' keyword");
 			classAttrsRange.popFront(); // Drop "extends"
 			classAttrsRange.takeFrontAs!INameExpression("Expected base class name");
 		}
@@ -44,8 +43,7 @@ class DeclClassCompiler: IDirectiveCompiler
 			classBodyStmt.accept(collector);
 
 			DirectiveSymbol initSymbol = cast(DirectiveSymbol) collector.symbolLookup("__init__");
-			if( initSymbol is null )
-				collector.log.error("Expected \"init\" symbol");
+			assure(initSymbol, "Expected \"init\" symbol");
 
 			// Add "__new__" symbol to class body scope. Copy "__init__" attrs to "__new__"
 			DirectiveSymbol newClassSymbol = new DirectiveSymbol("__new__", classBodyStmt.location, initSymbol.attrs);
@@ -68,8 +66,7 @@ class DeclClassCompiler: IDirectiveCompiler
 		INameExpression baseClassNameExpr;
 		if( INameExpression extendsExpr = cast(INameExpression) classAttrsRange.front )
 		{
-			if( extendsExpr.name != "extends" )
-				compiler.log.error("Expected 'extends' keyword");
+			assure(extendsExpr.name == "extends", "Expected 'extends' keyword");
 			classAttrsRange.popFront(); // Drop "extends"
 			baseClassNameExpr = classAttrsRange.takeFrontAs!INameExpression("Expected base class name");
 		}
@@ -77,12 +74,10 @@ class DeclClassCompiler: IDirectiveCompiler
 		ICodeBlockStatement classBodyStmt = classAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
 
 		DirectiveSymbol makeClassSymbol = new DirectiveSymbol("__make_" ~ classNameExpr.name ~ "__", classNameExpr.location);
-		if( makeClassSymbol is null )
-			compiler.log.error("Expected make class symbol");
+		assure(makeClassSymbol, "Expected make class symbol");
 
 		DeclClassSymbol classSymbol = cast(DeclClassSymbol) compiler.symbolLookup(classNameExpr.name);
-		if( classSymbol is null )
-			compiler.log.error("Expected class symbol");
+		assure(classSymbol, "Expected class symbol");
 
 		size_t classNameConstIndex = compiler.addConst(IvyData(classNameExpr.name));
 
@@ -100,8 +95,7 @@ class DeclClassCompiler: IDirectiveCompiler
 			classBodyStmt.accept(compiler);
 
 			DirectiveSymbol newClassSymbol = cast(DirectiveSymbol) compiler.symbolLookup("__new__");
-			if( newClassSymbol is null )
-				compiler.log.error("Expected new class symbol");
+			assure(newClassSymbol, "Expected new class symbol");
 
 			size_t newClassCodeObjIndex; 
 			{

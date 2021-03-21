@@ -71,7 +71,7 @@ public:
 		this._instrs[index].arg = arg;
 	}
 
-	size_t getInstrCount() {
+	size_t instrCount() @property {
 		return this._instrs.length;
 	}
 

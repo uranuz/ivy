@@ -36,32 +36,27 @@ public:
 			size_t varNameConstIndex;
 			if( auto kwPair = cast(IKeyValueAttribute) stmtRange.front )
 			{
-				if( kwPair.name.empty )
-					compiler.log.error(`Variable name cannot be empty`);
+				assure(!kwPair.name.empty, "Variable name cannot be empty");
 
-				if( kwPair.name.canFind('.') )
-					compiler.log.error(`Unable to set attributes with "var" directive`);
+				assure(!kwPair.name.canFind('.'), "Unable to set attributes with \"var\" directive");
 				varNameConstIndex = compiler.addConst( IvyData(kwPair.name) );
 
-				if( !kwPair.value )
-					compiler.log.error("Expected value for 'var' directive");
+				assure(kwPair.value, "Expected value for 'var' directive");
 
 				kwPair.value.accept(compiler); // Compile expression for getting value
 				stmtRange.popFront();
 			}
 			else if( auto nameExpr = cast(INameExpression) stmtRange.front )
 			{
-				if( nameExpr.name.empty )
-					compiler.log.error(`Variable name cannot be empty`);
-				if( nameExpr.name.canFind('.') )
-					compiler.log.error(`Unable to set attributes with "var" directive`);
+				assure(!nameExpr.name.empty, "Variable name cannot be empty");
+				assure(!nameExpr.name.canFind('.'), "Unable to set attributes with \"var\" directive");
 				varNameConstIndex = compiler.addConst( IvyData(nameExpr.name) );
 
 				stmtRange.popFront();
 			}
 			else
 			{
-				compiler.log.error(`Expected named attribute or name as variable declarator!`);
+				assure(false, "Expected named attribute or name as variable declarator!");
 			}
 
 			if( !stmtRange.empty )
@@ -74,8 +69,7 @@ public:
 						// Assuming that there will be no variable with name `as` in programme
 						stmtRange.popFront(); // Skip `as` keyword
 
-						if( stmtRange.empty )
-							compiler.log.error(`Expected variable type declaration`);
+						assure(!stmtRange.empty, "Expected variable type declaration");
 
 						// For now just skip type expression
 						stmtRange.popFront();
@@ -89,7 +83,6 @@ public:
 		// For now we expect that directive should return some value on the stack
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
-		if( !stmtRange.empty )
-			compiler.log.error("Expected end of directive after key-value pair. Maybe ';' is missing");
+		assure(stmtRange.empty, "Expected end of directive after key-value pair. Maybe ';' is missing");
 	}
 }

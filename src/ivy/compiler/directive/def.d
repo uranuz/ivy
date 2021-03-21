@@ -40,10 +40,9 @@ public:
 		ICodeBlockStatement defBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
 		IDirectiveStatementRange defStmtRange = defBlockStmt[];
 
-		collector.log.write(`collect: `, stmt.name, `, `, dirNameExpr.name);
+		collector.log.info("collect: ", stmt.name, ", ", dirNameExpr.name);
 
-		if( defStmtRange.empty )
-			collector.log.error("Expected directive params or body, but got end of input");
+		assure(!defStmtRange.empty, "Expected directive params or body, but got end of input");
 
 		DirAttr[] attrs;
 		IDirectiveStatement attrsStmt = defStmtRange.front; // Current attributes definition statement
@@ -52,23 +51,21 @@ public:
 			IAttributeRange attrsStmtRange = attrsStmt[]; // Range of attribute definitions
 			while( !attrsStmtRange.empty )
 			{
-				attrs ~= _analyzeValueAttr(attrsStmtRange, collector).attr;
+				attrs ~= _analyzeValueAttr(attrsStmtRange).attr;
 			}
 			defStmtRange.popFront(); // Consume "var" statement
 		}
 
-		if( defStmtRange.empty )
-			collector.log.error("Expected directive body, but got end of input");
+		assure(!defStmtRange.empty, "Expected directive body, but got end of input");
 
 		{
-			ICompoundStatement bodyStmt = _analyzeDirBody(defStmtRange.front, collector);
+			ICompoundStatement bodyStmt = _analyzeDirBody(defStmtRange.front);
 			defStmtRange.popFront();
 
-			if( collector._frameStack.empty )
-				collector.log.error(`Symbol table frame stack is empty`);
+			assure(!collector._frameStack.empty, "Symbol table frame stack is empty");
 
 			SymbolTableFrame oldScope = collector._frameStack.back;
-			collector.log.write(`oldScope: `, oldScope.toPrettyStr());
+			collector.log.info("oldScope: ", oldScope.toPrettyStr());
 
 			// Add directive definition into existing frame
 			DirectiveSymbol symb = new DirectiveSymbol(dirNameExpr.name, stmt.location, attrs);
@@ -81,11 +78,8 @@ public:
 			bodyStmt.accept(collector);
 		}
 
-		if( !defStmtRange.empty )
-			collector.log.error(`No extra def statements expected so far`);
-
-		if( !defAttrsRange.empty )
-			collector.log.error(`Expected end of directive definition statement. Maybe ; is missing`);
+		assure(defStmtRange.empty, "No extra def statements expected so far");
+		assure(defAttrsRange.empty, "Expected end of directive definition statement. Maybe ; is missing");
 	}
 
 
@@ -101,8 +95,7 @@ public:
 		ICodeBlockStatement defBlockStmt = defAttrsRange.takeFrontAs!ICodeBlockStatement("Expected code block as directive attributes definition");
 		IDirectiveStatementRange defStmtRange = defBlockStmt[];
 
-		if( defStmtRange.empty )
-			compiler.log.error("Expected directive params or body, but got end of input");
+		assure(!defStmtRange.empty, "Expected directive params or body, but got end of input");
 
 		IDirectiveStatement attrsStmt = defStmtRange.front; // Current attributes definition statement
 
@@ -113,7 +106,7 @@ public:
 
 			while( !attrsStmtRange.empty )
 			{
-				CompilerDirAttr res = _analyzeValueAttr(attrsStmtRange, compiler);
+				CompilerDirAttr res = _analyzeValueAttr(attrsStmtRange);
 
 				if( res.defaultValueExpr )
 				{
@@ -130,16 +123,14 @@ public:
 				compiler.addInstr(OpCode.MakeAssocArray, defValCount);
 		}
 
-		if( defStmtRange.empty )
-			compiler.log.error("Expected directive body, but got end of input");
+		assure(!defStmtRange.empty, "Expected directive body, but got end of input");
 
 		{
-			ICompoundStatement bodyStmt = _analyzeDirBody(defStmtRange.front, compiler);
+			ICompoundStatement bodyStmt = _analyzeDirBody(defStmtRange.front);
 			defStmtRange.popFront();
 
 			DirectiveSymbol dirSymbol = cast(DirectiveSymbol) compiler.symbolLookup(dirNameExpr.name);
-			if( dirSymbol is null )
-				compiler.log.error(`Expected directive definition symbol kind`);
+			assure(dirSymbol, "Expected directive definition symbol kind");
 
 			size_t codeObjIndex;
 			// Compilation of CodeObject itself
@@ -169,7 +160,7 @@ public:
 		}
 	}
 
-	CompilerDirAttr _analyzeValueAttr(Compiler)(IAttributeRange attrRange, Compiler compiler)
+	CompilerDirAttr _analyzeValueAttr(IAttributeRange attrRange)
 	{
 		import ivy.ast.consts: LiteralType;
 
@@ -178,8 +169,8 @@ public:
 		{
 			res.attr.name = kwPair.name;
 			res.defaultValueExpr = cast(IExpression) kwPair.value;
-			if( !res.defaultValueExpr )
-				compiler.log.error(`Expected attribute default value expression!`);
+
+			assure(res.defaultValueExpr, "Expected attribute default value expression!");
 		}
 		else if( INameExpression nameExpr = cast(INameExpression) attrRange.front )
 		{
@@ -187,7 +178,7 @@ public:
 		}
 		else
 		{
-			compiler.log.error(`Expected [name] or [key: value] expression as attribute definition`);
+			assure(false, "Expected [name] or [key: value] expression as attribute definition");
 		}
 
 		attrRange.popFront(); // Skip attribute
@@ -203,12 +194,13 @@ public:
 					// Assuming that there will be no named attribute with name `as` in programme
 					attrRange.popFront(); // Skip `as` keyword
 
-					if( attrRange.empty )
-						compiler.log.error(`Expected attr type definition, but got end of attrs range!`);
+					assure(!attrRange.empty, "Expected attr type definition, but got end of attrs range!");
 
 					ILiteralExpression attrTypeExpr = cast(ILiteralExpression) attrRange.front;
-					if( attrTypeExpr is null || attrTypeExpr.literalType != LiteralType.String )
-						compiler.log.error(`Expected string literal as attr type definition!`);
+
+					assure(
+						attrTypeExpr && attrTypeExpr.literalType == LiteralType.String,
+						"Expected string literal as attr type definition!");
 
 					res.attr.typeName = attrTypeExpr.toStr(); // Getting type of attribute as string (for now)
 
@@ -221,28 +213,24 @@ public:
 	}
 
 
-	ICompoundStatement _analyzeDirBody(Compiler)(IDirectiveStatement bodyDefStmt, Compiler compiler)
+	ICompoundStatement _analyzeDirBody(IDirectiveStatement bodyDefStmt)
 	{
 		import std.algorithm: canFind;
 
 		ICompoundStatement bodyStmt;
 
-		if( bodyDefStmt.name != "do" )
-			compiler.log.error(`Expected directive body, but got:`, bodyDefStmt.name);
+		assure(bodyDefStmt.name == "do", "Expected directive body, but got: ", bodyDefStmt.name);
 
 		IAttributeRange bodyStmtRange = bodyDefStmt[]; // Range on attributes of attributes definition statement
-		if( bodyStmtRange.empty )
-			compiler.log.error("Unexpected end of do directive!");
+		assure(!bodyStmtRange.empty, "Unexpected end of do directive!");
 
 		// Getting body AST for statement just for check if it is there
 		bodyStmt = cast(ICompoundStatement) bodyStmtRange.front;
-		if( !bodyStmt )
-			compiler.log.error("Expected compound statement as directive body statement");
+		assure(bodyStmt, "Expected compound statement as directive body statement");
 
 		bodyStmtRange.popFront(); // Need to consume body statement to behave correctly
 
-		if( !bodyStmtRange.empty )
-			compiler.log.error("Expected end of directive body definition");
+		assure(bodyStmtRange.empty, "Expected end of directive body definition");
 
 		return bodyStmt;
 	}

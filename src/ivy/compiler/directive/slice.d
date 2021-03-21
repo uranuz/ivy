@@ -8,27 +8,20 @@ class SliceCompiler: BaseDirectiveCompiler
 	{
 		auto stmtRange = stmt[];
 
-		if( stmtRange.empty )
-			compiler.log.error(`Expected node as "slice"s "aggregate" argument!`);
+		assure(!stmtRange.empty, `Expected node as "slice"s "aggregate" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
-		if( stmtRange.empty )
-			compiler.log.error(`Expected node as "slice"s "begin" argument!`);
+		assure(!stmtRange.empty, `Expected node as "slice"s "begin" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
-		if( stmtRange.empty )
-			compiler.log.error(`Expected node as "slice"s "end" argument!`);
+		assure(!stmtRange.empty, `Expected node as "slice"s "end" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		compiler.addInstr(OpCode.LoadSlice); // Add Insert instruction that works with 3 passed arguments
 
-		if( !stmtRange.empty )
-		{
-			compiler.log.write(`SliceCompiler. At end. stmtRange.front.kind: `, stmtRange.front.kind);
-			compiler.log.error(`Expected end of "slice" directive. Maybe ';' is missing`);
-		}
+		assure(stmtRange.empty, "Expected end of \"slice\" directive. Maybe ';' is missing");
 	}
 }

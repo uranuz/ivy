@@ -9,16 +9,11 @@ public:
 	override void compile(IDirectiveStatement stmt, ByteCodeCompiler compiler)
 	{
 		auto stmtRange = stmt[];
-		if( stmtRange.empty )
-			compiler.log.error(`Expected node as "expr" argument!`);
+		assure(!stmtRange.empty, "Expected node as \"expr\" argument!");
 
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
-		if( !stmtRange.empty )
-		{
-			compiler.log.write("ExprCompiler. At end. stmtRange.front.kind: ", ( cast(INameExpression) stmtRange.front ).name);
-			compiler.log.error(`Expected end of "expr" directive. Maybe ';' is missing`);
-		}
+		assure(stmtRange.empty, "Expected end of \"expr\" directive. Maybe ';' is missing");
 	}
 }

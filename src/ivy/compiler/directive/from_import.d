@@ -17,13 +17,11 @@ public:
 		import std.range: back;
 
 		IAttributeRange attrRange = stmt[];
-		if( attrRange.empty )
-			collector.log.error(`Expected module name in import statement, but got end of directive`);
+		assure(!attrRange.empty, "Expected module name in import statement, but got end of directive");
 
 		INameExpression moduleNameExpr = attrRange.takeFrontAs!INameExpression("Expected module name in import directive");
 		INameExpression importKwdExpr = attrRange.takeFrontAs!INameExpression("Expected 'import' keyword!");
-		if( importKwdExpr.name != "import" )
-			collector.log.error("Expected 'import' keyword!");
+		assure(importKwdExpr.name == "import", "Expected 'import' keyword!");
 
 		string[] symbolNames;
 		while( !attrRange.empty )
@@ -38,11 +36,9 @@ public:
 		{
 			// As long as variables currently shall be imported in runtime only and there is no compile-time
 			// symbols for it, so import symbol that currently exists
-			if( IIvySymbol importedSymbol = swf.frame.localLookup(symbolName) ) {
-				collector._frameStack.back.add(importedSymbol);
-			} else {
-				collector.log.error(`ERRORRR`);
-			}
+			IIvySymbol importedSymbol = swf.frame.localLookup(symbolName);
+			assure(importedSymbol, "Symbol not found: ", symbolName);
+			collector._frameStack.back.add(importedSymbol);
 		}
 	}
 
@@ -53,8 +49,7 @@ public:
 		INameExpression moduleNameExpr = stmtRange.takeFrontAs!INameExpression("Expected module name for import");
 
 		INameExpression importKwdExpr = stmtRange.takeFrontAs!INameExpression("Expected 'import' keyword, but got end of range");
-		if( importKwdExpr.name != "import" )
-			compiler.log.error("Expected 'import' keyword");
+		assure(importKwdExpr.name == "import", "Expected 'import' keyword");
 
 		string[] varNames;
 		while( !stmtRange.empty )
@@ -63,8 +58,7 @@ public:
 			varNames ~= varNameExpr.name;
 		}
 
-		if( !stmtRange.empty )
-			compiler.log.error(`Not all attributes for directive "from" were parsed. Maybe ; is missing somewhere`);
+		assure("Not all attributes for directive \"from\" were parsed. Maybe ';' is missing somewhere");
 
 		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
 

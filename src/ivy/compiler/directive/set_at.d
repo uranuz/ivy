@@ -22,8 +22,9 @@ public:
 		// Add fake value to stack as a result
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
-		if( !stmtRange.empty )
-			compiler.log.error(`Expected end of "setat" directive after index expression. Maybe ';' is missing. `
-				~ `Info: multiple index expressions are not supported yet.`);
+		assure(
+			stmtRange.empty,
+			`Expected end of "setat" directive after index expression. Maybe ';' is missing. `,
+			`Info: multiple index expressions are not supported yet.`);
 	}
 }

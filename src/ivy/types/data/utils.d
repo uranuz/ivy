@@ -59,7 +59,7 @@ IvyData errorToIvyData(Throwable error)
 	import trifle.backtrace: getBacktrace;
 
 	IvyData res;
-	res[`errorMsg`] = error.msg;
+	res[`errorMsg`] = (cast(string) error.message());
 	res[`traceInfo`] = getBacktrace(error);
 	res[`errorFile`] = error.file;
 	res[`errorLine`] = error.line;

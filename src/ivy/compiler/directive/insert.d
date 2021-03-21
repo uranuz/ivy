@@ -9,27 +9,20 @@ public:
 	{
 		auto stmtRange = stmt[];
 
-		if( stmtRange.empty )
-			compiler.log.error(`Expected node as "insert"s "aggregate" argument!`);
+		assure(!stmtRange.empty, `Expected node as "insert"s "aggregate" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
-		if( stmtRange.empty )
-			compiler.log.error(`Expected node as "insert"s "value" argument!`);
+		assure(!stmtRange.empty, `Expected node as "insert"s "value" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
-		if( stmtRange.empty )
-			compiler.log.error(`Expected node as "insert"s "index" argument!`);
+		assure(!stmtRange.empty, `Expected node as "insert"s "index" argument!`);
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
 		compiler.addInstr(OpCode.Insert); // Add Insert instruction that works with 3 passed arguments
 
-		if( !stmtRange.empty )
-		{
-			compiler.log.write(`InsertCompiler. At end. stmtRange.front.kind: `, stmtRange.front.kind);
-			compiler.log.error(`Expected end of "insert" directive. Maybe ';' is missing`);
-		}
+		assure(stmtRange.empty, `Expected end of "insert" directive. Maybe ';' is missing`);
 	}
 }

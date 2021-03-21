@@ -6,6 +6,8 @@ import ivy.compiler.compiler: ByteCodeCompiler;
 
 interface IDirectiveCompiler
 {
+	alias assure = ByteCodeCompiler.assure;
+
 	/// Preliminary phase that is used to collect info before compilation
 	void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector);
 	
@@ -19,8 +21,8 @@ public:
 	override void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector) {
 		foreach( childNode; stmt[] )
 		{
-			collector.log.write(`!!!!!Symbols collector. Analyse child of kind: `, childNode.kind, ` for IDirectiveStatement node: `, stmt.name);
-			collector.log.internalAssert(childNode, `Child node is null`);
+			collector.log.info("Analyse child of kind: ", childNode.kind, " for IDirectiveStatement node: ", stmt.name);
+			assure(childNode, "Child node is null");
 			childNode.accept(collector);
 		}
 	}

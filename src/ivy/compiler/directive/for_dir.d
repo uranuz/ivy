@@ -16,19 +16,15 @@ public:
 		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("For loop variable name expected");
 
 		string varName = varNameExpr.name;
-		if( varName.length == 0 )
-			compiler.log.error("Loop variable name cannot be empty");
+		assure(!varName.empty, "Loop variable name cannot be empty");
 
 		INameExpression inAttribute = stmtRange.takeFrontAs!INameExpression("Expected 'in' attribute");
-
-		if( inAttribute.name != "in" )
-			compiler.log.error("Expected 'in' keyword");
+		assure(inAttribute.name == "in", "Expected 'in' keyword");
 
 		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected 'for' aggregate expression");
 		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement("Expected loop body statement");
 
-		if( !stmtRange.empty )
-			compiler.log.error("Expected end of directive after loop body. Maybe ';' is missing");
+		assure(stmtRange.empty, "Expected end of directive after loop body. Maybe ';' is missing");
 
 		// TODO: Check somehow if aggregate has supported type
 
@@ -57,7 +53,7 @@ public:
 		// Push fake result to "make all happy" ;)
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData() ));
 
-		compiler.log.internalAssert(!compiler._jumpTableStack.empty, `Jump table stack is empty!`);
+		assure(!compiler._jumpTableStack.empty, "Jump table stack is empty!");
 		JumpTableItem[] jumpTable = compiler._jumpTableStack.back;
 		compiler._jumpTableStack.popBack();
 		foreach( ref JumpTableItem item; jumpTable )

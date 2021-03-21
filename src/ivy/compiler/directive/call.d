@@ -10,20 +10,17 @@ public:
 		import ivy.types.call_spec: CallSpec;
 
 		auto stmtRange = stmt[];
-		if( stmtRange.empty )
-			compiler.log.error(`Expected callable argument!`);
+		assure(!stmtRange.empty, "Expected callable argument!");
 
 		// Get callable expression AST and remember in order to put it last in stack
 		auto callableExpr = stmtRange.front;
 		stmtRange.popFront();
 
-		if( stmtRange.empty )
-			compiler.log.error(`Expected call arguments assoc array`);
+		assure(!stmtRange.empty, "Expected call arguments assoc array");
 		stmtRange.front.accept(compiler);
 		stmtRange.popFront();
 
-		if( !stmtRange.empty )
-			compiler.log.error(`Expected end of "call" directive. Maybe ';' is missing`);
+		assure(stmtRange.empty, "Expected end of \"call\" directive. Maybe ';' is missing");
 
 		// Compile callable expr AST
 		callableExpr.accept(compiler);

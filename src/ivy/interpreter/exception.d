@@ -2,21 +2,13 @@ module ivy.interpreter.exception;
 
 import ivy.exception: IvyException;
 
-struct CallStackInfoItem
-{
-	string mod;
-	string callable;
-}
-
 
 class IvyInterpretException: IvyException
 {
-private:
-	string _moduleName;
-	size_t _moduleLine;
-	size_t _instrAddr;
-	int _opcode;
-	CallStackInfoItem[] _callStackInfo;
+	import ivy.interpreter.exec_frame_info: ExecFrameInfo;
+
+protected:
+	ExecFrameInfo[] _frameStackInfo;
 
 public:
 	this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow @nogc @safe 
@@ -24,45 +16,17 @@ public:
 		super(msg, file, line, next);
 	}
 
-	CallStackInfoItem[] callStackInfo() @property {
-		return _callStackInfo;
+	ExecFrameInfo[] frameStackInfo() @property {
+		return this._frameStackInfo;
 	}
 
-	void callStackInfo(CallStackInfoItem[] items) @property {
-		_callStackInfo = items;
+	void frameStackInfo(ExecFrameInfo[] items) @property
+	{
+		import std.range: empty, back;
+		this._frameStackInfo = items;
+
+		// Set location of last item in frame stack
+		if( !items.empty )
+			this.location = items.back.location;
 	}
-
-	string moduleName() @property {
-		return _moduleName;
-	}
-
-	void moduleName(string val) @property {
-		_moduleName = val;
-	}
-
-	int opcode() @property {
-		return _opcode;
-	}
-
-	void opcode(int val) @property {
-		_opcode = val;
-	}
-
-
-	size_t moduleLine() @property {
-		return _moduleLine;
-	}
-
-	void moduleLine(size_t val) @property {
-		_moduleLine = val;
-	}
-
-	size_t instrAddr() @property {
-		return _instrAddr;
-	}
-
-	void instrAddr(size_t val) @property {
-		_instrAddr = val;
-	}
-
 }

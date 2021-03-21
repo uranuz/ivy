@@ -2,10 +2,12 @@ module ivy.interpreter.exec_stack;
 
 struct ExecStack
 {
+	import trifle.utils: ensure;
+
 	import ivy.types.data: IvyData;
 	import ivy.interpreter.exception: IvyInterpretException;
 
-	import std.exception: enforce;
+	alias assure = ensure!IvyInterpretException;
 
 	IvyData[] _stack;
 	size_t[] _stackBlocks;
@@ -17,7 +19,7 @@ struct ExecStack
 	void removeStackBlock()
 	{
 		import std.range: popBack, empty;
-		enforce!IvyInterpretException(!this._stackBlocks.empty, `Cannot remove stack block!`);
+		assure(!this._stackBlocks.empty, "Cannot remove stack block!");
 		this.popN(this.length); // Remove odd items from stack
 		this._stackBlocks.popBack();
 	}
@@ -35,7 +37,7 @@ struct ExecStack
 	ref IvyData back() @property
 	{
 		import std.range: back;
-		enforce!IvyInterpretException(!this.empty, `Cannot get exec stack "back" property, because it is empty!!!`);
+		assure(!this.empty, "Cannot get exec stack \"back\" property, because it is empty!!!");
 		return this._stack.back;
 	}
 
@@ -43,7 +45,7 @@ struct ExecStack
 	IvyData pop()
 	{
 		import std.range: popBack, back;
-		enforce!IvyInterpretException(!this.empty, `Cannot execute "popBack" for exec stack, because it is empty!!!`);
+		assure(!this.empty, "Cannot execute \"popBack\" for exec stack, because it is empty!!!");
 		IvyData val = this._stack.back();
 		this._stack.popBack();
 		return val;
@@ -52,7 +54,7 @@ struct ExecStack
 	void popN(size_t count)
 	{
 		import std.range: popBackN;
-		enforce!IvyInterpretException(count <= this.length, `Requested to remove more items than exists in stack block`);
+		assure(count <= this.length, "Requested to remove more items than exists in stack block");
 		this._stack.popBackN(count);
 	}
 
@@ -66,7 +68,7 @@ struct ExecStack
 		if( isIntegral!Int )
 	{
 		import std.range: back;
-		enforce!IvyInterpretException(!this.empty, `Cannot assign item of empty exec stack!!!`);
+		assure(!this.empty, "Cannot assign item of empty exec stack!!!");
 		this._stack[index + _stackBlocks.back] = arg;
 	}
 
@@ -74,7 +76,7 @@ struct ExecStack
 		if( isIntegral!Int )
 	{
 		import std.range: back;
-		enforce!IvyInterpretException(!this.empty, `Cannot get item by index for empty exec stack!!!`);
+		assure(!this.empty, "Cannot get item by index for empty exec stack!!!");
 		return this._stack[index + this._stackBlocks.back];
 	}
 

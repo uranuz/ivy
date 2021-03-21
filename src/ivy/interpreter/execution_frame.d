@@ -2,35 +2,34 @@ module ivy.interpreter.execution_frame;
 
 import ivy.exception: IvyException;
 
-class IvyExecutionFrameException: IvyException
-{
-public:
-	@nogc @safe this(string msg, string file = __FILE__, size_t line = __LINE__, Throwable next = null) pure nothrow
-	{
-		super(msg, file, line, next);
-	}
-}
-
 class ExecutionFrame
 {
-	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
+	import trifle.location: Location;
+	import trifle.utils: ensure;
+
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.iface.callable_object: ICallableObject;
 
-	import std.exception: enforce;
+	import ivy.interpreter.exec_frame_info: ExecFrameInfo;
+	import ivy.interpreter.exception: IvyInterpretException;
+	import ivy.bytecode: Instruction;
 
-	alias enf = enforce!IvyExecutionFrameException;
+	alias assure = ensure!IvyInterpretException;
 
 private:
+	// Callable object that is attached to execution frame
 	ICallableObject _callable;
 
-public IvyData _dataDict;
+	// Index of currently executed instruction
+	size_t _instrIndex = 0;
+
+public IvyData[string] _dataDict;
 
 public:
 	this(ICallableObject callable, IvyData[string] dataDict = null)
 	{
 		this._callable = callable;
-		enf(this._callable !is null, "Expected callable object for exec frame");
+		assure(this._callable, "Expected callable object for exec frame");
 
 		this._dataDict = dataDict;
 		this._dataDict["_ivyMethod"] = this._callable.symbol.name;
@@ -44,7 +43,7 @@ public:
 	IvyData getValue(string varName)
 	{
 		IvyData* res = varName in this._dataDict;
-		enf(res !is null, "Cannot find variable with name \"" ~ varName ~ "\" in exec frame for symbol \"" ~ this.callable.symbol.name ~ "\"");
+		assure(res, "Cannot find variable with name \"" ~ varName ~ "\" in exec frame for symbol \"" ~ this.callable.symbol.name ~ "\"");
 		return *res;
 	}
 
@@ -52,14 +51,68 @@ public:
 		this._dataDict[varName] = value;
 	}
 
+	void setJump(size_t instrIndex)
+	{
+		if( this.callable.isNative )
+			return; // Cannot set jump for native directive
+		assure(instrIndex <= this.callable.codeObject.instrs.length, "Cannot jump after the end of code object");
+		this._instrIndex = instrIndex;
+	}
+
+	void nextInstr() {
+		++this._instrIndex;
+	}
+
 	ICallableObject callable() @property
 	{
-		enf(this._callable !is null, "No callable for global execution frame");
+		assure(this._callable, "No callable for global execution frame");
 		return this._callable;
+	}
+
+	bool hasInstrs() @property
+	{
+		if( this.callable.isNative )
+			return false; 
+		return this._instrIndex < this.callable.codeObject.instrCount;
+	}
+
+	Instruction currentInstr() @property
+	{
+		if( !this.hasInstrs )
+			return Instruction(); // Cannot get instruction for native directive
+		return this.callable.codeObject.instrs[this._instrIndex];
+	}
+
+	size_t currentInstrLine() @property
+	{
+		if( !this.hasInstrs )
+			return 0; // Cannot tell instr line for native directive
+		return this.callable.codeObject.getInstrLine(this._instrIndex);
+	}
+
+	Location currentLocation() @property
+	{
+		Location loc;
+
+		loc.fileName = this.callable.moduleSymbol.name;
+		loc.lineIndex = this.currentInstrLine;
+
+		return loc;
+	}
+
+	ExecFrameInfo info() @property
+	{
+		ExecFrameInfo info;
+
+		info.callableName = this.callable.symbol.name;
+		info.location = this.currentLocation;
+		info.instrIndex = this._instrIndex;
+		info.opcode = this.currentInstr.opcode;
+
+		return info;
 	}
 
 	override string toString() {
 		return "<Exec frame for dir object \"" ~ this.callable.symbol.name ~ "\">";
 	}
-
 }

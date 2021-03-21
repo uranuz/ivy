@@ -14,9 +14,7 @@ class NewAllocDirInterpreter: BaseDirectiveInterpreter
 	override void interpret(Interpreter interp)
 	{
 		DeclClass class_ = cast(DeclClass) interp.getValue("class_").classNode;
-		interp.log.internalAssert(
-			class_ !is null,
-			"Expected \"class_\" to allocate instance of");
+		interp.assure(class_, "Expected \"class_\" to allocate instance of");
 		interp._stack.push(new DeclClassNode(class_));
 	}
 }

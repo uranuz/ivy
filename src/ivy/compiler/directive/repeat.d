@@ -17,13 +17,11 @@ public:
 		INameExpression varNameExpr = stmtRange.takeFrontAs!INameExpression("Loop variable name expected");
 
 		string varName = varNameExpr.name;
-		if( varName.length == 0 )
-			compiler.log.error("Loop variable name cannot be empty");
+		assure(!varName.empty, "Loop variable name cannot be empty");
 
 		INameExpression inAttribute = stmtRange.takeFrontAs!INameExpression("Expected 'in' attribute");
 
-		if( inAttribute.name != "in" )
-			compiler.log.error("Expected 'in' keyword");
+		assure(inAttribute.name == "in", "Expected 'in' keyword");
 
 		IExpression aggregateExpr = stmtRange.takeFrontAs!IExpression("Expected loop aggregate expression");
 
@@ -35,8 +33,7 @@ public:
 
 		ICompoundStatement bodyStmt = stmtRange.takeFrontAs!ICompoundStatement("Expected loop body statement");
 
-		if( !stmtRange.empty )
-			compiler.log.error("Expected end of directive after loop body. Maybe ';' is missing");
+		assure(stmtRange.empty, "Expected end of directive after loop body. Maybe ';' is missing");
 
 		// Issue instruction to get iterator from aggregate in execution stack
 		compiler.addInstr(OpCode.GetDataRange);
@@ -71,7 +68,7 @@ public:
 
 		// Data range is dropped by RunLoop already
 
-		compiler.log.internalAssert(!compiler._jumpTableStack.empty, `Jump table stack is empty!`);
+		compiler.assure(!compiler._jumpTableStack.empty, "Jump table stack is empty!");
 		JumpTableItem[] jumpTable = compiler._jumpTableStack.back;
 		compiler._jumpTableStack.popBack();
 		foreach( ref JumpTableItem item; jumpTable )

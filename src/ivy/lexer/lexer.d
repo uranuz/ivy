@@ -1,5 +1,7 @@
 module ivy.lexer.lexer;
 
+import trifle.utils: ensure;
+
 import ivy.lexer.lexeme_info: LexemeInfo;
 import ivy.lexer.lexeme: Lexeme;
 import ivy.lexer.consts;
@@ -8,7 +10,7 @@ import std.range: empty, front, popFront, back, popBack;
 import std.exception: enforce;
 import ivy.lexer.exception: IvyLexerException;
 
-alias enf = enforce!IvyLexerException;
+alias assure = ensure!IvyLexerException;
 
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyLexerDebug;
@@ -16,9 +18,10 @@ version(IvyTotalDebug) version = IvyLexerDebug;
 struct Lexer(S)
 {
 	import trifle.text_forward_range: TextForwardRange;
+	
 
 	import ivy.lexer.rule: LexicalRule;
-	import ivy.log: LogInfo, LogProxyImpl, LogInfoType;
+	import ivy.log: LogInfo, IvyLogProxy, LogerMethod;
 
 	import ivy.lexer.lexeme_info: LexemeInfo;
 	import ivy.lexer.lexeme: Lexeme;
@@ -27,10 +30,8 @@ struct Lexer(S)
 
 	alias SourceRange = TextForwardRange!String;
 	alias LexRule = LexicalRule!SourceRange;
-	alias LexemeT = Lexeme;
 	alias Char = SourceRange.Char;
 	alias String = S;
-	alias LogerMethod = void delegate(LogInfo);
 	alias LexerT = Lexer!String;
 
 	static auto staticRule(Flags...)(String str, LexemeType lexType, Flags extraFlags)
@@ -46,7 +47,9 @@ struct Lexer(S)
 			}
 			else static if( is( typeof(flag) == LexemeType ) || is( typeof(flag) == int ) )
 			{
-				enf(pairTypeIndex == 0, "Pair type index is not 0, so seems that it's attempt to set multiple pairs for lexeme");
+				assure(
+					pairTypeIndex == 0,
+					"Pair type index is not 0, so seems that it's attempt to set multiple pairs for lexeme");
 				pairTypeIndex = flag;
 			}
 			else
@@ -56,8 +59,8 @@ struct Lexer(S)
 		}
 
 		newFlags &= ~LexemeFlag.Dynamic;
-		enf(
-			!( cast(bool)(newFlags & LexemeFlag.Paren) && pairTypeIndex == 0 ),
+		assure(
+			cast(bool)(newFlags & LexemeFlag.Paren) || pairTypeIndex == 0,
 			"Lexeme with LexemeFlag.Paren expected to have pair lexeme");
 
 		return LexRule( str, &parseStaticLexeme!(SourceRange, LexRule), LexemeInfo( lexType, newFlags, pairTypeIndex ) );
@@ -76,7 +79,7 @@ struct Lexer(S)
 			}
 			else static if( is( typeof(flag) == LexemeType ) || is( typeof(flag) == int ) )
 			{
-				enf(
+				assure(
 					pairTypeIndex == 0,
 					"Pair type index is not 0, so seems that it's attempt to set multiple pairs for lexeme");
 				pairTypeIndex = flag;
@@ -88,7 +91,7 @@ struct Lexer(S)
 		}
 
 		newFlags |= LexemeFlag.Dynamic;
-		enf(
+		assure(
 			!( cast(bool)(newFlags & LexemeFlag.Paren) && pairTypeIndex == 0 ),
 			"Lexeme with LexemeFlag.Paren expected to have pair lexeme");
 
@@ -169,12 +172,13 @@ public:
 
 	}
 
+	string fileName;
 	SourceRange sourceRange; //Source range. Don't modify it!
 	SourceRange currentRange;
 	LexerContext _ctx;
-	LogerMethod logerMethod;
+	IvyLogProxy log;
 
-	/+private+/ LexemeT _front;
+	private Lexeme _front;
 
 	@disable this(this);
 
@@ -182,50 +186,22 @@ public:
 		enum isDebugMode = true;
 	else
 		enum isDebugMode = false;
-
-	static struct LogerProxy
-	{
-		mixin LogProxyImpl!(IvyLexerException, isDebugMode);
-		LexerT lexer;
-
-		string sendLogInfo(LogInfoType logInfoType, string msg)
-		{
-			import ivy.log.utils: getShortFuncName;
-
-			import std.array: array;
-			import std.conv: to;
-
-			if( lexer.logerMethod !is null ) {
-				lexer.logerMethod(LogInfo(
-					msg,
-					logInfoType,
-					getShortFuncName(func),
-					file,
-					line,
-					(!lexer.empty? lexer.front.loc.fileName: null),
-					(!lexer.empty? lexer.front.loc.lineIndex: 0),
-					(!lexer.empty? lexer.frontValue.array.to!string: null)
-				));
-			}
-			return msg;	
-		}
-	}
-
-	LogerProxy log(string func = __FUNCTION__, string file = __FILE__, int line = __LINE__)	{
-		return LogerProxy(func, file, line, this.save);
-	}
-
-	this(String src, LogerMethod logMeth = null)
+	
+	this(String src, string fName, LogerMethod logerMethod = null)
 	{
 		auto newRange = SourceRange(src);
-		this(newRange, logMeth);
+		this(newRange, fName, logerMethod);
 	}
 
-	this(ref const(SourceRange) srcRange, LogerMethod logMeth = null)
+	this(ref const(SourceRange) srcRange, string fName, LogerMethod logerMethod = null)
 	{
 		sourceRange = srcRange.save;
 		currentRange = sourceRange.save;
-		logerMethod = logMeth;
+		this.fileName = fName;
+		this.log = IvyLogProxy(logerMethod? (ref LogInfo logInfo) {
+			logInfo.location = this.front.loc;
+			logerMethod(logInfo);
+		}: null);
 
 		// In order to make lexer initialized at startup - we parse first lexeme
 		if( !this.empty )
@@ -236,7 +212,8 @@ public:
 	{
 		this.sourceRange = src.sourceRange.save;
 		this.currentRange = src.currentRange.save;
-		this.logerMethod = src.logerMethod;
+		this.fileName = src.fileName;
+		this.log = src.log;
 		this._ctx = src._ctx;
 		this._front = src._front;
 	}
@@ -249,7 +226,7 @@ public:
 		}
 	}
 
-	static LexemeT parseFront(ref SourceRange source, ref LexerContext ctx)
+	Lexeme parseFront(ref SourceRange source, ref LexerContext ctx)
 	{
 		import std.conv: to;
 		import std.range: empty;
@@ -260,11 +237,11 @@ public:
 		if( source.empty )
 		{
 			if( !ctx.parenStack.empty )
-				enf(
+				assure(
 					false,
-					"Expected matching parenthesis for "
-					~ (cast(LexemeType) ctx.parenStack.back.typeIndex).to!string
-					~ ", but unexpected end of input found!!!");
+					"Expected matching parenthesis for ",
+					cast(LexemeType) ctx.parenStack.back.typeIndex,
+					", but unexpected end of input found!");
 
 			return createLexemeAt(source, LexemeType.EndOfFile);
 		}
@@ -276,23 +253,23 @@ public:
 		} else if( ctx.state == ContextState.MixedContext ) {
 			rules = mixedContextRules;
 		} else {
-			enf(false, "No lexer context detected!");
+			assure(false, "No lexer context detected!");
 		}
 
 
-		LexemeT lex;
+		Lexeme lex;
 		SourceRange currentRange;
 		foreach( rule; rules )
 		{
 			currentRange = source.save;
 			if( rule.apply(currentRange) )
 			{
-				lex = extractLexeme( source, currentRange, rule.lexemeInfo );
+				lex = extractLexeme(source, currentRange, rule.lexemeInfo, fileName);
 				break;
 			}
 		}
 
-		enf(lex.info.isValidType, "Expected valid token!");
+		assure(lex.info.isValidType, "Expected valid token!");
 
 		return lex;
 	}
@@ -312,7 +289,7 @@ public:
 		import std.array: array;
 		import std.conv: to;
 
-		log.write("Running lexer popFront");
+		log.info("Running lexer popFront");
 
 		_front = parseFront(currentRange, _ctx);
 
@@ -320,13 +297,16 @@ public:
 		if( _front.info.isRightParen )
 		{
 			if( !_ctx.parenStack.empty ) {
-				enf(
+				assure(
 					_ctx.parenStack.back.pairTypeIndex == _front.typeIndex,
-					`Expected pair lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.pairTypeIndex).to!string
-					~ `" for lexeme "` ~ (cast(LexemeType) _ctx.parenStack.back.typeIndex).to!string
-					~ `", but got "` ~ (cast(LexemeType) _front.typeIndex).to!string ~ `"!`);
+					"Expected pair lexeme ",
+					cast(LexemeType) _ctx.parenStack.back.pairTypeIndex,
+					" for lexeme ",
+					cast(LexemeType) _ctx.parenStack.back.typeIndex,
+					", but got ",
+					cast(LexemeType) _front.typeIndex);
 			} else {
-				enf(false, `Right paren "` ~ _front.typeIndex.to!string ~ `" found, but paren stack is empty!`);
+				assure(false, "Right paren ", _front.typeIndex, " found, but paren stack is empty!");
 			}
 		}
 
@@ -395,7 +375,7 @@ public:
 		return currentRange.empty || _front.info.isEndOfFile;
 	}
 
-	LexemeT front() @property
+	Lexeme front() @property
 	{
 		return _front;
 	}
@@ -497,11 +477,11 @@ public:
 			return false;
 		source.popFront();
 
-		enf(!source.empty, `Expected decimal part of float!!!`);
+		assure(!source.empty, "Expected decimal part of float!!!");
 
 		ch = source.front;
 
-		enf('0' <= ch && ch <= '9', `Expected decimal part of float!!!`);
+		assure('0' <= ch && ch <= '9', "Expected decimal part of float!!!");
 		source.popFront();
 
 		while( !source.empty )
@@ -621,7 +601,6 @@ Lexeme createLexemeAt(SourceRange)(ref SourceRange source, LexemeType lexType = 
 	lex.loc.graphemeLength = 0;
 
 	lex.loc.lineIndex = source.lineIndex;
-	lex.loc.lineCount = 0;
 
 	lex.loc.columnIndex = source.columnIndex;
 
@@ -631,17 +610,23 @@ Lexeme createLexemeAt(SourceRange)(ref SourceRange source, LexemeType lexType = 
 }
 
 // Universal super-duper extractor of lexemes by it's begin, end ranges and info about type of lexeme
-auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRange) endRange, ref const(LexemeInfo) lexemeInfo)
-{
+auto extractLexeme(SourceRange)(
+	ref SourceRange beginRange,
+	ref const(SourceRange) endRange,
+	ref const(LexemeInfo) lexemeInfo,
+	string fileName
+) {
 	import std.algorithm: canFind, min;
 
 	Lexeme lex;
 	lex.info = lexemeInfo;
 
+	lex.loc.fileName = fileName;
+
 	// TODO: Maybe we should just add Location field for Lexeme
 	lex.loc.index = beginRange.index;
 
-	enf(
+	assure(
 		endRange.index >= beginRange.index,
 		"Index for end range must not be less than for begin range!");
 	// Not idiomatic range maybe approach, but effective
@@ -649,17 +634,16 @@ auto extractLexeme(SourceRange)(ref SourceRange beginRange, ref const(SourceRang
 
 	lex.loc.graphemeIndex = beginRange.graphemeIndex;
 
-	enf(
+	assure(
 		endRange.graphemeIndex >= beginRange.graphemeIndex,
 		"Grapheme index for end range must not be less than for begin range!");
 	lex.loc.graphemeLength = endRange.graphemeIndex - beginRange.graphemeIndex;
 
 	lex.loc.lineIndex = beginRange.lineIndex;
 
-	enf(
+	assure(
 		endRange.lineIndex >= beginRange.lineIndex,
 		"Line index for end range must not be less than for begin range!");
-	lex.loc.lineCount = endRange.lineIndex - beginRange.lineIndex;
 
 	
 	lex.loc.columnIndex = beginRange.columnIndex;

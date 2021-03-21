@@ -21,7 +21,7 @@ class HasDirInterpreter: BaseDirectiveInterpreter
 		switch(collection.type)
 		{
 			case IvyDataType.AssocArray:
-				interp.log.internalAssert(
+				interp.assure(
 					key.type == IvyDataType.String,
 					"Expected string as second \"has\" directive attribute, but got: ", key.type);
 				interp._stack.push(cast(bool)(key.str in collection));
@@ -30,7 +30,7 @@ class HasDirInterpreter: BaseDirectiveInterpreter
 				interp._stack.push(collection.array.canFind(key));
 				break;
 			default:
-				interp.log.error("Expected array or assoc array as first \"has\" directive attribute, but got: ", collection.type);
+				interp.assure(false, "Expected array or assoc array as first \"has\" directive attribute, but got: ", collection.type);
 				break;
 		}
 	}

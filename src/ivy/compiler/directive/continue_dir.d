@@ -13,11 +13,9 @@ public:
 
 		auto stmtRange = stmt[];
 
-		if( !stmtRange.empty ) {
-			compiler.log.error(`Expected end of "return" directive. Maybe ';' is missing`);
-		}
+		assure(stmtRange.empty, "Expected end of \"return\" directive. Maybe ';' is missing");
 
-		compiler.log.internalAssert(!compiler._jumpTableStack.empty, `Jump table stack is empty!`);
+		assure(!compiler._jumpTableStack.empty, "Jump table stack is empty!");
 		// Add instruction to jump at SOME position and put instruction index and kind in jump table
 		// This SOME position will be calculated and patched when generating loop bytecode
 		compiler._jumpTableStack.back ~= JumpTableItem(JumpKind.Continue, compiler.addInstr(OpCode.Jump));
