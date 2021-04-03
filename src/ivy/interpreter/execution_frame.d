@@ -8,7 +8,7 @@ class ExecutionFrame
 	import trifle.utils: ensure;
 
 	import ivy.types.data: IvyData, IvyDataType;
-	import ivy.types.iface.callable_object: ICallableObject;
+	import ivy.types.callable_object: CallableObject;
 
 	import ivy.interpreter.exec_frame_info: ExecFrameInfo;
 	import ivy.interpreter.exception: IvyInterpretException;
@@ -18,7 +18,7 @@ class ExecutionFrame
 
 private:
 	// Callable object that is attached to execution frame
-	ICallableObject _callable;
+	CallableObject _callable;
 
 	// Index of currently executed instruction
 	size_t _instrIndex = 0;
@@ -26,7 +26,7 @@ private:
 public IvyData[string] _dataDict;
 
 public:
-	this(ICallableObject callable, IvyData[string] dataDict = null)
+	this(CallableObject callable, IvyData[string] dataDict = null)
 	{
 		this._callable = callable;
 		assure(this._callable, "Expected callable object for exec frame");
@@ -63,7 +63,7 @@ public:
 		++this._instrIndex;
 	}
 
-	ICallableObject callable() @property
+	CallableObject callable() @property
 	{
 		assure(this._callable, "No callable for global execution frame");
 		return this._callable;

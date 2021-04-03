@@ -1,12 +1,10 @@
 module ivy.types.callable_object;
 
-import ivy.types.iface.callable_object: ICallableObject;
-
 /**
 	Callable object is representation of directive or module prepared for execution.
 	Consists of it's code object (that will be executed) and some context (module for example)
 */
-class CallableObject: ICallableObject
+class CallableObject
 {
 	import ivy.types.code_object: CodeObject;
 	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
@@ -16,11 +14,19 @@ class CallableObject: ICallableObject
 	import std.exception: enforce;
 
 private:
-	// Code object related to this callable
-	CodeObject _codeObject;
+	union
+	{
+		// Native directive interpreter connected to this callable
+		IDirectiveInterpreter _dirInterp;
+		// Code object related to this callable
+		CodeObject _codeObject;
+	}
 
-	// Native directive interpreter connected to this callable
-	IDirectiveInterpreter _dirInterp;
+	// Kind of callable: native IDirectiveInterpreter or ivy CodeObject
+	bool _isNative;
+
+	// Context is a "this" variable used with this callable
+	IvyData _context;
 
 	// Calculated default values
 	IvyData[string] _defaults;
@@ -29,6 +35,7 @@ public:
 	this(CodeObject codeObject, IvyData[string] defaults = null)
 	{
 		this._codeObject = codeObject;
+		this._isNative = false;
 		this._defaults = defaults;
 		enforce(this._codeObject !is null, "Expected code object");
 	}
@@ -36,12 +43,24 @@ public:
 	this(IDirectiveInterpreter dirInterp)
 	{
 		this._dirInterp = dirInterp;
+		this._isNative = true;
 		enforce(this._dirInterp !is null, "Expected native dir interpreter");
 	}
 
-override {
+	this(CallableObject other, IvyData context)
+	{
+		this._isNative = other.isNative;
+		if( this.isNative ) {
+			this._dirInterp = other.dirInterp;
+		} else {
+			this._codeObject = other.codeObject;
+		}
+		this._defaults = other.defaults;
+		this._context = context;
+	}
+
 	bool isNative() @property {
-		return this._dirInterp !is null;
+		return this._isNative;
 	}
 
 	IDirectiveInterpreter dirInterp() @property
@@ -77,8 +96,7 @@ override {
 	}
 
 	IvyData context() @property {
-		return IvyData();
+		return this._context;
 	}
-}
 
 }

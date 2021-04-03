@@ -56,16 +56,13 @@ private void _writeStr(DataRenderType renderType, OutRange, IvyData)(ref OutRang
 
 void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 	ref OutRange sink,
-	auto ref IvyData node,
-	size_t maxRecursion = size_t.max
+	auto ref IvyData node
 ) {
 	import ivy.types.data: IvyDataType;
 
 	import std.range: put;
 	import std.conv: to;
 	import std.algorithm: canFind;
-
-	assert( maxRecursion, "Recursion is too deep!" );
 
 	final switch(node.type)
 	{
@@ -106,7 +103,7 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 					sink.put(", ");
 				}
 
-				renderDataNode!renderType(sink, el, maxRecursion - 1);
+				renderDataNode!renderType(sink, el);
 			}
 			static if( asArray ) sink.put("]");
 			break;
@@ -121,13 +118,13 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 				_writeStr!renderType(sink, key);
 				sink.put(": ");
 
-				renderDataNode!renderType(sink, val, maxRecursion - 1);
+				renderDataNode!renderType(sink, val);
 				++i;
 			}
 			sink.put("}");
 			break;
 		case IvyDataType.ClassNode:
-			renderDataNode!renderType(sink, node.classNode.__serialize__(), maxRecursion - 1);
+			renderDataNode!renderType(sink, node.classNode.__serialize__());
 			break;
 		case IvyDataType.CodeObject:
 			_writeStr!renderType(sink, "[[code object: " ~ node.codeObject.symbol.name ~ "]]");

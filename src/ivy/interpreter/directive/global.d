@@ -15,11 +15,10 @@ private class GlobalDirInterpreter: BaseDirectiveInterpreter
 	}
 }
 
-import ivy.types.iface.callable_object: ICallableObject;
 import ivy.types.callable_object: CallableObject;
 
 private __gshared IDirectiveInterpreter globalDirective;
-__gshared ICallableObject globalCallable;
+__gshared CallableObject globalCallable;
 
 shared static this()
 {

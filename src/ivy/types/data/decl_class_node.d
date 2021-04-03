@@ -6,7 +6,7 @@ class DeclClassNode: BaseClassNode
 {
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.data.decl_class: DeclClass;
-	import ivy.types.binded_callable: BindedCallable;
+	import ivy.types.callable_object: CallableObject;
 
 protected:
 	DeclClass _type;
@@ -21,7 +21,7 @@ public:
 
 		// Bind all class callables to class instance
 		foreach (it; this._type._getMethods())
-			this._dataDict[it.name] = new BindedCallable(it.callable, IvyData(this));
+			this._dataDict[it.name] = new CallableObject(it.callable, IvyData(this));
 	}
 
 override {

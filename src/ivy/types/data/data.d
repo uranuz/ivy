@@ -7,7 +7,7 @@ struct TIvyData(S)
 	import ivy.types.data.consts: IvyDataType, NodeEscapeState;
 
 	import ivy.types.code_object: CodeObject;
-	import ivy.types.iface.callable_object: ICallableObject;
+	import ivy.types.callable_object: CallableObject;
 	import ivy.types.data.async_result: AsyncResult;
 	import ivy.types.data.iface.class_node: IClassNode;
 	import ivy.types.data.iface.range: IvyDataRange;
@@ -39,7 +39,7 @@ struct TIvyData(S)
 			MIvyData[String] assocArray;
 			IClassNode classNode;
 			CodeObject codeObject;
-			ICallableObject callable;
+			CallableObject callable;
 			ExecutionFrame execFrame;
 			IvyDataRange dataRange;
 			AsyncResult asyncResult;
@@ -81,7 +81,7 @@ struct TIvyData(S)
 
 	ref MIvyData[] array() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not array, but" ~ this.toDebugString());
+		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not array");
 		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
 		return storage.array[0];
 	}
@@ -106,7 +106,7 @@ struct TIvyData(S)
 		return storage.codeObject;
 	}
 
-	ICallableObject callable() @property
+	CallableObject callable() @property
 	{
 		enforce!DataNodeException(type == IvyDataType.Callable, "IvyData is not callable object");
 		enforce!DataNodeException(storage.callable !is null, "Detected null callable object");
@@ -335,7 +335,7 @@ struct TIvyData(S)
 			typeTag = IvyDataType.CodeObject;
 			storage.codeObject = arg;
 		}
-		else static if( is( T : ICallableObject ) )
+		else static if( is( T : CallableObject ) )
 		{
 			typeTag = IvyDataType.Callable;
 			storage.callable = arg;

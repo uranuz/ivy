@@ -10,7 +10,6 @@ class Interpreter
 
 	import ivy.types.code_object: CodeObject;
 	import ivy.types.module_object: ModuleObject;
-	import ivy.types.iface.callable_object: ICallableObject;
 	import ivy.types.callable_object: CallableObject;
 	import ivy.types.data: IvyDataType, IvyData;
 	import ivy.types.data.decl_class: DeclClass;
@@ -790,13 +789,13 @@ public:
 		return this._frameStack[$-2];
 	}
 
-	ICallableObject currentCallable() @property {
+	CallableObject currentCallable() @property {
 		return this.currentFrame.callable;
 	}
 
 	CodeObject currentCodeObject()
 	{
-		ICallableObject callable = this.currentCallable;
+		CallableObject callable = this.currentCallable;
 		if( !callable.isNative ) {
 			return callable.codeObject;
 		}
@@ -896,7 +895,7 @@ public:
 		assert(false);
 	}
 
-	void newFrame(ICallableObject callable, IvyData[string] dataDict = null)
+	void newFrame(CallableObject callable, IvyData[string] dataDict = null)
 	{
 		import ivy.types.symbol.consts: SymbolKind;
 		string symbolName = callable.symbol.name;
@@ -967,7 +966,7 @@ public:
 		this.findValueFrameGlobal(varName).setValue(varName, value);
 	}
 
-	ExecutionFrame _getModuleFrame(ICallableObject callable)
+	ExecutionFrame _getModuleFrame(CallableObject callable)
 	{
 		string moduleName = callable.moduleSymbol.name;
 		ExecutionFrame moduleFrame = this._moduleFrames.get(moduleName, null);
@@ -976,7 +975,7 @@ public:
 	}
 
 	IvyData[string] _extractCallArgs(
-		ICallableObject callable,
+		CallableObject callable,
 		IvyData[string] kwAttrs = null,
 		CallSpec callSpec = CallSpec()
 	) {
@@ -1026,11 +1025,11 @@ public:
 		return this._runCallableImpl(this.asCallable(callableNode), null, callSpec); // Skip instruction index increment
 	}
 
-	bool runCallable(ICallableObject callable, IvyData[string] kwAttrs = null) {
+	bool runCallable(CallableObject callable, IvyData[string] kwAttrs = null) {
 		return this._runCallableImpl(callable, kwAttrs); // Skip instruction index increment
 	}
 
-	bool _runCallableImpl(ICallableObject callable, IvyData[string] kwAttrs = null, CallSpec callSpec = CallSpec())
+	bool _runCallableImpl(CallableObject callable, IvyData[string] kwAttrs = null, CallSpec callSpec = CallSpec())
 	{
 		IvyData[string] callArgs = this._extractCallArgs(callable, kwAttrs, callSpec);
 
@@ -1113,7 +1112,7 @@ public:
 		return updEx;
 	}
 
-	AsyncResult execCallable(ICallableObject callable, IvyData[string] kwArgs = null)
+	AsyncResult execCallable(CallableObject callable, IvyData[string] kwArgs = null)
 	{
 		AsyncResult fResult = new AsyncResult();
 		try {
@@ -1126,7 +1125,7 @@ public:
 	}
 
 
-	static ICallableObject asCallable(IvyData callableNode)
+	static CallableObject asCallable(IvyData callableNode)
 	{
 		// If class node passed there, then we shall get callable from it by calling "__call__"
 		if( callableNode.type == IvyDataType.ClassNode )

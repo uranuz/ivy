@@ -5,13 +5,12 @@ import ivy.types.data.base_class_node: BaseClassNode;
 class DeclClass: BaseClassNode
 {
 	import ivy.types.data: IvyData, IvyDataType;
-	import ivy.types.binded_callable: BindedCallable;
-	import ivy.types.iface.callable_object: ICallableObject;
+	import ivy.types.callable_object: CallableObject;
 
 	static struct CallableKV
 	{
 		string name;
-		ICallableObject callable;
+		CallableObject callable;
 	}
 
 protected:
@@ -28,11 +27,11 @@ public:
 
 		// Bind all callables to this class
 		foreach( it; this._getThisMethods() )
-			this._dataDict[it.name] = new BindedCallable(it.callable, IvyData(this));
+			this._dataDict[it.name] = new CallableObject(it.callable, IvyData(this));
 
 		// Workaround. Put default values from __init__ to __new__
-		ICallableObject initCallable = this.__getAttr__("__init__").callable;
-		ICallableObject newCallable = this.__call__();
+		CallableObject initCallable = this.__getAttr__("__init__").callable;
+		CallableObject newCallable = this.__call__();
 		newCallable.defaults = initCallable.defaults;
 	}
 
@@ -53,7 +52,7 @@ override {
 		this._dataDict[field] = val;
 	}
 
-	ICallableObject __call__() {
+	CallableObject __call__() {
 		return this.__getAttr__("__new__").callable;
 	}
 
