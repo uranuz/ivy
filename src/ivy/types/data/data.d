@@ -572,9 +572,11 @@ struct TIvyData(S)
 		return toSomeString!(DataRenderType.TextDebug);
 	}
 
+	/*
 	string toHTMLDebugString() {
 		return toSomeString!(DataRenderType.HTMLDebug);
 	}
+	*/
 
 	string toJSONString() {
 		return toSomeString!(DataRenderType.JSON);

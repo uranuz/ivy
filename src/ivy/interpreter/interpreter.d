@@ -91,9 +91,36 @@ public:
 
 	void execLoop(AsyncResult fResult)
 	{
-		import std.range: empty;
+		// Save initial execution frame count.
+		size_t initFrameCount = this._frameStack.length;
 
-		while( !this._frameStack.empty )
+		IvyData res = this.execLoopImpl(initFrameCount);
+		if( this._frameStack.length < initFrameCount ) {
+			// If exec frame stack is less than initial then job is done
+			fResult.resolve(res);
+		}
+		// Looks like interpreter was suspended by async operation
+	}
+
+	IvyData execLoopSync()
+	{
+		// Save initial execution frame count.
+		size_t initFrameCount = this._frameStack.length;
+
+		IvyData res = this.execLoopImpl(initFrameCount);
+		assure(
+			this._frameStack.length < initFrameCount,
+			"Requested synchronous code execution, but detected that interpreter was suspended!");
+		return res;
+	}
+
+	IvyData execLoopImpl(size_t initFrameCount)
+	{
+		import std.range: empty;
+		assure(!this._frameStack.empty, "Unable to run interpreter if exec frame is empty");
+
+		IvyData res;
+		while( this._frameStack.length >= initFrameCount )
 		{
 			while( this.currentFrame.hasInstrs )
 			{
@@ -102,25 +129,19 @@ public:
 					continue;
 				this.currentFrame.nextInstr();
 				if( la == LoopAction.await )
-					return;
+					return IvyData();
 			}
 
 			// We expect to have only the result of directive on the stack
 			assure(this._stack.length == 1, "Exec stack should contain 1 item now");
 
-			IvyData result = this._stack.pop(); // Take result
+			res = this._stack.pop(); // Take result
 			this.removeFrame(); // Exit out of this frame
 
-			// If there is the last frame it means that it is the last module frame.
-			// We need to leave frame here for case when we want to execute specific function of module
-			if( this._frameStack.empty )
-			{
-				fResult.resolve(result);
-				return;
-			}
-
-			this._stack.push(result); // Put result back
+			if( !this._frameStack.empty )
+				this._stack.push(res); // Put result back if there is a place for it
 		}
+		return res;
 	}
 
 	LoopAction execLoopBody()

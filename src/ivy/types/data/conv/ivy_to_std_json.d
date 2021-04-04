@@ -3,31 +3,30 @@ module ivy.types.data.conv.ivy_to_std_json;
 import std.json: JSONValue;
 import ivy.types.data: IvyData, IvyDataType;
 
-JSONValue toStdJSON(ref IvyData src)
+import ivy.interpreter.interpreter: Interpreter;
+import ivy.types.data.iface.class_node: IClassNode;
+
+JSONValue toStdJSON2(Interp...)(IvyData src, Interp interp)
 {
+	import ivy.types.data.conv.consts: IvySrlField;
 	import ivy.types.data.conv.ivy_to_std_json: toStdJSON2;
 
 	import std.exception: enforce;
 
 	final switch( src.type )
 	{
-		case IvyDataType.Undef:
-		case IvyDataType.Null:
-			return JSONValue(null);
-		case IvyDataType.Boolean:
-			return JSONValue(src.boolean);
-		case IvyDataType.Integer:
-			return JSONValue(src.integer);
-		case IvyDataType.Floating:
-			return JSONValue(src.floating);
-		case IvyDataType.String:
-			return JSONValue(src.str);
+		case IvyDataType.Undef: return JSONValue("undef");
+		case IvyDataType.Null: return JSONValue(null);
+		case IvyDataType.Boolean: return JSONValue(src.boolean);
+		case IvyDataType.Integer: return JSONValue(src.integer);
+		case IvyDataType.Floating: return JSONValue(src.floating);
+		case IvyDataType.String: return JSONValue(src.str);
 		case IvyDataType.Array:
 		{
 			JSONValue[] nodeArray;
 			nodeArray.length = src.array.length;
 			foreach( size_t i, val; src.array ) {
-				nodeArray[i] = val.toStdJSON;
+				nodeArray[i] = val.toStdJSON2;
 			}
 			return JSONValue(nodeArray);
 		}
@@ -36,61 +35,45 @@ JSONValue toStdJSON(ref IvyData src)
 			JSONValue[string] nodeAA;
 			foreach( string key, val; src.assocArray ) {
 				if( val.type != IvyDataType.Undef ) {
-					nodeAA[key] = val.toStdJSON;
+					nodeAA[key] = val.toStdJSON2;
 				}
 			}
 			return JSONValue(nodeAA);
 		}
 		case IvyDataType.ClassNode:
-			return src.classNode.__serialize__().toStdJSON2();
+		{
+			//static if( Interp.length == 0 ) {
+				return JSONValue([
+					IvySrlField.type: src.type
+				]);
+			/*
+			} else {
+				return _serializeClassNode(src.classNode, Interp[0]).toStdJSON2(Interp[0]);
+			}
+			*/
+		}
 		case IvyDataType.CodeObject:
+			return src.codeObject.toStdJSON();
 		case IvyDataType.Callable:
-		case IvyDataType.ExecutionFrame:
-		case IvyDataType.DataNodeRange:
-		case IvyDataType.ModuleObject:
-		case IvyDataType.AsyncResult:
-			enforce(false, `Cannot serialize type`);
-	}
-	assert(false, `This should never happen`);
-}
-
-JSONValue toStdJSON2(IvyData con)
-{
-	import ivy.types.data.conv.consts: IvySrlField;
-
-	final switch( con.type )
-	{
-		case IvyDataType.Undef: return JSONValue("undef");
-		case IvyDataType.Null: return JSONValue();
-		case IvyDataType.Boolean: return JSONValue(con.boolean);
-		case IvyDataType.Integer: return JSONValue(con.integer);
-		case IvyDataType.Floating: return JSONValue(con.floating);
-		case IvyDataType.String: return JSONValue(con.str);
-		case IvyDataType.Array: {
-			JSONValue[] arr;
-			foreach( IvyData node; con.array ) {
-				arr ~= toStdJSON(node);
-			}
-			return JSONValue(arr);
-		}
-		case IvyDataType.AssocArray: {
-			JSONValue[string] arr;
-			foreach( string key, IvyData node; con.assocArray ) {
-				arr[key] ~= toStdJSON(node);
-			}
-			return JSONValue(arr);
-		}
-		case IvyDataType.CodeObject: {
-			return con.codeObject.toStdJSON();
-		}
-		case IvyDataType.Callable:
-		case IvyDataType.ClassNode:
 		case IvyDataType.ExecutionFrame:
 		case IvyDataType.DataNodeRange:
 		case IvyDataType.AsyncResult:
 		case IvyDataType.ModuleObject: {
-			return JSONValue([IvySrlField.type: con.type]);
+			return JSONValue([
+				IvySrlField.type: src.type
+			]);
 		}
 	}
-	assert(false);
+	assert(false, `This should never happen`);
 }
+
+/*
+IvyData _serializeClassNode(IClassNode classNode, Interpreter interp)
+{
+	ICallableNode serializeCallable = classNode.__getAttr__("__serialize__");
+	
+	interp.execCallable(serializeCallable).then((IvyData ivyNode) {
+		ivyNode.
+	});
+}
+*/
