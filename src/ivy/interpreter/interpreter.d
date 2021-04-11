@@ -29,6 +29,7 @@ class Interpreter
 	import ivy.interpreter.directive.global: globalCallable;
 	import ivy.interpreter.exec_frame_info: ExecFrameInfo;
 	import ivy.interpreter.exception: IvyInterpretException;
+	import ivy.types.data.iface.class_node: IClassNode;
 	import ivy.exception: IvyException;
 
 	import ivy.log: LogInfo, IvyLogProxy, LogerMethod;
@@ -971,6 +972,10 @@ public:
 		return currFrame;
 	}
 
+	bool hasValue(string varName) {
+		return this.findValueFrame(varName).hasValue(varName);
+	}
+
 	IvyData getValue(string varName) {
 		return this.findValueFrame(varName).getValue(varName);
 	}
@@ -1145,6 +1150,19 @@ public:
 		return fResult;
 	}
 
+	IvyData execCallableSync(CallableObject callable, IvyData[string] kwArgs = null)
+	{
+		this.runCallable(callable, kwArgs);
+		return this.execLoopSync();
+	}
+
+	IvyData execClassMethodSync(IClassNode classNode, string method, IvyData[string] kwArgs = null) {
+		return this.execCallableSync(classNode.__getAttr__(method).callable, kwArgs);
+	}
+
+	AsyncResult execClassMethod(IClassNode classNode, string method, IvyData[string] kwArgs = null) {
+		return this.execCallable(classNode.__getAttr__(method).callable, kwArgs);
+	}
 
 	static CallableObject asCallable(IvyData callableNode)
 	{

@@ -16,7 +16,6 @@ class IvyEngine
 	import ivy.types.data.async_result: AsyncResult;
 	import ivy.interpreter.interpreter: Interpreter;
 	import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
-	import ivy.interpreter.directive.standard_factory: makeStandardInterpreterDirFactory;
 	import ivy.engine_config: IvyConfig;
 	import ivy.compiler.module_repository: CompilerModuleRepository;
 	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
@@ -139,12 +138,13 @@ private:
 	void _initObjects()
 	{
 		import ivy.types.symbol.iface: IIvySymbol;
+		import ivy.interpreter.directive.standard_factory: ivyDirFactory;
 
 		if( _config.compilerFactory is null ) {
 			_config.compilerFactory = makeStandardDirCompilerFactory();
 		}
 		if( _config.directiveFactory is null ) {
-			_config.directiveFactory = makeStandardInterpreterDirFactory();
+			_config.directiveFactory = ivyDirFactory;
 		}
 		
 		_moduleRepo = new CompilerModuleRepository(

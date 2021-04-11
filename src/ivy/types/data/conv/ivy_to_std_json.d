@@ -42,15 +42,13 @@ JSONValue toStdJSON2(Interp...)(IvyData src, Interp interp)
 		}
 		case IvyDataType.ClassNode:
 		{
-			//static if( Interp.length == 0 ) {
+			static if( interp.length == 0 ) {
 				return JSONValue([
 					IvySrlField.type: src.type
 				]);
-			/*
 			} else {
-				return _serializeClassNode(src.classNode, Interp[0]).toStdJSON2(Interp[0]);
+				return interp[0].execClassMethodSync(src.callableNode, "__serialize__").toStdJSON2(interp);
 			}
-			*/
 		}
 		case IvyDataType.CodeObject:
 			return src.codeObject.toStdJSON();
@@ -64,16 +62,5 @@ JSONValue toStdJSON2(Interp...)(IvyData src, Interp interp)
 			]);
 		}
 	}
-	assert(false, `This should never happen`);
+	assert(false, "This should never happen");
 }
-
-/*
-IvyData _serializeClassNode(IClassNode classNode, Interpreter interp)
-{
-	ICallableNode serializeCallable = classNode.__getAttr__("__serialize__");
-	
-	interp.execCallable(serializeCallable).then((IvyData ivyNode) {
-		ivyNode.
-	});
-}
-*/

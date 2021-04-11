@@ -2,12 +2,12 @@ module ivy.interpreter.directive.global;
 
 import ivy.interpreter.directive.utils;
 
-private class GlobalDirInterpreter: BaseDirectiveInterpreter
+private class GlobalDirInterpreter: DirectiveInterpreter
 {
 	import ivy.types.symbol.global: globalSymbol;
 	
 	this() {
-		this._symbol = globalSymbol;
+		super((Interpreter) {}, globalSymbol);
 	}
 	
 	override void interpret(Interpreter interp) {
