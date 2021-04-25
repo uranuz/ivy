@@ -1,11 +1,14 @@
 module ivy.types.data.decl_class;
 
 import ivy.types.data.base_class_node: BaseClassNode;
+import ivy.types.data.decl_class_node: DeclClassNode;
 
 class DeclClass: BaseClassNode
 {
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.callable_object: CallableObject;
+	import ivy.interpreter.directive.base: makeDir;
+	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
 
 	static struct CallableKV
 	{
@@ -19,20 +22,30 @@ protected:
 	DeclClass _baseClass;
 
 public:
-	this(string name, IvyData[string] dataDict, DeclClass baseClass)
+	this(string name, IvyData[string] dataDict, DeclClass baseClass = null)
 	{
 		this._name = name;
 		this._dataDict = dataDict;
 		this._baseClass = baseClass;
 
-		// Bind all callables to this class
-		foreach( it; this._getThisMethods() )
-			this._dataDict[it.name] = new CallableObject(it.callable, IvyData(this));
+		CallableObject initCallable;
+		try {
+			initCallable = this.__getAttr__("__init__").callable;
+		} catch(Exception) {
+			// Maybe there is no __init__ for class, so create it...
+			this.__setAttr__(IvyData(new CallableObject(i__emptyInit__)), "__init__");
+			initCallable = this.__getAttr__("__init__").callable;
+		}
 
-		// Workaround. Put default values from __init__ to __new__
-		CallableObject initCallable = this.__getAttr__("__init__").callable;
-		CallableObject newCallable = this.__call__();
-		newCallable.defaults = initCallable.defaults;
+		try {
+			// Put default values from __init__ to __new__
+			CallableObject newCallable = this.__call__();
+			newCallable.defaults = initCallable.defaults;
+			// We need to bind __new__ callable to class object to be able to make instances
+			this.__setAttr__(IvyData(new CallableObject(newCallable, IvyData(this))), "__new__");
+		} catch(Exception) {
+			// Seems that it is build in class that cannot be created by user
+		}
 	}
 
 override {
@@ -55,29 +68,25 @@ override {
 	CallableObject __call__() {
 		return this.__getAttr__("__new__").callable;
 	}
-
-	IvyData __serialize__() {
-		return IvyData("<class " ~ this._name ~ ">");
-	}
 }
-	CallableKV[] _getThisMethods()
+	final CallableKV[] _getThisMethods()
 	{
 		import std.algorithm: filter, map;
 		import std.array: array;
 
-		// Return all class callables except for "__new__"
+		// Return all class callables
 		return this._dataDict.byKeyValue.filter!(
-			(it) => it.value.type == IvyDataType.Callable //&& it.key != "__new__"
+			(it) => it.value.type == IvyDataType.Callable
 		).map!(
 			(it) => CallableKV(it.key, it.value.callable)
 		).array;
 	}
 
-	CallableKV[] _getBaseMethods() {
+	final CallableKV[] _getBaseMethods() {
 		return (this._baseClass is null)? []: this._baseClass._getMethods();
 	}
 
-	CallableKV[] _getMethods()
+	final CallableKV[] _getMethods()
 	{
 		import std.algorithm: filter, map;
 		import std.array: array;
@@ -89,5 +98,46 @@ override {
 	string name() @property {
 		return this._name;
 	}
+
+	private final void __emptyInit__() {
+		// Default __init__ that does nothing
+	}
+
+	private __gshared IDirectiveInterpreter i__emptyInit__;
+
+	shared static this()
+	{
+		i__emptyInit__ = makeDir!__emptyInit__("__init__");
+	}
 }
 
+DeclClass makeClass(alias ClassNode)(string symbolName)
+	if( is(ClassNode : DeclClassNode) )
+{
+	import std.traits:
+		getSymbolsByUDA,
+		getUDAs,
+		isSomeFunction;
+	import std.exception: enforce;
+
+	import ivy.interpreter.directive.base: IvyMethodAttr, makeDir;
+	import ivy.types.data: IvyData;
+	import ivy.types.callable_object: CallableObject;
+
+	IvyData[string] dataDict;
+	static foreach( alias method; getSymbolsByUDA!(ClassNode, IvyMethodAttr) )
+	{{
+		static assert(isSomeFunction!method, "Some function expected to be marked with IvyMethodAttr");
+		alias udas = getUDAs!(method, IvyMethodAttr);
+		static assert(udas.length == 1, "Expected only one instance of IvyMethodAttr on method");
+		enum IvyMethodAttr ivyMethodAttr = udas[0];
+		static if( ivyMethodAttr.symbolName.length > 0 ) {
+			enum methodSymbolName = ivyMethodAttr.symbolName;
+		} else {
+			enum methodSymbolName = __traits(identifier, method);
+		}
+		enforce(methodSymbolName !in dataDict, "Symbol '" ~ methodSymbolName ~ "' already exists in class: " ~ symbolName);
+		dataDict[methodSymbolName] = new CallableObject(makeDir!method(methodSymbolName, ivyMethodAttr.attrs));
+	}}
+	return new DeclClass(symbolName, dataDict);
+}

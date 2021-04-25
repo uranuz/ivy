@@ -3,7 +3,6 @@ module ivy.types.data.conv.ivy_to_std_json;
 import std.json: JSONValue;
 import ivy.types.data: IvyData, IvyDataType;
 
-import ivy.interpreter.interpreter: Interpreter;
 import ivy.types.data.iface.class_node: IClassNode;
 
 JSONValue toStdJSON2(Interp...)(IvyData src, Interp interp)

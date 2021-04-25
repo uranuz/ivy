@@ -14,6 +14,7 @@ class IvyEngine
 {
 	import ivy.types.data: IvyData;
 	import ivy.types.data.async_result: AsyncResult;
+	import ivy.interpreter._global_callable_init; // Used to ensure that this module is compiled. Don't delete
 	import ivy.interpreter.interpreter: Interpreter;
 	import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
 	import ivy.engine_config: IvyConfig;

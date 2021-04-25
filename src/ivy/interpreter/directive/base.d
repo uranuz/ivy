@@ -60,6 +60,7 @@ template makeIvyMethod(alias Method)
 	import ivy.interpreter.interpreter: Interpreter;
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.data.iface.class_node: IClassNode;
+	import ivy.types.data.decl_class_node: DeclClassNode;
 
 	alias ParamTypes = Parameters!(Method);
 	alias ResultType = ReturnType!(Method);
@@ -108,8 +109,11 @@ template makeIvyMethod(alias Method)
 		typeof(toDelegate(&Method)) asDel;
 		if( interp.hasValue("this") )
 		{
+			DeclClassNode declClassNode = cast(DeclClassNode) interp.getValue("this").classNode;
+			enforce(declClassNode !is null, "Expected DeclClassNode as this parameter");
+
 			asDel.funcptr = &Method;
-			asDel.ptr = cast(void*) interp.getValue("this").classNode;
+			asDel.ptr = cast(void*) declClassNode;
 		} else {
 			asDel = toDelegate(&Method);
 		}
@@ -125,4 +129,11 @@ template makeIvyMethod(alias Method)
 
 IDirectiveInterpreter makeDir(alias Method)(string symbolName, DirAttr[] attrs = null) {
 	return new DirectiveInterpreter(&makeIvyMethod!Method, new DirectiveSymbol(symbolName, attrs));
+}
+
+
+struct IvyMethodAttr
+{
+	string symbolName;
+	DirAttr[] attrs;
 }

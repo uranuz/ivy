@@ -12,7 +12,6 @@ interface IClassNode
 	IvyData opIndex(IvyData);
 	IvyData __getAttr__(string);
 	void __setAttr__(IvyData, string);
-	IvyData __serialize__();
 	CallableObject __call__();
 	size_t length() @property;
 	bool empty() @property;

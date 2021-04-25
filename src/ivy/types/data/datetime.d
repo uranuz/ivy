@@ -1,17 +1,22 @@
 module ivy.types.data.datetime;
 
-import ivy.types.data.base_class_node: BaseClassNode;
+import ivy.types.data.decl_class_node: DeclClassNode;
 
 // Хранит дату/время
-class IvyDateTime: BaseClassNode
+class IvyDateTime: DeclClassNode
 {
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.data.consts: DateTimeAttr;
-	
+	import ivy.interpreter.directive.base: IvyMethodAttr;
+	import ivy.types.data.decl_class: DeclClass, makeClass;
+
 	import std.datetime: SysTime, Month;
 	import std.exception: enforce;
 public:
-	this(SysTime dt) {
+	this(SysTime dt)
+	{
+		super(_declClass);
+
 		this._dt = dt;
 	}
 
@@ -33,7 +38,7 @@ public:
 				case DateTimeAttr.dayOfYear: val = cast(ptrdiff_t) this._dt.dayOfYear; break;
 				case DateTimeAttr.utcMinuteOffset: val = cast(ptrdiff_t) this._dt.utcOffset.total!("minutes"); break;
 				default:
-					enforce(false, "Cannot get DateTime attribute: " ~ attrName);
+					return super.__getAttr__(attrName);
 			}
 			return val;
 		}
@@ -57,17 +62,26 @@ public:
 					enforce(false, "Cannot set DateTime attribute: " ~ attrName);
 			}
 		}
-
-		IvyData __serialize__()
-		{
-			import ivy.types.data.conv.consts: IvySrlField, IvySrlFieldType;
-
-			return IvyData([
-				IvySrlField.type: IvyData(IvySrlFieldType.dateTime),
-				IvySrlField.value: IvyData(this._dt.toISOExtString())
-			]);
-		}
 	}
+
+	@IvyMethodAttr()
+	IvyData __serialize__()
+	{
+		import ivy.types.data.conv.consts: IvySrlField, IvySrlFieldType;
+
+		return IvyData([
+			IvySrlField.type: IvyData(IvySrlFieldType.dateTime),
+			IvySrlField.value: IvyData(this._dt.toISOExtString())
+		]);
+	}
+
+	private __gshared DeclClass _declClass;
+	
+	shared static this()
+	{
+		_declClass = makeClass!(typeof(this))("DateTime");
+	}
+
 protected:
 	SysTime _dt;
 }

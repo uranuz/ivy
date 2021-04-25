@@ -93,7 +93,7 @@ struct TIvyData(S)
 	}
 
 	IClassNode classNode() @property
-{
+	{
 		enforce!DataNodeException(type == IvyDataType.ClassNode, "IvyData is not class node");
 		enforce!DataNodeException(storage.classNode !is null, "Detected null class node");
 		return storage.classNode;
@@ -564,32 +564,14 @@ struct TIvyData(S)
 		return _escapeState;
 	}
 
+	import ivy.types.data.render: DataRenderType;
+	import ivy.types.data.render: renderDataNode2;
+
 	string toString() {
-		return toSomeString!(DataRenderType.Text);
+		return renderDataNode2!(DataRenderType.Text)(this);
 	}
 
 	string toDebugString() {
-		return toSomeString!(DataRenderType.TextDebug);
-	}
-
-	/*
-	string toHTMLDebugString() {
-		return toSomeString!(DataRenderType.HTMLDebug);
-	}
-	*/
-
-	string toJSONString() {
-		return toSomeString!(DataRenderType.JSON);
-	}
-
-	import ivy.types.data.render: DataRenderType;
-	string toSomeString(DataRenderType kind)()
-	{
-		import ivy.types.data.render: renderDataNode;
-		import std.array: appender;
-
-		auto result = appender!string();
-		renderDataNode!kind(result, this);
-		return result.data;
+		return renderDataNode2!(DataRenderType.TextDebug)(this);
 	}
 }

@@ -8,6 +8,8 @@ class DeclClassNode: BaseClassNode
 	import ivy.types.data.decl_class: DeclClass;
 	import ivy.types.callable_object: CallableObject;
 
+	import std.exception: enforce;
+
 protected:
 	DeclClass _type;
 
@@ -17,6 +19,8 @@ protected:
 public:
 	this(DeclClass type)
 	{
+		enforce(type !is null, "Expected instance of DeclClass");
+
 		this._type = type;
 
 		// Bind all class callables to class instance
@@ -36,10 +40,6 @@ override {
 
 	void __setAttr__(IvyData val, string field) {
 		this._dataDict[field] = val;
-	}
-
-	IvyData __serialize__() {
-		return IvyData("<" ~ this._type.name ~ ">");
 	}
 }
 

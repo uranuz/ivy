@@ -9,6 +9,7 @@ import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 import ivy.interpreter.directive.base: makeDir;
 import ivy.types.symbol.dir_attr: DirAttr;
 import ivy.types.symbol.consts: IvyAttrType;
+import ivy.types.symbol.consts: GLOBAL_SYMBOL_NAME;
 
 
 InterpreterDirectiveFactory ivyDirFactory() @property {
@@ -119,9 +120,12 @@ IntegerRange rangeFn(size_t begin, size_t end) {
 	return new IntegerRange(begin, end);
 }
 
-IvyData toJSONStrFn(IvyData value)
+IvyData toJSONStrFn(IvyData value, Interpreter interp)
 {
-	IvyData res = value.toJSONString();
+	import ivy.types.data.render: DataRenderType;
+	import ivy.types.data.render: renderDataNode2;
+
+	IvyData res = renderDataNode2!(DataRenderType.JSON)(value, interp);
 	res.escapeState = NodeEscapeState.Safe;
 	return res;
 }

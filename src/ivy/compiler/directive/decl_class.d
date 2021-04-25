@@ -105,7 +105,7 @@ class DeclClassCompiler: IDirectiveCompiler
 				newClassCodeObjIndex = compiler.enterNewCodeObject(newClassSymbol);
 				scope(exit) compiler.exitCodeObject();
 
-				// Class object expected to be stored in context variable "this". Use it as argunent to "__new_alloc__"
+				// Class object expected to be stored in context variable "this". Use it as argument to "__new_alloc__"
 				compiler.addInstr(OpCode.LoadName, compiler.addConst( IvyData("this") ));
 				// Add instruction to load "__new_alloc__" callable from global scope
 				compiler.addInstr(OpCode.LoadName, compiler.addConst( IvyData("__new_alloc__") ));

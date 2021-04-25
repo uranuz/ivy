@@ -54,11 +54,14 @@ private void _writeStr(DataRenderType renderType, OutRange, IvyData)(ref OutRang
 	}
 }
 
-void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
+void renderDataNode(DataRenderType renderType, IvyData, OutRange, Interp...)(
 	ref OutRange sink,
-	auto ref IvyData node
+	auto ref IvyData node,
+	Interp interp
 ) {
 	import ivy.types.data: IvyDataType;
+	import ivy.types.data.iface.class_node: IClassNode;
+	import ivy.types.callable_object: CallableObject;
 
 	import std.range: put;
 	import std.conv: to;
@@ -103,7 +106,7 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 					sink.put(", ");
 				}
 
-				renderDataNode!renderType(sink, el);
+				renderDataNode!renderType(sink, el, interp);
 			}
 			static if( asArray ) sink.put("]");
 			break;
@@ -118,14 +121,33 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 				_writeStr!renderType(sink, key);
 				sink.put(": ");
 
-				renderDataNode!renderType(sink, val);
+				renderDataNode!renderType(sink, val, interp);
 				++i;
 			}
 			sink.put("}");
 			break;
 		case IvyDataType.ClassNode:
-			renderDataNode!renderType(sink, node.classNode.__serialize__());
+		{
+			static if( interp.length > 0 )
+			{
+				IClassNode classNode = node.classNode;
+				enum bool useRender = [
+					DataRenderType.Text,
+					DataRenderType.TextDebug,
+					DataRenderType.HTML,
+					DataRenderType.HTMLDebug,
+				].canFind(renderType);
+				static if( useRender ) {
+					enum outMethod = "render";
+				} else {
+					enum outMethod = "__serialize__";
+				}
+				renderDataNode!renderType(sink, interp[0].execClassMethodSync(classNode, outMethod), interp);
+			} else {
+				_writeStr!renderType(sink, "[[class node]]");
+			}
 			break;
+		}
 		case IvyDataType.CodeObject:
 			_writeStr!renderType(sink, "[[code object: " ~ node.codeObject.symbol.name ~ "]]");
 			break;
@@ -145,4 +167,16 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange)(
 			_writeStr!renderType(sink, "[[module object]]");
 			break;
 	}
+}
+
+
+string renderDataNode2(DataRenderType renderType, IvyData, Interp...)(
+	auto ref IvyData node,
+	Interp interp
+) {
+	import std.array: appender;
+
+	auto result = appender!string();
+	renderDataNode!renderType(result, node, interp);
+	return result.data;
 }

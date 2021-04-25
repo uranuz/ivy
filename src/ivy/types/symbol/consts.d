@@ -16,3 +16,8 @@ enum SymbolKind: ubyte {
 	module_,
 	declClass
 }
+
+enum IvyProtocolAttr: string
+{
+	serialize = "__serialize__"
+}

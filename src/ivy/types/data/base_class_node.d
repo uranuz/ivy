@@ -32,9 +32,6 @@ public:
 		void __setAttr__(IvyData, string) {
 			mixin(notImplMixin);
 		}
-		IvyData __serialize__() {
-			mixin(notImplMixin);
-		}
 		CallableObject __call__() {
 			mixin(notImplMixin);
 		}

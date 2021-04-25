@@ -3,6 +3,7 @@ module ivy.interpreter.interpreter;
 // If IvyTotalDebug is defined then enable parser debug
 version(IvyTotalDebug) version = IvyInterpreterDebug;
 
+
 class Interpreter
 {
 	import trifle.location: Location;
@@ -26,7 +27,6 @@ class Interpreter
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.global: GLOBAL_SYMBOL_NAME;
 	import ivy.types.symbol.iface.callable: ICallableSymbol;
-	import ivy.interpreter.directive.global: globalCallable;
 	import ivy.interpreter.exec_frame_info: ExecFrameInfo;
 	import ivy.interpreter.exception: IvyInterpretException;
 	import ivy.types.data.iface.class_node: IClassNode;
@@ -36,6 +36,8 @@ class Interpreter
 
 public:
 	alias assure = ensure!IvyInterpretException;
+
+	package __gshared CallableObject _globalCallable;
 
 	// LogWriter method used to send error and debug messages
 	IvyLogProxy log;
@@ -75,7 +77,7 @@ public:
 		assure(this._directiveFactory !is null, "Expected directive factory");
 
 		// Add global execution frame. Do not add it to _frameStack!
-		this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(globalCallable);
+		this._moduleFrames[GLOBAL_SYMBOL_NAME] = new ExecutionFrame(_globalCallable);
 
 		// Add custom native directive interpreters to global scope
 		foreach( dirInterp; directiveFactory.interps ) {
