@@ -14,7 +14,6 @@ class Interpreter
 	import ivy.types.callable_object: CallableObject;
 	import ivy.types.data: IvyDataType, IvyData;
 	import ivy.types.data.decl_class: DeclClass;
-	import ivy.types.decl_class_factory: DeclClassFactory;
 	import ivy.types.call_spec: CallSpec;
 	import ivy.types.data.utils: deeperCopy;
 	import ivy.interpreter.execution_frame: ExecutionFrame;
@@ -47,8 +46,6 @@ public:
 
 	InterpreterDirectiveFactory _directiveFactory;
 
-	DeclClassFactory _declClassFactory;
-
 	// Storage for execution frames of imported modules
 	ExecutionFrame[string] _moduleFrames;
 
@@ -65,7 +62,6 @@ public:
 	) {
 		this._moduleObjCache = moduleObjCache;
 		this._directiveFactory = directiveFactory;
-		this._declClassFactory = new DeclClassFactory;
 
 		this.log = IvyLogProxy(logerMethod? (ref LogInfo logInfo) {
 			// Add current location info to log message
@@ -435,7 +431,7 @@ public:
 				IvyData[string] classDataDict = this._stack.pop().assocArray;
 				string className = this._stack.pop().str;
 
-				this._stack.push(this._declClassFactory.makeClass(className, classDataDict, baseClass));
+				this._stack.push(new DeclClass(className, classDataDict, baseClass));
 				break;
 			}
 

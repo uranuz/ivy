@@ -7,8 +7,9 @@ class IvyDateTime: DeclClassNode
 {
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.data.consts: DateTimeAttr;
-	import ivy.interpreter.directive.base: IvyMethodAttr;
-	import ivy.types.data.decl_class: DeclClass, makeClass;
+	import ivy.interpreter.directive.utils: IvyMethodAttr;
+	import ivy.types.data.decl_class: DeclClass;
+	import ivy.types.data.decl_class_utils: makeClass;
 
 	import std.datetime: SysTime, Month;
 	import std.exception: enforce;

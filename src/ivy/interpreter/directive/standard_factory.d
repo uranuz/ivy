@@ -6,7 +6,7 @@ import ivy.types.data.decl_class: DeclClass;
 import ivy.types.data.decl_class_node: DeclClassNode;
 import ivy.interpreter.interpreter: Interpreter;
 import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
-import ivy.interpreter.directive.base: makeDir;
+import ivy.interpreter.directive.utils: makeDir;
 import ivy.types.symbol.dir_attr: DirAttr;
 import ivy.types.symbol.consts: IvyAttrType;
 import ivy.types.symbol.consts: GLOBAL_SYMBOL_NAME;
@@ -85,9 +85,6 @@ bool hasFn(IvyData collection, IvyData key)
 	switch( collection.type )
 	{
 		case IvyDataType.AssocArray:
-			Interpreter.assure(
-				key.type == IvyDataType.String,
-				"Expected string as second \"has\" directive attribsute, but got: ", key.type);
 			return cast(bool)(key.str in collection);
 		case IvyDataType.Array:
 			return collection.array.canFind(key);

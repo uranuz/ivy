@@ -4,7 +4,7 @@ shared static this()
 {
 	import ivy.interpreter.interpreter: Interpreter;
 	import ivy.types.callable_object: CallableObject;
-	import ivy.interpreter.directive.base: makeDir;
+	import ivy.interpreter.directive.utils: makeDir;
 	import ivy.types.symbol.global: GLOBAL_SYMBOL_NAME;
 
 	Interpreter._globalCallable = new CallableObject(makeDir!_globalStub(GLOBAL_SYMBOL_NAME));
