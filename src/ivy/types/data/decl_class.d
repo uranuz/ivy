@@ -33,7 +33,7 @@ public:
 			initCallable = this.__getAttr__("__init__").callable;
 		} catch(Exception) {
 			// Maybe there is no __init__ for class, so create it...
-			this.__setAttr__(IvyData(new CallableObject(i__emptyInit__)), "__init__");
+			this.__setAttr__(IvyData(new CallableObject(this.i__emptyInit__)), "__init__");
 			initCallable = this.__getAttr__("__init__").callable;
 		}
 

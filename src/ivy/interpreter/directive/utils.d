@@ -12,10 +12,10 @@ struct IvyMethodAttr
 }
 
 IDirectiveInterpreter makeDir(alias Method)(string symbolName, DirAttr[] attrs = null) {
-	return new DirectiveInterpreter(&makeIvyMethod!Method, new DirectiveSymbol(symbolName, attrs));
+	return new DirectiveInterpreter(&_callDir!Method, new DirectiveSymbol(symbolName, attrs));
 }
 
-template makeIvyMethod(alias Method)
+template _callDir(alias Method)
 {
 	import std.traits:
 		Parameters,
@@ -38,7 +38,7 @@ template makeIvyMethod(alias Method)
 	alias ResultType = ReturnType!(Method);
 	alias ParamNames = ParameterIdentifierTuple!(Method);
 
-	void makeIvyMethod(Interpreter interp)
+	void _callDir(Interpreter interp)
 	{
 		Tuple!(ParamTypes) argTuple;
 		foreach( i, type; ParamTypes )

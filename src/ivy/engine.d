@@ -38,10 +38,6 @@ private:
 public:
 	this(IvyConfig config)
 	{
-		import std.exception: enforce;
-
-		enforce(!!config.importPaths.length, "List of compiler import paths must not be empty!");
-
 		this._mutex = new Mutex();
 		this._config = config;
 		this._initObjects();
@@ -59,7 +55,7 @@ public:
 
 			if( !this._moduleObjCache.get(moduleName) )
 				this._compiler.run(moduleName); // Run compilation itself
-			fResult.resolve();
+			fResult.resolve(IvyData(this._moduleObjCache.get(moduleName)));
 		}
 		return fResult;
 	}
@@ -75,7 +71,7 @@ public:
 	}
 
 	SaveStateResult runModule(string moduleName, IvyData[string] extraGlobals = null) {
-		return this.runModule(moduleName, makeInterp(extraGlobals));
+		return this.runModule(moduleName, this.makeInterp(extraGlobals));
 	}
 
 	SaveStateResult runModule(string moduleName, Interpreter interp)

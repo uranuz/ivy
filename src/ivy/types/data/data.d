@@ -14,6 +14,7 @@ struct TIvyData(S)
 	import ivy.types.data.exception: DataNodeException;
 
 	import ivy.interpreter.execution_frame: ExecutionFrame;
+	import ivy.types.module_object: ModuleObject;
 
 	import std.exception: enforce;
 	import std.conv: text;
@@ -43,6 +44,7 @@ struct TIvyData(S)
 			ExecutionFrame execFrame;
 			IvyDataRange dataRange;
 			AsyncResult asyncResult;
+			ModuleObject moduleObject;
 		}
 	}
 
@@ -122,16 +124,23 @@ struct TIvyData(S)
 
 	IvyDataRange dataRange() @property
 	{
-		enforce!DataNodeException( type == IvyDataType.DataNodeRange, "IvyData is not a data node range");
+		enforce!DataNodeException(type == IvyDataType.DataNodeRange, "IvyData is not a data node range");
 		enforce!DataNodeException(storage.dataRange !is null, "Detected null data node range");
 		return storage.dataRange;
 	}
 
 	AsyncResult asyncResult() @property
 	{
-		enforce!DataNodeException( type == IvyDataType.AsyncResult, "IvyData is not an async result");
+		enforce!DataNodeException(type == IvyDataType.AsyncResult, "IvyData is not an async result");
 		enforce!DataNodeException(storage.asyncResult !is null, "Detected null async result");
 		return storage.asyncResult;
+	}
+
+	ModuleObject moduleObject() @property
+	{
+		enforce!DataNodeException(type == IvyDataType.ModuleObject, "IvyData is not a module object");
+		enforce!DataNodeException(storage.asyncResult !is null, "Detected null module object");
+		return storage.moduleObject;
 	}
 
 	IvyDataType type() @property {
@@ -354,6 +363,11 @@ struct TIvyData(S)
 		{
 			typeTag = IvyDataType.AsyncResult;
 			storage.asyncResult = arg;
+		}
+		else static if( is( T : ModuleObject ) )
+		{
+			typeTag = IvyDataType.ModuleObject;
+			storage.moduleObject = arg;
 		}
 		else static if(is(T : MIvyData))
 		{

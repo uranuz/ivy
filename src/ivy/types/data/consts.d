@@ -15,7 +15,7 @@ enum IvyDataType: ubyte {
 	ExecutionFrame,
 	DataNodeRange,
 	AsyncResult,
-	ModuleObject // Used for serialization
+	ModuleObject
 }
 
 enum NodeEscapeState: ubyte {

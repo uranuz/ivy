@@ -37,7 +37,7 @@ private void _writeStr(DataRenderType renderType, OutRange)(ref OutRange sink, s
 
 import std.traits: isInstanceOf;
 import ivy.types.data: TIvyData, NodeEscapeState;
-private void _writeStr(DataRenderType renderType, OutRange, IvyData)(ref OutRange sink, IvyData strNode)
+private void _writeStrNode(DataRenderType renderType, OutRange, IvyData)(ref OutRange sink, IvyData strNode)
 	if( isInstanceOf!(TIvyData, IvyData) )
 {
 	import ivy.types.data: IvyDataType;
@@ -65,7 +65,8 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange, Interp...)(
 
 	import std.range: put;
 	import std.conv: to;
-	import std.algorithm: canFind;
+	import std.algorithm: canFind, each;
+	import object: byKeyValue;
 
 	final switch(node.type)
 	{
@@ -95,37 +96,39 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange, Interp...)(
 			sink.put(node.floating.to!string);
 			break;
 		case IvyDataType.String:
-			_writeStr!renderType(sink, node);
+			_writeStrNode!renderType(sink, node);
 			break;
-		case IvyDataType.Array:
+		case IvyDataType.Array: {
 			enum bool asArray = ![DataRenderType.Text, DataRenderType.HTML].canFind(renderType);
 			static if( asArray ) sink.put("[");
-			foreach( i, ref el; node.array )
-			{
-				static if( asArray )	if( i != 0 ) {
+			node.array.each!((i, el) {
+				static if( asArray ) if( i != 0 ) {
 					sink.put(", ");
 				}
 
 				renderDataNode!renderType(sink, el, interp);
-			}
+			});
 			static if( asArray ) sink.put("]");
 			break;
-		case IvyDataType.AssocArray:
+		}
+		case IvyDataType.AssocArray: {
 			sink.put("{");
-			size_t i = 0;
-			foreach( ref key, ref val; node.assocArray )
-			{
-				if( i != 0 )
+			node
+			.assocArray
+			.byKeyValue
+			.each!((i, pair) {
+				if( i != 0 ) {
 					sink.put(", ");
+				}
 
-				_writeStr!renderType(sink, key);
+				_writeStr!renderType(sink, pair.key);
 				sink.put(": ");
 
-				renderDataNode!renderType(sink, val, interp);
-				++i;
-			}
+				renderDataNode!renderType(sink, pair.value, interp);
+			})();
 			sink.put("}");
 			break;
+		}
 		case IvyDataType.ClassNode:
 		{
 			static if( interp.length > 0 )
@@ -178,14 +181,14 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange, Interp...)(
 
 
 string renderDataNode2(DataRenderType renderType, IvyData, Interp...)(
-	auto ref IvyData node,
+	auto ref IvyData val,
 	Interp interp
 ) {
 	import std.array: appender;
 
-	auto result = appender!string();
-	renderDataNode!renderType(result, node, interp);
-	return result.data;
+	auto sink = appender!string();
+	renderDataNode!renderType(sink, val, interp);
+	return sink.data;
 }
 
 struct FirControlRender(O, Interp)

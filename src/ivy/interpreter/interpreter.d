@@ -214,7 +214,7 @@ public:
 
 			case OpCode.UnaryNot:
 			{
-				this._stack.back = !this._stack.back.toBoolean();
+				this._stack.push(!this._stack.pop().toBoolean());
 				break;
 			}
 
@@ -762,13 +762,13 @@ public:
 				aResult.then(
 					(IvyData data) {
 						this._stack.push([
-							`isError`: IvyData(false),
-							`data`: data
+							"isError": IvyData(false),
+							"data": data
 						]);
 					},
 					(Throwable error) {
 						IvyData ivyError = errorToIvyData(error);
-						ivyError[`isError`] = true;
+						ivyError["isError"] = true;
 						this._stack.push(ivyError);
 					}
 				);
@@ -910,7 +910,7 @@ public:
 				case OpCode.LTEqual: return left <= right;
 				case OpCode.GTEqual: return left >= right;
 			}
-			default: this.log.error("Unexpected code of binary operation");
+			default: assure(false, "Unexpected code of binary operation");
 		}
 		assert(false);
 	}
@@ -1103,6 +1103,32 @@ public:
 		return fResult;
 	}
 
+	AsyncResult execCallable(CallableObject callable, IvyData[string] kwArgs = null)
+	{
+		AsyncResult fResult = new AsyncResult();
+		try {
+			this.runCallable(callable, kwArgs);
+			this.execLoop(fResult);
+		} catch( Throwable ex ) {
+			fResult.reject(this.updateNLogError(ex));
+		}
+		return fResult;
+	}
+
+	IvyData execCallableSync(CallableObject callable, IvyData[string] kwArgs = null)
+	{
+		this.runCallable(callable, kwArgs);
+		return this.execLoopSync();
+	}
+
+	IvyData execClassMethodSync(IClassNode classNode, string method, IvyData[string] kwArgs = null) {
+		return this.execCallableSync(classNode.__getAttr__(method).callable, kwArgs);
+	}
+
+	AsyncResult execClassMethod(IClassNode classNode, string method, IvyData[string] kwArgs = null) {
+		return this.execCallable(classNode.__getAttr__(method).callable, kwArgs);
+	}
+
 	/// Updates exception with frame stack info of interpreter
 	IvyException updateError(Throwable ex)
 	{
@@ -1134,32 +1160,6 @@ public:
 		IvyException updEx = updateError(ex);
 		this.log.error(cast(string) updEx.message);
 		return updEx;
-	}
-
-	AsyncResult execCallable(CallableObject callable, IvyData[string] kwArgs = null)
-	{
-		AsyncResult fResult = new AsyncResult();
-		try {
-			this.runCallable(callable, kwArgs);
-			this.execLoop(fResult);
-		} catch( Throwable ex ) {
-			fResult.reject(this.updateNLogError(ex));
-		}
-		return fResult;
-	}
-
-	IvyData execCallableSync(CallableObject callable, IvyData[string] kwArgs = null)
-	{
-		this.runCallable(callable, kwArgs);
-		return this.execLoopSync();
-	}
-
-	IvyData execClassMethodSync(IClassNode classNode, string method, IvyData[string] kwArgs = null) {
-		return this.execCallableSync(classNode.__getAttr__(method).callable, kwArgs);
-	}
-
-	AsyncResult execClassMethod(IClassNode classNode, string method, IvyData[string] kwArgs = null) {
-		return this.execCallable(classNode.__getAttr__(method).callable, kwArgs);
 	}
 
 	static CallableObject asCallable(IvyData callableNode)

@@ -29,6 +29,8 @@ public:
 		_importPaths = importPaths;
 		_fileExtension = fileExtension;
 		_logerMethod = logerMethod;
+
+		ensure(!!importPaths.length, "List of compiler import paths must not be empty!");
 	}
 
 
