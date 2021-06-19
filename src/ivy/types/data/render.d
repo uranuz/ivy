@@ -131,28 +131,8 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange, Interp...)(
 		}
 		case IvyDataType.ClassNode:
 		{
-			static if( interp.length > 0 )
-			{
-				IClassNode classNode = node.classNode;
-				enum bool useRender = [
-					DataRenderType.Text,
-					DataRenderType.TextDebug,
-					DataRenderType.HTML,
-					DataRenderType.HTMLDebug,
-				].canFind(renderType);
-
-				static if( useRender ) {
-					import std.traits: isInstanceOf, TemplateOf;
-					static if( isInstanceOf!(FirControlRender, OutRange) ) {
-						auto firRender = FirControlRender!(OutRange.OutRange, typeof(interp[0]))(*sink._outRange, classNode, interp[0]);
-					} else {
-						auto firRender = FirControlRender!(OutRange, typeof(interp[0]))(sink, classNode, interp[0]);
-					}
-					renderDataNode!renderType(firRender, interp[0].execClassMethodSync(classNode, "render"), interp);
-				} else {
-					renderDataNode!renderType(sink, interp[0].execClassMethodSync(classNode, "__serialize__"), interp);
-				}
-				
+			static if( interp.length > 0 ) {
+				_renderClassNode!renderType(sink, node.classNode, interp[0]);
 			} else {
 				_writeStr!renderType(sink, "[[class node]]");
 			}
@@ -176,6 +156,33 @@ void renderDataNode(DataRenderType renderType, IvyData, OutRange, Interp...)(
 		case IvyDataType.ModuleObject:
 			_writeStr!renderType(sink, "[[module object]]");
 			break;
+	}
+}
+
+void _renderClassNode(DataRenderType renderType, ClsNode, OutRange, Interp)(
+	ref OutRange sink,
+	ClsNode classNode,
+	Interp interp
+) {
+	import std.algorithm: canFind;
+
+	enum bool useRender = [
+		DataRenderType.Text,
+		DataRenderType.TextDebug,
+		DataRenderType.HTML,
+		DataRenderType.HTMLDebug,
+	].canFind(renderType);
+
+	static if( useRender ) {
+		import std.traits: isInstanceOf, TemplateOf;
+		static if( isInstanceOf!(FirControlRender, OutRange) ) {
+			auto firRender = FirControlRender!(OutRange.OutRange, typeof(interp))(*sink._outRange, classNode, interp);
+		} else {
+			auto firRender = FirControlRender!(OutRange, typeof(interp))(sink, classNode, interp);
+		}
+		renderDataNode!renderType(firRender, interp.execClassMethodSync(classNode, "render"), interp);
+	} else {
+		renderDataNode!renderType(sink, interp.execClassMethodSync(classNode, "__serialize__"), interp);
 	}
 }
 
