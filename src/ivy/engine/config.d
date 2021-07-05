@@ -1,4 +1,4 @@
-module ivy.engine_config;
+module ivy.engine.config;
 
 import ivy.compiler.directive.factory: DirectiveCompilerFactory;
 import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;

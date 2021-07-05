@@ -1,4 +1,4 @@
-module ivy.engine;
+module ivy.engine.engine;
 
 struct SaveStateResult
 {
@@ -12,66 +12,60 @@ struct SaveStateResult
 /// Dump-simple in-memory cache for compiled programmes
 class IvyEngine
 {
+	import ivy.engine.config: IvyConfig;
+	import ivy.engine.module_object_loader: ModuleObjectLoader;
+	import ivy.engine.module_object_cache: ModuleObjectCache;
+
 	import ivy.types.data: IvyData;
 	import ivy.types.data.async_result: AsyncResult;
+
 	import ivy.interpreter._global_callable_init; // Used to ensure that this module is compiled. Don't delete
 	import ivy.interpreter.interpreter: Interpreter;
-	import ivy.compiler.directive.standard_factory: makeStandardDirCompilerFactory;
-	import ivy.engine_config: IvyConfig;
-	import ivy.compiler.module_repository: CompilerModuleRepository;
-	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
-	import ivy.compiler.compiler: ByteCodeCompiler;
-	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-	import ivy.log.info: LogInfo;
+
 	import ivy.log.consts: LogInfoType;
+	import ivy.log.info: LogInfo;
 
 private:
 	IvyConfig _config;
-	CompilerModuleRepository _moduleRepo;
-	CompilerSymbolsCollector _symbolsCollector;
-	ByteCodeCompiler _compiler;
-	ModuleObjectsCache _moduleObjCache;
 
-	import core.sync.mutex: Mutex;
-	Mutex _mutex;
+	ModuleObjectLoader _loader;
 
 public:
 	this(IvyConfig config)
 	{
-		this._mutex = new Mutex();
 		this._config = config;
-		this._initObjects();
+
+		import ivy.interpreter.directive.standard_factory: ivyDirFactory;
+
+		if( this._config.directiveFactory is null ) {
+			this._config.directiveFactory = ivyDirFactory;
+		}
+
+		this._loader = new ModuleObjectLoader(this._config);
 	}
 
 	/// Load module by name into engine
 	AsyncResult loadModule(string moduleName)
 	{
-		AsyncResult fResult = new AsyncResult();
-		synchronized(_mutex)
-		{
-			if( this._config.clearCache ) {
-				this.clearCache();
-			}
-
-			if( !this._moduleObjCache.get(moduleName) )
-				this._compiler.run(moduleName); // Run compilation itself
-			fResult.resolve(IvyData(this._moduleObjCache.get(moduleName)));
+		if( this._config.clearCache ) {
+			this.clearCache();
 		}
-		return fResult;
+
+		return this._loader.load(moduleName);
+	}
+
+	SaveStateResult runModule(string moduleName, IvyData[string] extraGlobals = null) {
+		return this.runModule(moduleName, this.makeInterp(extraGlobals));
 	}
 
 	Interpreter makeInterp(IvyData[string] extraGlobals = null)
 	{
 		auto interp = new Interpreter(
-			this._moduleObjCache,
+			this._loader.cache,
 			this._config.directiveFactory,
 			this._config.interpreterLoger);
 		interp.addExtraGlobals(extraGlobals);
 		return interp;
-	}
-
-	SaveStateResult runModule(string moduleName, IvyData[string] extraGlobals = null) {
-		return this.runModule(moduleName, this.makeInterp(extraGlobals));
 	}
 
 	SaveStateResult runModule(string moduleName, Interpreter interp)
@@ -123,47 +117,11 @@ public:
 		]);
 	}
 
-	void clearCache()
-	{
-		_moduleRepo.clearCache();
-		_symbolsCollector.clearCache();
-		_moduleObjCache.clearCache();
-		_compiler.clearCache();
+	private ModuleObjectCache _moduleObjCache() @property {
+		return this._loader.cache;
 	}
 
-private:
-	void _initObjects()
-	{
-		import ivy.types.symbol.iface: IIvySymbol;
-		import ivy.interpreter.directive.standard_factory: ivyDirFactory;
-
-		if( _config.compilerFactory is null ) {
-			_config.compilerFactory = makeStandardDirCompilerFactory();
-		}
-		if( _config.directiveFactory is null ) {
-			_config.directiveFactory = ivyDirFactory;
-		}
-		
-		_moduleRepo = new CompilerModuleRepository(
-			_config.importPaths,
-			_config.fileExtension,
-			_config.parserLoger
-		);
-		_symbolsCollector = new CompilerSymbolsCollector(
-			_moduleRepo,
-			_config.compilerFactory,
-			cast(IIvySymbol[]) _config.directiveFactory.symbols,
-			_config.compilerLoger
-		);
-		_moduleObjCache = new ModuleObjectsCache();
-		_compiler = new ByteCodeCompiler(
-			_moduleRepo,
-			_symbolsCollector,
-			_config.compilerFactory,
-			_moduleObjCache,
-			_config.compilerLoger
-		);
+	void clearCache() {
+		this._loader.clearCache();
 	}
-
-	
 }

@@ -1,26 +1,38 @@
-module ivy.interpreter.module_objects_cache;
+module ivy.engine.module_object_cache;
 
-import ivy.types.module_object: ModuleObject;
-import ivy.types.data: IvyDataType;
-import ivy.bytecode: OpCode;
-
-class ModuleObjectsCache
+class ModuleObjectCache
 {
+	import core.sync.mutex: Mutex;
+
+	import ivy.types.module_object: ModuleObject;
+
 private:
 	// Dictionary with module objects that compiler produces
 	ModuleObject[string] _moduleObjects;
 
+	Mutex _mutex;
+
 public:
+	this() {
+		this._mutex = new Mutex();
+	}
+
 	ModuleObject get(string moduleName) {
-		return _moduleObjects.get(moduleName, null);
+		return this._moduleObjects.get(moduleName, null);
 	}
 
-	void add(ModuleObject moduleObject) {
-		_moduleObjects[moduleObject.symbol.name] = moduleObject;
+	void add(ModuleObject moduleObject)
+	{
+		synchronized(this._mutex) {
+			this._moduleObjects[moduleObject.symbol.name] = moduleObject;
+		}
 	}
 
-	void clearCache() {
-		_moduleObjects.clear();
+	void clearCache()
+	{
+		synchronized(this._mutex) {
+			this._moduleObjects.clear();
+		}
 	}
 
 	ModuleObject[string] moduleObjects() @property {
@@ -29,7 +41,10 @@ public:
 
 	string toPrettyStr()
 	{
-		import std.conv;
+		import ivy.types.data: IvyDataType;
+		import ivy.bytecode: OpCode;
+
+		import std.conv: text;
 		import std.range: empty, back, take;
 		import std.algorithm: canFind;
 
@@ -41,7 +56,7 @@ public:
 			OpCode.LoadName
 		];
 
-		foreach( modName, modObj; _moduleObjects )
+		foreach( modName, modObj; this._moduleObjects )
 		{
 			result ~= "\r\nMODULE " ~ modName ~ "\r\n";
 			result ~= "\r\nCONSTANTS\r\n";
@@ -77,7 +92,6 @@ public:
 					result ~= mapItem.line.text ~ "\t\t" ~ mapItem.startInstr.text ~ "\r\n";
 				}
 			}
-
 
 			result ~= "\r\nEND OF MODULE " ~ modName ~ "\r\n";
 		}

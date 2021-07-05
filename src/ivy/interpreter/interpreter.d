@@ -9,27 +9,30 @@ class Interpreter
 	import trifle.location: Location;
 	import trifle.utils: ensure;
 
+	import ivy.bytecode: Instruction, OpCode;
+
+	import ivy.engine.module_object_cache: ModuleObjectCache;
+	import ivy.exception: IvyException;
+
 	import ivy.types.code_object: CodeObject;
-	import ivy.types.module_object: ModuleObject;
+	import ivy.types.call_spec: CallSpec;
 	import ivy.types.callable_object: CallableObject;
 	import ivy.types.data: IvyDataType, IvyData;
+	import ivy.types.data.iface.class_node: IClassNode;
 	import ivy.types.data.decl_class: DeclClass;
-	import ivy.types.call_spec: CallSpec;
 	import ivy.types.data.utils: deeperCopy;
-	import ivy.interpreter.execution_frame: ExecutionFrame;
-	import ivy.interpreter.exec_stack: ExecStack;
-	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
-	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
-	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 	import ivy.types.data.async_result: AsyncResult, AsyncResultState;
-	import ivy.bytecode: Instruction, OpCode;
+	import ivy.types.module_object: ModuleObject;
 	import ivy.types.symbol.dir_attr: DirAttr;
 	import ivy.types.symbol.global: GLOBAL_SYMBOL_NAME;
 	import ivy.types.symbol.iface.callable: ICallableSymbol;
+
+	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
+	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 	import ivy.interpreter.exec_frame_info: ExecFrameInfo;
+	import ivy.interpreter.execution_frame: ExecutionFrame;
+	import ivy.interpreter.exec_stack: ExecStack;
 	import ivy.interpreter.exception: IvyInterpretException;
-	import ivy.types.data.iface.class_node: IClassNode;
-	import ivy.exception: IvyException;
 
 	import ivy.log: LogInfo, IvyLogProxy, LogerMethod;
 
@@ -42,7 +45,7 @@ public:
 	IvyLogProxy log;
 
 	// Storage for bytecode code and initial constant data for modules
-	ModuleObjectsCache _moduleObjCache;
+	ModuleObjectCache _moduleObjCache;
 
 	InterpreterDirectiveFactory _directiveFactory;
 
@@ -56,7 +59,7 @@ public:
 	ExecStack _stack;
 
 	this(
-		ModuleObjectsCache moduleObjCache,
+		ModuleObjectCache moduleObjCache,
 		InterpreterDirectiveFactory directiveFactory,
 		LogerMethod logerMethod = null
 	) {

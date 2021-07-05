@@ -26,10 +26,10 @@ class ByteCodeCompiler: AbstractNodeVisitor
 	import ivy.types.code_object: CodeObject;
 	import ivy.types.module_object: ModuleObject;
 
-	import ivy.types.symbol.iface: IIvySymbol, ICallableSymbol;
 	import ivy.types.symbol.directive: DirectiveSymbol;
-	import ivy.types.symbol.module_: ModuleSymbol;
 	import ivy.types.symbol.dir_attr: DirAttr;
+	import ivy.types.symbol.iface: IIvySymbol, ICallableSymbol;
+	import ivy.types.symbol.module_: ModuleSymbol;
 
 	import ivy.compiler.module_repository: CompilerModuleRepository;
 	import ivy.compiler.symbol_table: SymbolTableFrame;
@@ -37,8 +37,11 @@ class ByteCodeCompiler: AbstractNodeVisitor
 	import ivy.compiler.node_visit_mixin: NodeVisitMixin;
 	import ivy.compiler.errors: IvyCompilerException;
 	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
-	import ivy.interpreter.module_objects_cache: ModuleObjectsCache;
+
+	import ivy.engine.module_object_cache: ModuleObjectCache;
+
 	import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
+
 	import ivy.log: LogInfoType, LogInfo, IvyLogProxy, LogerMethod;
 	
 public:
@@ -63,9 +66,10 @@ private:
 	CompilerModuleRepository _moduleRepo;
 
 	// Object implementing storage of compiled ModuleObject's
-	ModuleObjectsCache _moduleObjCache;
+	ModuleObjectCache _moduleObjCache;
 
-	size_t[][ ubyte[16] ][string] _moduleConstHashes; // Mapping moduleName -> constHash -> constIndex (list)
+	// Mapping moduleName -> constHash -> constIndex (list)
+	size_t[][ ubyte[16] ][string] _moduleConstHashes;
 
 	// Current stack of code objects that compiler produces
 	CodeObject[] _codeObjStack;
@@ -80,7 +84,7 @@ public:
 		CompilerModuleRepository moduleRepo,
 		CompilerSymbolsCollector symbolsCollector,
 		DirectiveCompilerFactory compilerFactory,
-		ModuleObjectsCache moduleObjCache,
+		ModuleObjectCache moduleObjCache,
 		LogerMethod logerMethod = null
 	) {
 		log = IvyLogProxy(logerMethod? (ref LogInfo logInfo) {
