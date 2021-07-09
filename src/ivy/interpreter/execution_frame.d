@@ -23,15 +23,15 @@ private:
 	// Index of currently executed instruction
 	size_t _instrIndex = 0;
 
-public IvyData[string] _dataDict;
+	IvyData[string] _dataDict;
 
 public:
-	this(CallableObject callable, IvyData[string] dataDict = null)
-	{
-		this._callable = callable;
-		assure(this._callable, "Expected callable object for exec frame");
+	this(CallableObject callable, IvyData[string] dataDict = null) {
+		assure(callable, "Expected callable object for exec frame");
 
+		this._callable = callable;
 		this._dataDict = dataDict;
+
 		this._dataDict["_ivyMethod"] = this._callable.symbol.name;
 		this._dataDict["_ivyModule"] = this._callable.moduleSymbol.name;
 	}
@@ -40,22 +40,23 @@ public:
 		return (varName in this._dataDict) !is null;
 	}
 
-	IvyData getValue(string varName)
-	{
-		IvyData* res = varName in this._dataDict;
-		assure(res, "Cannot find variable with name \"" ~ varName ~ "\" in exec frame for symbol \"" ~ this.callable.symbol.name ~ "\"");
-		return *res;
+	IvyData getValue(string varName) {
+		assure(
+			this.hasValue(varName),
+			"Cannot find variable with name \"", varName, "\" in exec frame for symbol \"", this.callable.symbol.name ~ "\"");
+		return this._dataDict[varName];
 	}
 
 	void setValue(string varName, IvyData value) {
 		this._dataDict[varName] = value;
 	}
 
-	void setJump(size_t instrIndex)
-	{
+	void setJump(size_t instrIndex) {
 		if( this.callable.isNative )
 			return; // Cannot set jump for native directive
-		assure(instrIndex <= this.callable.codeObject.instrs.length, "Cannot jump after the end of code object");
+		assure(
+			instrIndex <= this.callable.codeObject.instrs.length,
+			"Cannot jump after the end of code object");
 		this._instrIndex = instrIndex;
 	}
 
@@ -63,36 +64,35 @@ public:
 		++this._instrIndex;
 	}
 
-	CallableObject callable() @property
-	{
+	CallableObject callable() @property {
 		assure(this._callable, "No callable for global execution frame");
 		return this._callable;
 	}
 
-	bool hasInstrs() @property
-	{
+	bool hasInstrs() @property {
 		if( this.callable.isNative )
 			return false; 
 		return this._instrIndex < this.callable.codeObject.instrCount;
 	}
 
-	Instruction currentInstr() @property
-	{
+	Instruction currentInstr() @property {
 		if( !this.hasInstrs )
 			return Instruction(); // Cannot get instruction for native directive
 		return this.callable.codeObject.instrs[this._instrIndex];
 	}
 
-	size_t currentInstrLine() @property
-	{
+	IvyData[string] dict() @property {
+		return this._dataDict;
+	}
+
+	size_t currentInstrLine() @property {
 		if( !this.hasInstrs )
 			return 0; // Cannot tell instr line for native directive
 		return this.callable.codeObject.getInstrLine(this._instrIndex);
 	}
 
-	Location currentLocation() @property
-	{
-		Location loc;
+	Location currentLocation() @property {
+		auto loc = Location();
 
 		loc.fileName = this.callable.moduleSymbol.name;
 		loc.lineIndex = this.currentInstrLine;
@@ -100,8 +100,7 @@ public:
 		return loc;
 	}
 
-	ExecFrameInfo info() @property
-	{
+	ExecFrameInfo info() @property {
 		ExecFrameInfo info;
 
 		info.callableName = this.callable.symbol.name;

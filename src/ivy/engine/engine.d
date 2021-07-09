@@ -1,18 +1,10 @@
 module ivy.engine.engine;
 
-struct SaveStateResult
-{
-	import ivy.types.data.async_result: AsyncResult;
-	import ivy.interpreter.interpreter: Interpreter;
-
-	Interpreter interp;
-	AsyncResult asyncResult;
-}
-
 /// Dump-simple in-memory cache for compiled programmes
 class IvyEngine
 {
-	import ivy.engine.config: IvyConfig;
+	import ivy.engine.config: IvyEngineConfig;
+	import ivy.engine.context_async_result: ContextAsyncResult;
 	import ivy.engine.module_object_loader: ModuleObjectLoader;
 	import ivy.engine.module_object_cache: ModuleObjectCache;
 
@@ -26,12 +18,12 @@ class IvyEngine
 	import ivy.log.info: LogInfo;
 
 private:
-	IvyConfig _config;
+	IvyEngineConfig _config;
 
 	ModuleObjectLoader _loader;
 
 public:
-	this(IvyConfig config)
+	this(IvyEngineConfig config)
 	{
 		this._config = config;
 
@@ -54,7 +46,7 @@ public:
 		return this._loader.load(moduleName);
 	}
 
-	SaveStateResult runModule(string moduleName, IvyData[string] extraGlobals = null) {
+	ContextAsyncResult runModule(string moduleName, IvyData[string] extraGlobals = null) {
 		return this.runModule(moduleName, this.makeInterp(extraGlobals));
 	}
 
@@ -68,13 +60,10 @@ public:
 		return interp;
 	}
 
-	SaveStateResult runModule(string moduleName, Interpreter interp)
+	ContextAsyncResult runModule(string moduleName, Interpreter interp)
 	{
-		import std.exception: enforce;
-		enforce(interp, "Interpreter is null");
-
 		auto asyncResult = new AsyncResult();
-		auto res = SaveStateResult(interp, asyncResult);
+		auto res = ContextAsyncResult(interp, asyncResult);
 
 		this.loadModule(moduleName).then((it) {
 			interp.importModule(moduleName).then(asyncResult);
@@ -89,7 +78,7 @@ public:
 		IvyData[string] extraGlobals = null
 	) {
 		AsyncResult fResult = new AsyncResult();
-		SaveStateResult moduleExecRes = this.runModule(moduleName, extraGlobals);
+		ContextAsyncResult moduleExecRes = this.runModule(moduleName, extraGlobals);
 		
 		moduleExecRes.asyncResult.then(
 			(IvyData modRes) {

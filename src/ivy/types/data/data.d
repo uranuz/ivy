@@ -4,6 +4,8 @@ public alias IvyData = TIvyData!string;
 
 struct TIvyData(S)
 {
+	import trifle.utils: ensure;
+
 	import ivy.types.data.consts: IvyDataType, NodeEscapeState;
 
 	import ivy.types.code_object: CodeObject;
@@ -16,13 +18,13 @@ struct TIvyData(S)
 	import ivy.interpreter.execution_frame: ExecutionFrame;
 	import ivy.types.module_object: ModuleObject;
 
-	import std.exception: enforce;
 	import std.conv: text;
 	import std.traits: StringTypeOf, isAggregateType, isStaticArray;
 	
 
 	alias String = S;
 	alias MIvyData = TIvyData!String;
+	alias assure = ensure!DataNodeException;
 
 	enum bool isMyString(T) = is(StringTypeOf!T) && !isAggregateType!T && !isStaticArray!T;
 
@@ -58,88 +60,88 @@ struct TIvyData(S)
 
 	bool boolean() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.Boolean, "IvyData is not boolean");
+		assure(type == IvyDataType.Boolean, "IvyData is not boolean");
 		return storage.boolean;
 	}
 
 	ptrdiff_t integer() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.Integer, "IvyData is not integer");
+		assure(type == IvyDataType.Integer, "IvyData is not integer");
 		return storage.integer;
 	}
 
 	double floating() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.Floating, "IvyData is not floating");
+		assure(type == IvyDataType.Floating, "IvyData is not floating");
 		return storage.floating;
 	}
 
 	ref String str() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.String, "IvyData is not string");
-		enforce!DataNodeException(storage.str.length == 1, "Expected internal storage length of 1");
+		assure(type == IvyDataType.String, "IvyData is not string");
+		assure(storage.str.length == 1, "Expected internal storage length of 1");
 		return storage.str[0];
 	}
 
 	ref MIvyData[] array() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not array");
-		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
+		assure(type == IvyDataType.Array, "IvyData is not array");
+		assure(storage.array.length == 1, "Expected internal storage length of 1");
 		return storage.array[0];
 	}
 
 	ref MIvyData[String] assocArray() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.AssocArray, "IvyData is not dict");
+		assure(type == IvyDataType.AssocArray, "IvyData is not dict");
 		return storage.assocArray;
 	}
 
 	IClassNode classNode() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.ClassNode, "IvyData is not class node");
-		enforce!DataNodeException(storage.classNode !is null, "Detected null class node");
+		assure(type == IvyDataType.ClassNode, "IvyData is not class node");
+		assure(storage.classNode !is null, "Detected null class node");
 		return storage.classNode;
 	}
 
 	CodeObject codeObject() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.CodeObject, "IvyData is not code object");
-		enforce!DataNodeException(storage.codeObject !is null, "Detected null code object");
+		assure(type == IvyDataType.CodeObject, "IvyData is not code object");
+		assure(storage.codeObject !is null, "Detected null code object");
 		return storage.codeObject;
 	}
 
 	CallableObject callable() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.Callable, "IvyData is not callable object");
-		enforce!DataNodeException(storage.callable !is null, "Detected null callable object");
+		assure(type == IvyDataType.Callable, "IvyData is not callable object");
+		assure(storage.callable !is null, "Detected null callable object");
 		return storage.callable;
 	}
 
 	ExecutionFrame execFrame() @property
 	{
-		enforce!DataNodeException( type == IvyDataType.ExecutionFrame, "IvyData is not a execution frame");
-		enforce!DataNodeException(storage.execFrame !is null, "Detected null execution frame");
+		assure( type == IvyDataType.ExecutionFrame, "IvyData is not a execution frame");
+		assure(storage.execFrame !is null, "Detected null execution frame");
 		return storage.execFrame;
 	}
 
 	IvyDataRange dataRange() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.DataNodeRange, "IvyData is not a data node range");
-		enforce!DataNodeException(storage.dataRange !is null, "Detected null data node range");
+		assure(type == IvyDataType.DataNodeRange, "IvyData is not a data node range");
+		assure(storage.dataRange !is null, "Detected null data node range");
 		return storage.dataRange;
 	}
 
 	AsyncResult asyncResult() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.AsyncResult, "IvyData is not an async result");
-		enforce!DataNodeException(storage.asyncResult !is null, "Detected null async result");
+		assure(type == IvyDataType.AsyncResult, "IvyData is not an async result");
+		assure(storage.asyncResult !is null, "Detected null async result");
 		return storage.asyncResult;
 	}
 
 	ModuleObject moduleObject() @property
 	{
-		enforce!DataNodeException(type == IvyDataType.ModuleObject, "IvyData is not a module object");
-		enforce!DataNodeException(storage.asyncResult !is null, "Detected null module object");
+		assure(type == IvyDataType.ModuleObject, "IvyData is not a module object");
+		assure(storage.asyncResult !is null, "Detected null module object");
 		return storage.moduleObject;
 	}
 
@@ -404,9 +406,9 @@ struct TIvyData(S)
 
 	void opIndexAssign(T)(auto ref T value, size_t index)
 	{
-		enforce!DataNodeException(type == IvyDataType.Array, "IvyData is not an array");
-		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
-		enforce!DataNodeException(index < storage.array[0].length , "IvyData array index is out of range");
+		assure(type == IvyDataType.Array, "IvyData is not an array");
+		assure(storage.array.length == 1, "Expected internal storage length of 1");
+		assure(index < storage.array[0].length , "IvyData array index is out of range");
 
 		storage.array[0][index] = value;
 	}
@@ -414,14 +416,14 @@ struct TIvyData(S)
 	MIvyData opIndex(size_t index)
 	{
 		import std.algorithm: canFind;
-		enforce!DataNodeException(
+		assure(
 			[IvyDataType.Array, IvyDataType.ClassNode].canFind(type),
 			"IvyData is not an array or class node, but is: " ~ type.text);
 		if( type == IvyDataType.ClassNode ) {
 			return storage.classNode[MIvyData(index)];
 		}
-		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
-		enforce!DataNodeException(index < storage.array[0].length, "IvyData array index is out of range");
+		assure(storage.array.length == 1, "Expected internal storage length of 1");
+		assure(index < storage.array[0].length, "IvyData array index is out of range");
 
 		return storage.array[0][index];
 	}
@@ -432,13 +434,13 @@ struct TIvyData(S)
 		import std.conv: text, to;
 		import std.traits: isArray;
 
-		enforce!DataNodeException(
+		assure(
 			[IvyDataType.Array, IvyDataType.String].canFind(type),
 			"Cannot append to IvyData that is not array or string, got: " ~ this.type.text);
 
 		if( type != IvyDataType.Array )
 			this = (MIvyData[]).init;
-		enforce!DataNodeException(storage.array.length == 1, "Expected internal storage length of 1");
+		assure(storage.array.length == 1, "Expected internal storage length of 1");
 
 		static if( isArray!T )
 		{
@@ -461,7 +463,7 @@ struct TIvyData(S)
 	void opIndexAssign(T)(auto ref T value, String key)
 	{
 		import std.algorithm: canFind;
-		enforce!DataNodeException(
+		assure(
 			[IvyDataType.AssocArray, IvyDataType.Null, IvyDataType.Undef].canFind(type),
 			"IvyData is not a dict, null or undef");
 
@@ -474,14 +476,14 @@ struct TIvyData(S)
 	MIvyData opIndex(String key)
 	{
 		import std.algorithm: canFind;
-		enforce!DataNodeException(
+		assure(
 			[IvyDataType.AssocArray, IvyDataType.ClassNode].canFind(type),
 			"IvyData is not a dict or class node, but is: " ~ type.text);
 		if( type == IvyDataType.ClassNode ) {
 			return storage.classNode[MIvyData(key)];
 		}
 		
-		enforce!DataNodeException(key in storage.assocArray, "IvyData dict has no such key");
+		assure(key in storage.assocArray, "IvyData dict has no such key");
 
 		return storage.assocArray[key];
 	}
@@ -489,7 +491,7 @@ struct TIvyData(S)
 	auto opBinaryRight(string op: "in")(String key)
 	{
 		import std.algorithm: canFind;
-		enforce!DataNodeException(
+		assure(
 			[IvyDataType.AssocArray, IvyDataType.Null, IvyDataType.Undef].canFind(type),
 			"IvyData is not a dict, null or undef");
 

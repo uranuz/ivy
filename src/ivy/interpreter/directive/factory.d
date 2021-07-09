@@ -2,10 +2,13 @@ module ivy.interpreter.directive.factory;
 
 class InterpreterDirectiveFactory
 {
-	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
-	import ivy.types.symbol.iface: ICallableSymbol;
+	import trifle.utils: ensure;
 
-	import std.exception: enforce;
+	import ivy.types.symbol.iface: ICallableSymbol;
+	import ivy.exception: IvyException;
+	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
+
+	alias assure = ensure!IvyException;
 
 private:
 	InterpreterDirectiveFactory _baseFactory;
@@ -17,28 +20,23 @@ public:
 		this._baseFactory = baseFactory;
 	}
 
-	IDirectiveInterpreter get(string name)
-	{
+	IDirectiveInterpreter get(string name) {
 		auto intPtr = name in this._indexes;
-		if( intPtr is null ) {
+		if( intPtr !is null )
 			return this._dirInterps[*intPtr];
-		}
-		if( this._baseFactory !is null ) {
+		if( this._baseFactory )
 			return this._baseFactory.get(name);
-		}
 		return null;
 	}
 
-	void add(IDirectiveInterpreter dirInterp)
-	{
+	void add(IDirectiveInterpreter dirInterp) {
 		string name = dirInterp.symbol.name;
-		enforce(name !in this._indexes, "Directive interpreter with name: " ~ name ~ " already added");
+		assure(name !in this._indexes, "Directive interpreter with name: ", name, " already added");
 		this._indexes[name] = this._dirInterps.length;
 		this._dirInterps ~= dirInterp;
 	}
 
-	IDirectiveInterpreter[] interps() @property
-	{
+	IDirectiveInterpreter[] interps() @property {
 		import std.algorithm: map;
 		import std.range: chain;
 		import std.array: array;
@@ -46,8 +44,7 @@ public:
 		return chain(this._getBaseInterps(), this._dirInterps).array;
 	}
 
-	ICallableSymbol[] symbols() @property
-	{
+	ICallableSymbol[] symbols() @property {
 		import std.algorithm: map;
 		import std.range: chain;
 		import std.array: array;
@@ -56,10 +53,10 @@ public:
 	}
 
 	IDirectiveInterpreter[] _getBaseInterps() {
-		return this._baseFactory is null? []: this._baseFactory.interps;
+		return this._baseFactory? this._baseFactory.interps: [];
 	}
 
 	ICallableSymbol[] _getBaseSymbols() {
-		return this._baseFactory is null? []: this._baseFactory.symbols;
+		return this._baseFactory? this._baseFactory.symbols: [];
 	}
 }

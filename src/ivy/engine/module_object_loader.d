@@ -7,7 +7,7 @@ class ModuleObjectLoader
 	import ivy.compiler.module_repository: CompilerModuleRepository;
 	import ivy.compiler.symbol_collector: CompilerSymbolsCollector;
 
-	import ivy.engine.config: IvyConfig;
+	import ivy.engine.config: IvyEngineConfig;
 
 	import ivy.engine.module_object_cache: ModuleObjectCache;
 
@@ -20,7 +20,7 @@ class ModuleObjectLoader
 	ByteCodeCompiler _compiler;
 	ModuleObjectCache _cache;
 
-	this(IvyConfig config)
+	this(IvyEngineConfig config)
 	{
 		if( config.compilerFactory is null ) {
 			config.compilerFactory = makeStandardDirCompilerFactory();

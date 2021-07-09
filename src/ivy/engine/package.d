@@ -1,4 +1,5 @@
 module ivy.engine;
 
-public import ivy.engine.config: IvyConfig;
-public import ivy.engine.engine: IvyEngine, SaveStateResult;
+public import ivy.engine.config: IvyEngineConfig;
+public import ivy.engine.context_async_result: ContextAsyncResult;
+public import ivy.engine.engine: IvyEngine;

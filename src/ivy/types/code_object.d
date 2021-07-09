@@ -23,8 +23,8 @@ class CodeObject
 
 protected:
 	ICallableSymbol _symbol;
-	Instruction[] _instrs; // Plain list of instructions
 	ModuleObject _moduleObject; // Module object which contains this code object
+	Instruction[] _instrs; // Plain list of instructions
 
 	SourceMapItem[] _sourceMap; // Debugging info (source map sorted by line)
 	SourceMapItem[] _revSourceMap; // Debugging info (source map sorted by startInstr)
@@ -51,33 +51,30 @@ public:
 		return this._instrs;
 	}
 
-	ref SourceMapItem[] sourceMap() @property {
-		return this._sourceMap;
-	}
-
-	size_t addInstr(Instruction instr, size_t line)
-	{
+	size_t addInstr(Instruction instr, size_t line) {
 		size_t index = this._instrs.length;
 		this._instrs ~= instr;
 		this._addSourceMapItem(line, index);
 		return index;
 	}
 
-	void setInstrArg(size_t index, size_t arg)
-	{
+	size_t instrCount() @property {
+		return this._instrs.length;
+	}
+
+	ref SourceMapItem[] sourceMap() @property {
+		return this._sourceMap;
+	}
+
+	void setInstrArg(size_t index, size_t arg) {
 		enforce(
 			index < this._instrs.length,
 			"Cannot set argument 0 of instruction, because instruction not exists!");
 		this._instrs[index].arg = arg;
 	}
 
-	size_t instrCount() @property {
-		return this._instrs.length;
-	}
-
 	// Get line where code object instruction is located
-	size_t getInstrLine(size_t instrIndex)
-	{
+	size_t getInstrLine(size_t instrIndex) {
 		auto sMap = this._checkRevSourceMap();
 		auto lowerB = sMap.lowerBound(SourceMapItem(0, instrIndex));
 		if( lowerB.length < this._revSourceMap.length ) {
@@ -94,8 +91,7 @@ public:
 		return one.startInstr < other.startInstr;
 	}
 
-	void _addSourceMapItem(size_t line, size_t instrIndex)
-	{
+	void _addSourceMapItem(size_t line, size_t instrIndex) {
 		import std.range: assumeSorted;
 		import std.array: insertInPlace;
 		auto sMap = assumeSorted!_sourceMapByLinePred(_sourceMap);
@@ -109,20 +105,17 @@ public:
 		}
 	}
 
-	auto _checkRevSourceMap()
-	{
+	auto _checkRevSourceMap() {
 		import std.algorithm: sort;
 		import std.range: assumeSorted;
-		if( this._revSourceMap.length == 0)
-		{
+		if( this._revSourceMap.length == 0) {
 			this._revSourceMap = this._sourceMap.dup;
 			this._revSourceMap.sort!_sourceMapByAddrPred();
 		}
 		return assumeSorted!_sourceMapByAddrPred(this._revSourceMap);
 	}
 
-	override bool opEquals(Object o)
-	{
+	override bool opEquals(Object o) {
 		auto rhs = cast(typeof(this)) o;
 		if( rhs is null )
 			return false;
@@ -146,8 +139,7 @@ public:
 		return true; // They are equal at the first look
 	}
 
-	JSONValue toStdJSON()
-	{
+	JSONValue toStdJSON() {
 		import ivy.types.symbol.dir_attr: DirAttr;
 		import ivy.types.data.consts: IvyDataType;
 		import ivy.types.data.conv.consts: IvySrlField;
@@ -158,7 +150,7 @@ public:
 		return JSONValue([
 			IvySrlField.type: JSONValue(IvyDataType.CodeObject),
 			"symbol": this.symbol.toStdJSON(),
-			"moduleObject": JSONValue(this.moduleObject.symbol.name),
+			"moduleName": JSONValue(this.moduleObject.symbol.name),
 			"instrs": JSONValue(map!((instr) => instr.toStdJSON())(this._instrs).array)
 		]);
 	}

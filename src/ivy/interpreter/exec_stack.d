@@ -9,57 +9,44 @@ struct ExecStack
 
 	alias assure = ensure!IvyInterpretException;
 
+private:
 	IvyData[] _stack;
-	size_t[] _stackBlocks;
+	size_t[] _blocks;
 
-	void addStackBlock() {
-		this._stackBlocks ~= this._stack.length;
-	}
-
-	void removeStackBlock()
-	{
-		import std.range: popBack, empty;
-		assure(!this._stackBlocks.empty, "Cannot remove stack block!");
-		this.popN(this.length); // Remove odd items from stack
-		this._stackBlocks.popBack();
-	}
-
-	// Test if current stack block is empty
-	bool empty() @property
-	{
-		import std.range: back, empty;
-		if( this._stackBlocks.empty || this._stack.empty )
-			return true;
-		return this._stack.length <= this._stackBlocks.back;
+public:
+	void push(T)(auto ref T arg) {
+		assure(this._blocks.length, "Cannot push execution stack value without any stask block");
+		this._stack ~= IvyData(arg);
 	}
 
 	// Get current item from the stack
-	ref IvyData back() @property
-	{
-		import std.range: back;
-		assure(!this.empty, "Cannot get exec stack \"back\" property, because it is empty!!!");
-		return this._stack.back;
+	ref IvyData back() @property {
+		assure(!this.empty, "Cannot get exec stack \"back\" property, because it is empty!");
+		return this._stack[this._stack.length - 1];
 	}
 
 	// Drop current item from the stack
-	IvyData pop()
-	{
-		import std.range: popBack, back;
-		assure(!this.empty, "Cannot execute \"popBack\" for exec stack, because it is empty!!!");
-		IvyData val = this._stack.back();
+	IvyData pop() {
+		import std.range: popBack;
+		assure(!this.empty, "Cannot remove item from execution stack, because it is empty!");
+		IvyData val = this.back;
 		this._stack.popBack();
 		return val;
 	}
 
-	void popN(size_t count)
-	{
+	void popN(size_t count) {
 		import std.range: popBackN;
-		assure(count <= this.length, "Requested to remove more items than exists in stack block");
+		assure(count <= this.length, "Cannot remove items from execution stack, because there is not enough of them!");
 		this._stack.popBackN(count);
 	}
 
-	void push(T)(auto ref T arg) {
-		this._stack ~= IvyData(arg);
+	// Test if current stack block is empty
+	bool empty() @property {
+		return !this.length;
+	}
+
+	size_t length() @property {
+		return this._stack.length - this._backBlock;
 	}
 
 	import std.traits: isIntegral;
@@ -67,25 +54,32 @@ struct ExecStack
 	void opIndexAssign(T, Int)(auto ref T arg, Int index)
 		if( isIntegral!Int )
 	{
-		import std.range: back;
-		assure(!this.empty, "Cannot assign item of empty exec stack!!!");
-		this._stack[index + _stackBlocks.back] = arg;
+		assure(index < this.length, "Cannot assign item by index that not exists!");
+		this._stack[index + this._backBlock] = arg;
 	}
 
 	ref IvyData opIndex(Int)(Int index)
 		if( isIntegral!Int )
 	{
-		import std.range: back;
-		assure(!this.empty, "Cannot get item by index for empty exec stack!!!");
-		return this._stack[index + this._stackBlocks.back];
+		assure(index < this.length, "Cannot get item by index that not exists!");
+		return this._stack[index + this._backBlock];
 	}
 
-	size_t length() @property
-	{
-		import std.range: empty, back;
-		if( this._stackBlocks.empty )
-			return 0;
-		return this._stack.length - this._stackBlocks.back;
+	/** Creates new block in stack */
+	void addBlock() {
+		this._blocks ~= this._stack.length;
+	}
+
+	/** Removes last block from stack */
+	void removeBlock() {
+		import std.range: popBack;
+		assure(this._blocks.length, "Cannot remove stack block. Execution stack is empty!");
+		this.popN(this.length); // Remove odd items from stack
+		this._blocks.popBack();
+	}
+
+	size_t _backBlock() @property {
+		return this._blocks.length? this._blocks[this._blocks.length - 1]: 0;
 	}
 
 	size_t opDollar() {

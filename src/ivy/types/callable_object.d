@@ -65,13 +65,13 @@ public:
 
 	IDirectiveInterpreter dirInterp() @property
 	{
-		enforce(this._dirInterp !is null, "Callable is not a native dir interpreter");
+		enforce(this._dirInterp, "Callable is not a native dir interpreter");
 		return this._dirInterp;
 	}
 
 	CodeObject codeObject() @property
 	{
-		enforce(this._codeObject !is null, "Callable is not an ivy code object");
+		enforce(this._codeObject , "Callable is not an ivy code object");
 		return this._codeObject;
 	}
 

@@ -36,7 +36,7 @@ public:
 	}
 
 	ModuleObject[string] moduleObjects() @property {
-		return _moduleObjects;
+		return this._moduleObjects;
 	}
 
 	string toPrettyStr()

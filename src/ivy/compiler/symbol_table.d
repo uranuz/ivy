@@ -11,14 +11,13 @@ struct SymbolWithFrame
 class SymbolTableFrame
 {
 	import trifle.location: Location;
+	import trifle.utils: ensure;
 
 	import ivy.types.symbol.iface: IIvySymbol, ICallableSymbol;
 	
 	import ivy.compiler.errors: IvyCompilerException;
 
-	import std.exception: enforce;
-
-	alias enf = enforce!IvyCompilerException;
+	alias assure = ensure!IvyCompilerException;
 
 private:
 	SymbolTableFrame _moduleFrame;
@@ -81,7 +80,7 @@ public:
 
 	void add(IIvySymbol symb)
 	{
-		enf(symb.name !in _symbols, `Symbol with name "` ~ symb.name ~ `" already declared in current scope`);
+		assure(symb.name !in _symbols, `Symbol with name "` ~ symb.name ~ `" already declared in current scope`);
 		_symbols[symb.name] = symb;
 	}
 
@@ -90,7 +89,7 @@ public:
 		string locStr = loc.toString();
 
 		SymbolTableFrame childFrame = _childFrames.get(locStr, null);
-		enf(childFrame !is null, `No child frame found with given location: ` ~ locStr);
+		assure(childFrame !is null, `No child frame found with given location: ` ~ locStr);
 		return childFrame;
 	}
 
@@ -112,7 +111,7 @@ public:
 
 		string locStr = symb.location.toString();
 
-		enf(
+		assure(
 			locStr !in _childFrames,
 			`Child frame already exists with location: ` ~ locStr);
 

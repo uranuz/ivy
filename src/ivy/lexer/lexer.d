@@ -7,7 +7,6 @@ import ivy.lexer.lexeme: Lexeme;
 import ivy.lexer.consts;
 
 import std.range: empty, front, popFront, back, popBack;
-import std.exception: enforce;
 import ivy.lexer.exception: IvyLexerException;
 
 alias assure = ensure!IvyLexerException;

@@ -5,7 +5,7 @@ import ivy.interpreter.directive.factory: InterpreterDirectiveFactory;
 import ivy.log: LogInfo, LogerMethod;
 
 // Structure for configuring Ivy
-struct IvyConfig
+struct IvyEngineConfig
 {
 	string[] importPaths; // Paths where to search for templates
 	string fileExtension = ".ivy"; // Extension of files that are templates

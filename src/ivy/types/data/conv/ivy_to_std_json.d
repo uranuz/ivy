@@ -10,8 +10,6 @@ JSONValue toStdJSON2(Interp...)(IvyData src, Interp interp)
 	import ivy.types.data.conv.consts: IvySrlField;
 	import ivy.types.data.conv.ivy_to_std_json: toStdJSON2;
 
-	import std.exception: enforce;
-
 	final switch( src.type )
 	{
 		case IvyDataType.Undef: return JSONValue("undef");

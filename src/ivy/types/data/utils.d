@@ -55,7 +55,6 @@ IvyData deeperCopy(IvyData)(auto ref IvyData node)
 IvyData errorToIvyData(Throwable error)
 {
 	import std.conv: to;
-	import std.exception: enforce;
 	import trifle.backtrace: getBacktrace;
 
 	IvyData res;
