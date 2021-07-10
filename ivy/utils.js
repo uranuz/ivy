@@ -4,16 +4,6 @@ define('ivy/utils', [
 	iutil
 ) {
 Object.assign(iutil, {
-	back: function(arr) {
-		if( !(arr instanceof Array) ) {
-			throw new Error('Expected array');
-		}
-		if( arr.length === 0 ) {
-			throw new Error('Cannot get back item, because array is empty!');
-		}
-		return arr[arr.length-1];
-	},
-
 	// Creates reverse iterator over array
 	reversed: FirClass(function Reversed(arr) {
 		var inst = firPODCtor(this, arguments);
@@ -41,7 +31,7 @@ Object.assign(iutil, {
 		}
 	}),
 
-	enforce: function(ExceptionType, cond) {
+	ensure: function(ExceptionType, cond) {
 		if( cond ) {
 			return;
 		};

@@ -1,38 +1,45 @@
 define('ivy/types/callable_object', [
-	'ivy/types/iface/callable_object',
 	'ivy/types/code_object',
 	'ivy/utils',
 	'ivy/exception'
 ], function(
-	ICallableObject,
 	CodeObject,
 	iutil,
 	IvyException
 ) {
-var enforce = iutil.enforce.bind(iutil, IvyException);
+var assure = iutil.ensure.bind(iutil, IvyException);
 
-return FirClass(
-	function CallableObject(codeObjectOrDirInterp, defaults) {
-		if( codeObjectOrDirInterp instanceof CodeObject ) {
-			this._codeObject = codeObjectOrDirInterp;
-			this._dirInterp = null;
+var CallableObject = FirClass(
+	function CallableObject(someCallable, defaultsOrContext) {
+		if(someCallable instanceof CodeObject) {
+			this._codeObject = someCallable;
+			this._defaults = defaultsOrContext || {};
+			this._context = void(0);
+		} else if(someCallable instanceof CallableObject) {
+			if( someCallable.isNative ) {
+				this._dirInterp = someCallable.dirInterp;
+			} else {
+				this._codeObject = someCallable.codeObject;
+			}
+			this._defaults = someCallable.defaults;
+			this._context = defaultsOrContext;
 		} else {
-			this._codeObject = null;
-			this._dirInterp = codeObjectOrDirInterp;
+			this._dirInterp = someCallable;
+			this._defaults = {};
+			this._context = void(0);
 		}
-		this._defaults = defaults || {};
-	}, ICallableObject, {
+	}, {
 		isNative: firProperty(function() {
-			return this._dirInterp != null;
+			return !!this._dirInterp;
 		}),
 
 		dirInterp: firProperty(function() {
-			enforce(this._dirInterp != null, "Callable is not a native dir interpreter");
+			assure(this._dirInterp, "Callable is not a native dir interpreter");
 			return this._dirInterp;
 		}),
 
 		codeObject: firProperty(function() {
-			enforce(this._codeObject != null, "Callable is not an ivy code object");
+			assure(this._codeObject, "Callable is not an ivy code object");
 			return this._codeObject;
 		}),
 
@@ -45,17 +52,20 @@ return FirClass(
 
 		moduleSymbol: firProperty(function() {
 			if( this.isNative ) {
-				return this._dirInterp.moduleSymbol;
+				return this.dirInterp.moduleSymbol;
 			}
 			return this.codeObject.moduleObject.symbol;
 		}),
 
 		defaults: firProperty(function() {
 			return this._defaults;
+		}, function(val) {
+			this._defaults = val
 		}),
 
 		context: firProperty(function() {
-			return;
+			return this._context;
 		})
 	});
+return CallableObject;
 });

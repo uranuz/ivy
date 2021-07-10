@@ -41,10 +41,6 @@ return FirClass(
 			return this.initSymbol.getAttr(attrName);
 		},
 
-		bodyAttrs: firProperty(function() {
-			return this._bodyAttrs;
-		}),
-
 		initSymbol: firProperty(function() {
 			return this._initSymbol;
 		}, function(symb) {

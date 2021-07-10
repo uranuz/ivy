@@ -3,83 +3,83 @@ module ivy.bytecode;
 
 enum OpCode: ubyte
 {
-	InvalidCode, // Used to check if code of operation was not properly set
+	InvalidCode = 0, // Used to check if code of operation was not properly set
 
-	Nop,
+	Nop = 1,
 
 	// Load constant data from code
-	LoadConst,
+	LoadConst = 2,
 
 	// Stack operations
-	PopTop,
-	SwapTwo,
-	DubTop,
+	PopTop = 3,
+	SwapTwo = 4,
+	DubTop = 5,
 
 	// General unary operations opcodes
-	UnaryMin,
-	UnaryPlus,
-	UnaryNot,
+	UnaryMin = 6,
+	UnaryPlus = 7,
+	UnaryNot = 8,
 
 	// Arithmetic binary operations opcodes
-	Add,
-	Sub,
-	Mul,
-	Div,
-	Mod,
+	Add = 9,
+	Sub = 10,
+	Mul = 11,
+	Div = 12,
+	Mod = 13,
 
 	// Comparision operations opcodes
-	Equal,
-	NotEqual,
-	LT,
-	GT,
-	LTEqual,
-	GTEqual,
+	Equal = 14,
+	NotEqual = 15,
+	LT = 16,
+	GT = 17,
+	LTEqual = 18,
+	GTEqual = 19,
 
 	// Frame data load/ store
-	StoreName,
-	StoreGlobalName,
-	LoadName,
+	StoreName = 20,
+	StoreGlobalName = 21,
+	LoadName = 22,
 
 	// Work with attributes
-	StoreAttr,
-	LoadAttr,
+	StoreAttr = 23,
+	LoadAttr = 24,
 
 	// Data construction opcodes
-	MakeArray,
-	MakeAssocArray,
-	MakeClass,
+	MakeArray = 25,
+	MakeAssocArray = 26,
+	MakeClass = 27,
 
 	// Array or assoc array operations
-	StoreSubscr,
-	LoadSubscr,
-	LoadSlice,
+	StoreSubscr = 28,
+	LoadSubscr = 29,
+	LoadSlice = 30,
 
 	// Arrays or strings concatenation
-	Concat,
-	Append,
-	Insert,
+	Concat = 31,
+	Append = 32,
+	Insert = 33,
 
 	// Flow control opcodes
-	JumpIfTrue,
-	JumpIfFalse,
-	JumpIfTrueOrPop,
-	JumpIfFalseOrPop,
-	Jump,
-	Return,
+	JumpIfTrue = 34,
+	JumpIfFalse = 35,
+	JumpIfTrueOrPop = 36,
+	JumpIfFalseOrPop = 37,
+	Jump = 38,
+	Return = 39,
 
 	// Loop initialization and execution
-	GetDataRange,
-	RunLoop,
+	GetDataRange = 40,
+	RunLoop = 41,
 
 	// Import another module
-	ImportModule,
-	FromImport,
-	LoadFrame,
+	ImportModule = 42,
+	FromImport = 43,
+	LoadFrame = 44,
 
 	// Preparing and calling directives
-	MakeCallable,
-	RunCallable,
-	Await
+	MakeCallable = 45,
+	RunCallable = 46,
+	Await = 47
 }
 
 // Minimal element of bytecode is instruction opcode with optional arg
@@ -99,7 +99,7 @@ struct Instruction
 	string toString()
 	{
 		import std.conv: text;
-		return this.name ~ ": " ~ this.arg.text;
+		return this.name ~ " (" ~ (cast(ubyte) this.opcode).text ~ ")" ~ ": " ~ this.arg.text;
 	}
 
 	JSONValue toStdJSON() {

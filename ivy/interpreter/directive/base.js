@@ -6,11 +6,12 @@ define('ivy/interpreter/directive/base', [
 	globalSymbol
 ) {
 return FirClass(
-	function BaseDirectiveInterpreter() {
-		this._symbol = null;
+	function DirectiveInterpreter(method, symbol) {
+		this._method = method;
+		this._symbol = symbol;
 	}, IDirectiveInterpreter, {
 		interpret: function(interp) {
-			throw new Error("Implement this!");
+			this._method(interp);
 		},
 
 		symbol: firProperty(function() {

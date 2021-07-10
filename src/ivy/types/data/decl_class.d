@@ -3,18 +3,17 @@ module ivy.types.data.decl_class;
 import ivy.types.data.base_class_node: BaseClassNode;
 import ivy.types.data.decl_class_node: DeclClassNode;
 
+private struct CallableKV {
+	string name;
+	CallableObject callable;
+}
+
 class DeclClass: BaseClassNode
 {
 	import ivy.types.data: IvyData, IvyDataType;
 	import ivy.types.callable_object: CallableObject;
 	import ivy.interpreter.directive.utils: makeDir;
 	import ivy.interpreter.directive.iface: IDirectiveInterpreter;
-
-	static struct CallableKV
-	{
-		string name;
-		CallableObject callable;
-	}
 
 protected:
 	string _name;
@@ -49,8 +48,7 @@ public:
 	}
 
 override {
-	IvyData __getAttr__(string field)
-	{
+	IvyData __getAttr__(string field) {
 		auto valPtr = field in this._dataDict;
 		if( valPtr !is null ) {
 			return *valPtr;
@@ -69,8 +67,11 @@ override {
 		return this.__getAttr__("__new__").callable;
 	}
 }
-	final CallableKV[] _getThisMethods()
-	{
+	string name() @property {
+		return this._name;
+	}
+
+	final CallableKV[] _getThisMethods() {
 		import std.algorithm: filter, map;
 		import std.array: array;
 
@@ -86,17 +87,12 @@ override {
 		return (this._baseClass is null)? []: this._baseClass._getMethods();
 	}
 
-	final CallableKV[] _getMethods()
-	{
+	final CallableKV[] _getMethods() {
 		import std.algorithm: filter, map;
 		import std.array: array;
 		import std.range: chain;
 
 		return chain(this._getBaseMethods(), this._getThisMethods()).array;
-	}
-
-	string name() @property {
-		return this._name;
 	}
 
 	private final void __emptyInit__() {
@@ -105,8 +101,7 @@ override {
 
 	private __gshared IDirectiveInterpreter i__emptyInit__;
 
-	shared static this()
-	{
+	shared static this() {
 		i__emptyInit__ = makeDir!__emptyInit__("__init__");
 	}
 }

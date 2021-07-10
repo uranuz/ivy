@@ -2,8 +2,8 @@ define('ivy/types/code_object', [], function() {
 return FirClass(
 	function CodeObject(symbol, moduleObject) {
 		this._symbol = symbol;
-		this._instrs = [];
 		this._moduleObject = moduleObject;
+		this._instrs = [];
 	}, {
 		symbol: firProperty(function() {
 			return this._symbol;
@@ -21,6 +21,10 @@ return FirClass(
 			var index = this._instrs.length;
 			this._instrs.push(instr);
 			return index;
-		}
+		},
+
+		instrCount: firProperty(function() {
+			return this._instrs.length;
+		})
 	});
 });

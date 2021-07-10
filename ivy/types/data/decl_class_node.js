@@ -1,11 +1,9 @@
 define('ivy/types/data/decl_class_node', [
 	'ivy/types/data/base_class_node',
-	'ivy/types/binded_callable',
-	'ivy/types/data/data'
+	'ivy/types/callable_object'
 ], function(
 	BaseClassNode,
-	BindedCallable,
-	idat
+	CallableObject
 ) {
 return FirClass(
 	function DeclClassNode(type) {
@@ -14,7 +12,7 @@ return FirClass(
 
 		// Bind all class callables to class instance
 		this._type._getMethods().forEach(function(it) {
-			this._dataDict[it.name] = new BindedCallable(it.callable, this);
+			this._dataDict[it.name] = new CallableObject(it.callable, this);
 		}, this);
 	}, BaseClassNode, {
 		__getAttr__: function(field) {
@@ -27,10 +25,6 @@ return FirClass(
 	
 		__setAttr__: function(val, field) {
 			this._dataDict[field] = val;
-		},
-	
-		__serialize__: function() {
-			return "<" + this._type.name + ">";
 		}
 	});
 });

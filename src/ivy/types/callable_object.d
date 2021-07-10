@@ -50,7 +50,7 @@ public:
 	this(CallableObject other, IvyData context)
 	{
 		this._isNative = other.isNative;
-		if( this.isNative ) {
+		if( other.isNative ) {
 			this._dirInterp = other.dirInterp;
 		} else {
 			this._codeObject = other.codeObject;

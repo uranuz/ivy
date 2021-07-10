@@ -1,16 +1,13 @@
 define('ivy/types/symbol/module_', [
 	'ivy/types/symbol/iface/callable',
-	'ivy/types/symbol/dir_body_attrs',
 	'ivy/location',
 	'ivy/types/symbol/consts'
 ], function(
 	ICallableSymbol,
-	DirBodyAttrs,
 	Location,
 	SymbolConsts
 ) {
 var
-	emptyBodyAttrs = DirBodyAttrs(),
 	SymbolKind = SymbolConsts.SymbolKind;
 return FirClass(
 	function ModuleSymbol(name, loc) {
@@ -42,11 +39,7 @@ return FirClass(
 
 		getAttr: function() {
 			throw new Error('Module symbol has no attributes');
-		},
-
-		bodyAttrs: firProperty(function() {
-			return emptyBodyAttrs;
-		})
+		}
 	}
 );
 });

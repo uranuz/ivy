@@ -15,8 +15,8 @@ var
 		'DubTop',
 
 		// General unary operations opcodes
-		'UnaryPlus',
 		'UnaryMin',
+		'UnaryPlus',
 		'UnaryNot',
 
 		// Arithmetic binary operations opcodes
@@ -108,7 +108,7 @@ Bytecode.Instruction = FirClass(
 		}),
 
 		toString: function() {
-			return this.name + ': ' + this.arg;
+			return this.name + " (" + this.opcode + ")" + ": " + this.arg;
 		}
 	});
 

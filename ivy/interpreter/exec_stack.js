@@ -1,71 +1,75 @@
-define('ivy/interpreter/exec_stack', ['ivy/utils'], function(iutil) {
+define('ivy/interpreter/exec_stack', [
+	'ivy/exception',
+	'ivy/utils'
+], function(
+	InterpreterException,
+	iutil
+) {
+var assure = iutil.ensure.bind(iutil, InterpreterException);
 return FirClass(
 	function ExecStack() {
 		this._stack = [];
 		this._blocks = [];
 	}, {
+		/** Add item in the back of stack */
+		push: function(val) {
+			assure(this._blocks.length, "Cannot push execution stack value without any stask block");
+			this._stack.push(val);
+		},
+
 		/** Returns last item added into stack */
 		back: firProperty(function() {
-			if( this.empty ) {
-				throw Error(`Cannot get stack item! Execution stack is empty!`);
-			}
-			return iutil.back(this._stack);
+			assure(!this.empty, "Cannot get exec stack \"back\" property, because it is empty!");
+			return this._stack[this._stack.length - 1];
 		}),
+
 		/** Drop last item from stack */
 		pop: function() {
-			if( this.empty ) {
-				throw Error(`Cannot remove item from execution stack, because it is empty!`);
-			}
+			assure(!this.empty, "Cannot remove item from execution stack, because it is empty!");
+
 			return this._stack.pop();
 		},
+
 		/** Drop last `count` items from stack */
 		popN: function(count) {
-			if( count < this.length ) {
-				throw Error(`Cannot remove items from execution stack, because it is empty!`);
-			}
+			assure(count <= this.length, "Cannot remove items from execution stack, because there is not enough of them!");
 			return this._stack.splice(-count, count);
 		},
+
 		/** Check if stack is empty */
 		empty: firProperty(function() {
-			if( this._stack.length === 0 || this._blocks.length === 0 ) {
-				return true;
-			}
-			return this._stack.length <= iutil.back(this._blocks);
+			return !this.length;
 		}),
+
 		/** Get length of current block of stack */
 		length: firProperty(function() {
-			if( this.empty ) {
-				return 0;
-			}
-			return this._stack.length - iutil.back(this._blocks);
+			return this._stack.length - this._backBlock;
 		}),
+
+		setAt: function(val, index) {
+			assure(index < this.length, "Cannot assign item by index that not exists!");
+			this._stack[index + this._backBlock] = val;
+		},
+
+		at: function(index) {
+			assure(index < this.length, "Cannot get item by index that not exists!");
+			return this._stack[index + this._backBlock];
+		},
+
 		/** Creates new block in stack */
-		addStackBlock: function() {
+		addBlock: function() {
 			this._blocks.push(this._stack.length);
 		},
+
 		/** Removes last block from stack */
-		removeStackBlock: function() {
-			if( this._blocks.length === 0 ) {
-				throw Error(`Cannot remove stack block. Execution stack is empty!`);
-			}
+		removeBlock: function() {
+			assure(this._blocks.length, "Cannot remove stack block. Execution stack is empty!");
 			this.popN(this.length);
 			this._blocks.pop();
 		},
-		/** Add item in the back of stack */
-		push: function(val) {
-			this._stack.push(val);
-		},
-		at: function(index) {
-			if( index >= this.length || index < 0 ) {
-				throw Error(`Index is out of stack bounds!`);
-			}
-			return this._stack[iutil.back(this._blocks) + index];
-		},
-		setAt: function(val, index) {
-			if( index >= this.length || index < 0 ) {
-				throw Error(`Index is out of stack bounds!`);
-			}
-			this._stack[iutil.back(this._blocks) + index] = val;
-		}
+
+		_backBlock: firProperty(function() {
+			return this._blocks.length? this._blocks[this._blocks.length - 1]: 0;
+		})
 	});
 });

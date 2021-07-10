@@ -17,7 +17,7 @@ var
 	DateTimeAttr = DataConsts.DateTimeAttr,
 	IvySrlField = ConvConsts.IvySrlField,
 	IvySrlFieldType = ConvConsts.IvySrlFieldType,
-	enforce = iutil.enforce.bind(iutil, IvyException);
+	assure = iutil.ensure.bind(iutil, IvyException);
 return FirClass(
 	function IvyDateTime(dt) {
 		this._dt = dt || new DateTime;
@@ -37,7 +37,7 @@ return FirClass(
 				//case DateTimeAttr.dayOfYear: val = this._dt.dayOfYear; break;
 				case DateTimeAttr.utcMinuteOffset: val = this._dt.getTimezoneOffset(); break;
 				default:
-					enforce(false, "Cannot get DateTime attribute: " + attrName);
+					assure(false, "Cannot get DateTime attribute: " + attrName);
 			}
 			return val;
 		},
@@ -57,7 +57,7 @@ return FirClass(
 				//case DateTimeAttr.dayOfYear: dateAttr = cast(ptrdiff_t) dt.dayOfYear; break;
 				//case DateTimeAttr.utcMinuteOffset: dateAttr = cast(ptrdiff_t) dt.utcOffset.total!("minutes"); break;
 				default:
-					enforce(false, "Cannot set DateTime attribute: " + attrName);
+					assure(false, "Cannot set DateTime attribute: " + attrName);
 			}
 		},
 

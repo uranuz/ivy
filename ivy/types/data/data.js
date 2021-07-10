@@ -1,18 +1,20 @@
 define('ivy/types/data/data', [
 	'exports',
 	'ivy/types/data/consts',
+	'ivy/types/data/render',
 	'ivy/interpreter/execution_frame',
 	'ivy/types/code_object',
-	'ivy/types/iface/callable_object',
+	'ivy/types/callable_object',
 	'ivy/types/data/iface/range',
 	'ivy/types/data/iface/class_node',
 	'ivy/types/data/async_result'
 ], function(
 	idat,
 	Consts,
+	DataRender,
 	ExecutionFrame,
 	CodeObject,
-	ICallableObject,
+	CallableObject,
 	DataNodeRange,
 	IClassNode,
 	AsyncResult
@@ -73,6 +75,10 @@ Object.assign(idat, {
 		return idat._getTyped(val, IvyDataType.AsyncResult);
 	},
 
+	moduleObject: function(val) {
+		return idat._getTyped(val, IvyDataType.ModuleObject);
+	},
+
 	_getTyped: function(val, type) {
 		if( idat.type(val) !== type ) {
 			throw new Error('Value is not of type: ' + type);
@@ -97,7 +103,7 @@ Object.assign(idat, {
 			return IvyDataType.CodeObject;
 		} else if( val instanceof AsyncResult ) {
 			return IvyDataType.AsyncResult;
-		} else if( val instanceof ICallableObject ) {
+		} else if( val instanceof CallableObject ) {
 			return IvyDataType.Callable;
 		} else if( val instanceof ExecutionFrame ) {
 			return IvyDataType.ExecutionFrame;
@@ -110,53 +116,6 @@ Object.assign(idat, {
 		} else {
 			throw new Error('Unrecognized node type!');
 		}
-	},
-	toString: function(val) {
-		switch( idat.type(val) ) {
-			case IvyDataType.Undef:
-			case IvyDataType.Null:
-				return '';
-			case IvyDataType.Boolean:
-				return (val? 'true': 'false');
-			case IvyDataType.Integer:
-			case IvyDataType.Floating:
-				return '' + val;
-			case IvyDataType.String:
-				return val;
-			case IvyDataType.AssocArray: {
-				var result = '{';
-				for( var key in val ) {
-					if( val.hasOwnProperty(key) ) {
-						result += '"' + key + '": ' + this.toString(val[key]);
-					}
-				}
-				result += '}';
-				return result;
-			}
-			case IvyDataType.Array: {
-				var result = '';
-				for( var i = 0; i < val.length; ++i ) {
-					result += this.toString(val[i]);
-				}
-				return result;
-			}
-			case IvyDataType.ClassNode: {
-				return this.toString(val.__serialize__());
-			}
-			default:
-				throw new Error('Getting of deeper copy for this type is not implemented for now');
-		}
-	},
-	toStdJSON: function(val) {
-		return JSON.stringify(val, idat._replaceIntoJSON);
-	},
-	_replaceIntoJSON: function(key, val) {
-		switch( idat.type(val) ) {
-			case IvyDataType.ClassNode:
-				return val.__serialize__();
-			default: break;
-		}
-		return val;
 	},
 	empty: function(val)
 	{
@@ -314,6 +273,9 @@ Object.assign(idat, {
 			default:
 				throw new Exception("Cannot compare data nodes of type: " + idat.type(val));
 		}
+	},
+	toString: function(val) {
+		return DataRender.renderDataNode2(val)
 	}
 });
 });

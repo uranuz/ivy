@@ -5,18 +5,19 @@ import ivy.interpreter.directive.base: DirectiveInterpreter;
 import ivy.types.symbol.directive: DirectiveSymbol;
 import ivy.types.symbol.dir_attr: DirAttr;
 
-struct IvyMethodAttr
-{
+struct IvyMethodAttr {
 	string symbolName;
 	DirAttr[] attrs;
 }
 
 IDirectiveInterpreter makeDir(alias Method)(string symbolName, DirAttr[] attrs = null) {
-	return new DirectiveInterpreter(&_callDir!Method, new DirectiveSymbol(symbolName, attrs));
+	return new DirectiveInterpreter(
+		&_callDir!Method,
+		new DirectiveSymbol(symbolName, attrs)
+	);
 }
 
-template _callDir(alias Method)
-{
+template _callDir(alias Method) {
 	import std.traits:
 		Parameters,
 		ReturnType,
@@ -38,14 +39,11 @@ template _callDir(alias Method)
 	alias ResultType = ReturnType!(Method);
 	alias ParamNames = ParameterIdentifierTuple!(Method);
 
-	void _callDir(Interpreter interp)
-	{
+	void _callDir(Interpreter interp) {
 		Tuple!(ParamTypes) argTuple;
-		foreach( i, type; ParamTypes )
-		{
+		foreach( i, type; ParamTypes ) {
 			alias paramName = ParamNames[i];
-			static if( is(type : Interpreter) )
-			{
+			static if( is(type : Interpreter) ) {
 				// В методе может использоваться производный класс HTTP-контекста
 				auto typedInterp = cast(type) interp;
 				enforce(
@@ -53,9 +51,7 @@ template _callDir(alias Method)
 					"Unable to convert parameter \"" ~ paramName ~ "\" to type \"" ~ type.stringof ~ "\"");
 				argTuple[i] = typedInterp;
 				continue;
-			}
-			else
-			{
+			} else {
 				IvyData ivyParam = interp.getValue(paramName);
 				static if( is(type : bool) ) {
 					argTuple[i] = ivyParam.boolean;
@@ -79,8 +75,7 @@ template _callDir(alias Method)
 		}
 
 		typeof(toDelegate(&Method)) asDel;
-		if( interp.hasValue("this") )
-		{
+		if( interp.hasValue("this") ) {
 			DeclClassNode declClassNode = cast(DeclClassNode) interp.getValue("this").classNode;
 			enforce(declClassNode !is null, "Expected DeclClassNode as this parameter");
 

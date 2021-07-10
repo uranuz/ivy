@@ -1,28 +1,25 @@
 define('ivy/types/symbol/directive', [
 	'ivy/types/symbol/iface/callable',
 	'ivy/location',
-	'ivy/types/symbol/dir_body_attrs',
 	'ivy/types/symbol/consts'
 ], function(
 	ICallableSymbol,
 	Location,
-	DirBodyAttrs,
 	SymbolConsts
 ) {
 var SymbolKind = SymbolConsts.SymbolKind;
 return FirClass(
-	function DirectiveSymbol(name, locOrAttrs, attrsOrBodyAttrs, bodyAttrs) {
+	function DirectiveSymbol(name, locOrAttrs, attrs) {
 		if( locOrAttrs instanceof Location ) {
-			this._init(name, locOrAttrs, attrsOrBodyAttrs, bodyAttrs);
+			this._init(name, locOrAttrs, attrs);
 		} else {
-			this._init(name, Location(`__global__`), locOrAttrs, attrsOrBodyAttrs);
+			this._init(name, Location("__global__"), locOrAttrs, attrs);
 		}
 	}, ICallableSymbol, {
-		_init: function(name, loc, attrs, bodyAttrs) {
+		_init: function(name, loc, attrs) {
 			this._name = name;
 			this._loc = loc;
 			this._attrs = attrs || [];
-			this._bodyAttrs = bodyAttrs || DirBodyAttrs();
 			this._attrIndexes = {};
 
 			if( !this._name.length ) {
@@ -30,9 +27,6 @@ return FirClass(
 			}
 			if( !(this._loc instanceof Location) ) {
 				throw new Error('Expected instance of Location');
-			}
-			if( !(this._bodyAttrs instanceof DirBodyAttrs) ) {
-				throw new Error('Expected instance of DirBodyAttrs');
 			}
 			this._reindexAttrs();
 		},
@@ -69,11 +63,7 @@ return FirClass(
 				throw new Error('No attribute with name "' + attrName + '" for directive "' + this._name + '"');
 			}
 			return this._attrs[idx];
-		},
-
-		bodyAttrs: firProperty(function() {
-			return this._bodyAttrs;
-		})
+		}
 	}
 );
 });
