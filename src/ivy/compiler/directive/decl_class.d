@@ -4,7 +4,6 @@ import ivy.compiler.directive.utils;
 
 class DeclClassCompiler: IDirectiveCompiler
 {
-	import ivy.compiler.symbol_table: SymbolTableFrame;
 	import ivy.types.symbol.directive: DirectiveSymbol;
 	import ivy.types.symbol.decl_class: DeclClassSymbol;
 

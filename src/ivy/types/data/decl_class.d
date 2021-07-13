@@ -4,6 +4,7 @@ import ivy.types.data.base_class_node: BaseClassNode;
 import ivy.types.data.decl_class_node: DeclClassNode;
 
 private struct CallableKV {
+	import ivy.types.callable_object: CallableObject;
 	string name;
 	CallableObject callable;
 }

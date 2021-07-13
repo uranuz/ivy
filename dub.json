@@ -9,5 +9,23 @@
 	"dependencies": {
 		"trifle": ">=0.0.0"
 	},
-	"versions": []
+	"versions": [],
+	"targetPath": "bin",
+	"subPackages":[
+		{
+			"name": "js_builder",
+			"description": "Tool that compiles Ivy templates into JavaScript modules",
+			"targetType": "executable",
+			"targetPath": "bin",
+			"dependencies": {
+				"trifle": ">=0.0.0"
+			},
+			"sourceFiles": [
+				"src/ivy/js_builder.d"
+			],
+			"sourcePaths": [
+				"src"
+			]
+		}
+	]
 }

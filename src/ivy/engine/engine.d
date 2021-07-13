@@ -23,8 +23,7 @@ private:
 	ModuleObjectLoader _loader;
 
 public:
-	this(IvyEngineConfig config)
-	{
+	this(IvyEngineConfig config) {
 		this._config = config;
 
 		import ivy.interpreter.directive.standard_factory: ivyDirFactory;
@@ -37,8 +36,7 @@ public:
 	}
 
 	/// Load module by name into engine
-	AsyncResult loadModule(string moduleName)
-	{
+	AsyncResult loadModule(string moduleName) {
 		if( this._config.clearCache ) {
 			this.clearCache();
 		}
@@ -50,8 +48,7 @@ public:
 		return this.runModule(moduleName, this.makeInterp(extraGlobals));
 	}
 
-	Interpreter makeInterp(IvyData[string] extraGlobals = null)
-	{
+	Interpreter makeInterp(IvyData[string] extraGlobals = null) {
 		auto interp = new Interpreter(
 			this._loader.cache,
 			this._config.directiveFactory,
@@ -60,8 +57,7 @@ public:
 		return interp;
 	}
 
-	ContextAsyncResult runModule(string moduleName, Interpreter interp)
-	{
+	ContextAsyncResult runModule(string moduleName, Interpreter interp) {
 		auto asyncResult = new AsyncResult();
 		auto res = ContextAsyncResult(interp, asyncResult);
 
@@ -92,8 +88,7 @@ public:
 	}
 
 	import std.json: JSONValue;
-	JSONValue serializeModule(string moduleName)
-	{
+	JSONValue serializeModule(string moduleName) {
 		import std.algorithm: map;
 		import std.array: array;
 
@@ -102,11 +97,11 @@ public:
 
 		return JSONValue([
 			"mainModuleName": JSONValue(moduleName),
-			"moduleObjects": JSONValue(map!((modObj) => modObj.toStdJSON())(this._moduleObjCache.moduleObjects.byValue).array)
+			"moduleObjects": JSONValue(map!((modObj) => modObj.toStdJSON())(this.moduleObjCache.moduleObjects.byValue).array)
 		]);
 	}
 
-	private ModuleObjectCache _moduleObjCache() @property {
+	ModuleObjectCache moduleObjCache() @property {
 		return this._loader.cache;
 	}
 

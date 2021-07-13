@@ -11,6 +11,8 @@ class FromImportCompiler: IDirectiveCompiler
 	import ivy.compiler.symbol_table: SymbolTableFrame, SymbolWithFrame;
 	import ivy.types.symbol.iface: IIvySymbol;
 
+	import ivy.types.module_object: ModuleObject;
+
 public:
 	override void collect(IDirectiveStatement stmt, CompilerSymbolsCollector collector)
 	{
@@ -60,7 +62,10 @@ public:
 
 		assure("Not all attributes for directive \"from\" were parsed. Maybe ';' is missing somewhere");
 
-		compiler.getOrCompileModule(moduleNameExpr.name); // Module must be compiled before we can import it
+		// Module must be compiled before we can import it
+		ModuleObject importedModuleObj = compiler.getOrCompileModule(moduleNameExpr.name);
+
+		compiler.currentModule.addDependModule(importedModuleObj.name, importedModuleObj.fileName);
 
 		compiler.addInstr(OpCode.LoadConst, compiler.addConst( IvyData(moduleNameExpr.name) ));
 		compiler.addInstr(OpCode.ImportModule);

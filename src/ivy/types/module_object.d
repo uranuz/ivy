@@ -14,7 +14,11 @@ class ModuleObject
 	import std.exception: enforce;
 	import std.json: JSONValue;
 
-	IvyData[] _consts; // List of constant data for this module
+	// List of constant data for this module
+	IvyData[] _consts;
+
+	// Map of depend modules: module name -> file name
+	string[string] _dependModules;
 
 public:
 	this(ModuleSymbol symbol) {
@@ -30,6 +34,10 @@ public:
 		data.escapeState = NodeEscapeState.Safe; 
 		this._consts ~= data;
 		return index;
+	}
+
+	void addDependModule(string name, string fileName) {
+		this._dependModules[name] = fileName;
 	}
 
 	IvyData getConst(size_t index)
@@ -56,6 +64,10 @@ public:
 
 	string fileName() @property {
 		return this.symbol.location.fileName;
+	}
+
+	string[string] dependModules() @property {
+		return this._dependModules;
 	}
 
 	JSONValue toStdJSON()

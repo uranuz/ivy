@@ -17,8 +17,7 @@ protected:
 	IvyData[string] _dataDict;
 
 public:
-	this(DeclClass type)
-	{
+	this(DeclClass type) {
 		enforce(type !is null, "Expected instance of DeclClass");
 
 		this._type = type;
@@ -29,8 +28,7 @@ public:
 	}
 
 override {
-	IvyData __getAttr__(string field)
-	{
+	IvyData __getAttr__(string field) {
 		if( auto valPtr = field in this._dataDict ) {
 			return *valPtr;
 		}

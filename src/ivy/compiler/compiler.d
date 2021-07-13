@@ -32,7 +32,6 @@ class ByteCodeCompiler: AbstractNodeVisitor
 	import ivy.types.symbol.module_: ModuleSymbol;
 
 	import ivy.compiler.module_repository: CompilerModuleRepository;
-	import ivy.compiler.symbol_table: SymbolTableFrame;
 	import ivy.compiler.directive.factory: DirectiveCompilerFactory;
 	import ivy.compiler.node_visit_mixin: NodeVisitMixin;
 	import ivy.compiler.errors: IvyCompilerException;
