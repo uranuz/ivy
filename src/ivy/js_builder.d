@@ -30,6 +30,7 @@ void main(string[] args)
 
 	bool isError = false;
 
+	writeln("Source path: ", sourcePath);
 	if (!sourcePath.length)
 	{
 		isError = true;
@@ -41,6 +42,7 @@ void main(string[] args)
 		writeln("Source path not exists");
 	}
 
+	writeln("Out path: ", outPath);
 	if (!outPath.length)
 	{
 		isError = true;
@@ -56,10 +58,9 @@ void main(string[] args)
 	config.importPaths = ([basePath] ~ importPaths).sort.uniq.array;
 	config.clearCache = false;
 
-	writeln("Source path: ", sourcePath);
 	writeln("Base path: ", basePath);
 	writeln("Import paths: ", config.importPaths);
-	writeln("Out path: ", outPath);
+	
 
 	IvyEngine ivyEngine = new IvyEngine(config);
 
@@ -83,7 +84,10 @@ void loadModulesByPath(IvyEngine ivyEngine, string sourcePath, string basePath)
 		writeln("Load module by relative path: ", relPath);
 
 		string moduleName = relPath.stripExtension.splitter(dirSeparator).join(".");
-		ivyEngine.loadModule(moduleName).then((it) => writeln("Loaded!"), (err) => writeln("Error loading!", err));
+		ivyEngine.loadModule(moduleName).then(
+			(it) => writeln("Module successfully loaded: ", moduleName, "\n"),
+			(err) => writeln("Failed to load module: ", moduleName, "\n", err, "\n")
+		);
 	}
 }
 
@@ -92,7 +96,6 @@ void writeJSModule(ModuleObject mod, string outPath, string[] importPaths)
 	string sourceRelPath = mod.fileName._resolveRelPath(importPaths[0]).stripExtension; // 0 - is base path
 	if( !sourceRelPath.length )
 		return;
-	writeln("sourceRelPath: ", sourceRelPath);
 
 	string jsContent = mod.renderJSModule(sourceRelPath, importPaths);
 	string contentOutPath = buildNormalizedPath(outPath, sourceRelPath).setExtension("ivy.js");
@@ -101,7 +104,6 @@ void writeJSModule(ModuleObject mod, string outPath, string[] importPaths)
 
 	writeln("Writing: ", contentOutPath);
 	write(contentOutPath, jsContent);
-	//writeln(contentOutPath, "\n\n", jsContent);
 }
 
 string renderJSModule(ModuleObject mod, string relPath, string[] importPaths)
@@ -110,20 +112,19 @@ string renderJSModule(ModuleObject mod, string relPath, string[] importPaths)
 	import std.array: array;
 	import std.json: toJSON, JSONValue;
 
-	string[] deps = ["ivy/engine/singleton"] ~ mod.dependModules.byValue.map!(
+	string[] deps = ["ivy/engine/engine"] ~ mod.dependModules.byValue.map!(
 		(fileName) => _resolveRelPath(fileName, importPaths).stripExtension
 	).array;
 
-	writeln(deps);
+	bool prettyJSON = false;
 
 	JSONValue jMod = mod.toStdJSON();
-	string sMod = toJSON(jMod, true);
+	string sMod = toJSON(jMod, prettyJSON);
 
-	return `define('` ~ relPath ~ `, [
+	return `define('` ~ relPath ~ `', [
 	` ~ deps.map!((it) => "'" ~ it ~ "'").join(",\n") ~ `
 ], function(ivyEngine) {
-	var rawMod = ` ~ sMod ~ `;
-	return ivyEngine.loadRawSync(rawMod);
+	return ivyEngine.loadRawSync(` ~ sMod ~ `);
 });`;
 
 }

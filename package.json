@@ -17,12 +17,6 @@
   },
   "homepage": "https://github.com/uranuz/ivy#readme",
   "devDependencies": {
-    "expand-tilde": "^2.0.2",
-    "gulp": "^4.0.2",
-    "gulp-util": "^3.0.8",
-    "vinyl-fs": "^3.0.3",
-    "webpack": "^4.41.2",
-    "webpack-node-externals": "^1.7.2",
-    "yargs": "^15.0.1"
+    "gulp": "^4.0.2"
   }
 }
