@@ -48,15 +48,6 @@ public:
 		return this.runModule(moduleName, this.makeInterp(extraGlobals));
 	}
 
-	Interpreter makeInterp(IvyData[string] extraGlobals = null) {
-		auto interp = new Interpreter(
-			this._loader.cache,
-			this._config.directiveFactory,
-			this._config.interpreterLoger);
-		interp.addExtraGlobals(extraGlobals);
-		return interp;
-	}
-
 	ContextAsyncResult runModule(string moduleName, Interpreter interp) {
 		auto asyncResult = new AsyncResult();
 		auto res = ContextAsyncResult(interp, asyncResult);
@@ -65,6 +56,15 @@ public:
 			interp.importModule(moduleName).then(asyncResult);
 		}, &asyncResult.reject);
 		return res;
+	}
+
+	Interpreter makeInterp(IvyData[string] extraGlobals = null) {
+		auto interp = new Interpreter(
+			this._loader.cache,
+			this._config.directiveFactory,
+			this._config.interpreterLoger);
+		interp.addExtraGlobals(extraGlobals);
+		return interp;
 	}
 
 	AsyncResult runMethod(

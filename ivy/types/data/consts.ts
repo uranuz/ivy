@@ -1,6 +1,4 @@
-module ivy.types.data.consts;
-
-enum IvyDataType: ubyte {
+export enum IvyDataType {
 	Undef,
 	Null,
 	Boolean,
@@ -13,24 +11,25 @@ enum IvyDataType: ubyte {
 	CodeObject,
 	Callable,
 	ExecutionFrame,
-	DataNodeRange,
+	IvyDataRange,
 	AsyncResult,
 	ModuleObject
 }
 
-enum NodeEscapeState: ubyte {
+export enum NodeEscapeState {
 	Init,
 	Safe,
 	Unsafe
 }
 
-enum AsyncResultState: ubyte {
-	pending,
-	resolved,
-	rejected
+export enum AsyncResultState {
+	'Init',
+	'Pending',
+	'Success',
+	'Error'
 }
 
-enum DateTimeAttr: string {
+export enum DateTimeAttr {
 	year = "year",
 	month = "month",
 	day = "day",

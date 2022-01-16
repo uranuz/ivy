@@ -2,7 +2,6 @@
 
 var
 	path = require('path'),
-	glob = require('glob'),
 	tfConfig = require('../trifle/builder/config'),
 	tfBuilder = require('../trifle/builder/builder');
 
@@ -21,12 +20,8 @@ function makeConfig() {
 
 	// Set webpack libraries we want to build
 	config.webpack.entries = {
-		ivy: path.join(config.buildPath, 'ivy/**/*.js')
+		ivy: path.join(config.buildPath, 'ivy/**/*.{ts,js}')
 	};
-
-	config.symlinkPubPaths = [
-		path.join(__dirname, 'ivy')
-	];
 
 	return config;
 }

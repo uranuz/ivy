@@ -36,10 +36,6 @@ public:
 		return index;
 	}
 
-	void addDependModule(string name, string fileName) {
-		this._dependModules[name] = fileName;
-	}
-
 	IvyData getConst(size_t index)
 	{
 		import std.conv: text;
@@ -64,6 +60,10 @@ public:
 
 	string fileName() @property {
 		return this.symbol.location.fileName;
+	}
+
+	void addDependModule(string name, string fileName) {
+		this._dependModules[name] = fileName;
 	}
 
 	string[string] dependModules() @property {

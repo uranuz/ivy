@@ -60,13 +60,17 @@ public:
 
 			if( exists(fileName) && isFile(fileName) ) {
 				existingFiles ~= fileName;
-			} else if( exists(fileNameNoExt) && isDir(fileNameNoExt) ) {
+			}
+			/*
+			// This mode is considered deprecated
+			else if( exists(fileNameNoExt) && isDir(fileNameNoExt) ) {
 				// If there is no file with exact name then try to find folder with this path
 				// and check if there is file with name <moduleName> and <_fileExtension>
 				fileName = buildNormalizedPath(fileNameNoExt, moduleName.splitter('.').back) ~ _fileExtension;
 				if( exists(fileName) && isFile(fileName) )
 					existingFiles ~= fileName;
 			}
+			*/
 		}
 
 		if( existingFiles.length == 0 )

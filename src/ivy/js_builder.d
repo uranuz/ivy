@@ -60,7 +60,6 @@ void main(string[] args)
 
 	writeln("Base path: ", basePath);
 	writeln("Import paths: ", config.importPaths);
-	
 
 	IvyEngine ivyEngine = new IvyEngine(config);
 
@@ -122,7 +121,7 @@ string renderJSModule(ModuleObject mod, string relPath, string[] importPaths)
 	string sMod = toJSON(jMod, prettyJSON);
 
 	return `define('` ~ relPath ~ `', [
-	` ~ deps.map!((it) => "'" ~ it ~ "'").join(",\n") ~ `
+	` ~ deps.map!((it) => "'" ~ it ~ "'").join(",\n	") ~ `
 ], function(ivyEngine) {
 	return ivyEngine.loadRawSync(` ~ sMod ~ `);
 });`;

@@ -3,7 +3,6 @@ module ivy.types.data.iface.class_node;
 interface IClassNode
 {
 	import ivy.types.data: IvyData;
-	import ivy.types.data.iface.class_node: IClassNode;
 	import ivy.types.data.iface.range: IvyDataRange;
 	import ivy.types.callable_object: CallableObject;
 	

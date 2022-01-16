@@ -1057,7 +1057,7 @@ public:
 
 	/// Updates exception with frame stack info of interpreter and writes it to log
 	IvyException updateNLogError(Throwable ex) {
-		IvyException updEx = updateError(ex);
+		IvyException updEx = this.updateError(ex);
 		this._log.error(cast(string) updEx.message);
 		return updEx;
 	}

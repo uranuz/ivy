@@ -5,10 +5,10 @@ public import ivy.types.data.consts: AsyncResultState;
 
 class AsyncResult
 {
-	alias CalbackMethod = void delegate(IvyData data);
-	alias ErrbackMethod = void delegate(Throwable error);
+	alias DoneFn = void delegate(IvyData data);
+	alias FailFn = void delegate(Throwable error);
 
-	void then(CalbackMethod doneFn, ErrbackMethod failFn = null)
+	void then(DoneFn doneFn, FailFn failFn = null)
 	{
 		if( doneFn !is null )
 			this._callbacks ~= doneFn;
@@ -29,7 +29,7 @@ class AsyncResult
 		}
 	}
 
-	void except(ErrbackMethod failFn) {
+	void except(FailFn failFn) {
 		this.then(null, failFn);
 	}
 
@@ -93,8 +93,8 @@ class AsyncResult
 	}
 
 private:
-	CalbackMethod[] _callbacks;
-	ErrbackMethod[] _errbacks;
+	DoneFn[] _callbacks;
+	FailFn[] _errbacks;
 	IvyData _value;
 	Throwable _error;
 	AsyncResultState _state;

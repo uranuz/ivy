@@ -16,10 +16,10 @@ class CallableObject
 private:
 	union
 	{
-		// Native directive interpreter connected to this callable
-		IDirectiveInterpreter _dirInterp;
 		// Code object related to this callable
 		CodeObject _codeObject;
+		// Native directive interpreter connected to this callable
+		IDirectiveInterpreter _dirInterp;
 	}
 
 	// Kind of callable: native IDirectiveInterpreter or ivy CodeObject
