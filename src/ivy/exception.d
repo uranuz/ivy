@@ -11,8 +11,7 @@ public:
 
 	Location location;
 
-	override const(char)[] message() const
-    {
+	override const(char)[] message() const @safe nothrow {
 		return this.msg ~ "\nLocation: " ~ this.location.toString();
-    }
+	}
 }

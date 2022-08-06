@@ -932,6 +932,7 @@ public:
 					);
 				}
 				left = new CompareExp(loc, lexToCmpOpMap[lex.info.typeIndex], left, right);
+				break;
 			}
 			default:
 			{
